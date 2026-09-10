@@ -1778,7 +1778,7 @@ function excelFile(M){
    Uses Google Identity Services + Drive REST v3 (scope: drive.file)
    ============================================================ */
 // Client ID of the firm's own Google Cloud app (filled in when the software is set up for the web address)
-const DEFAULT_GOOGLE_CLIENT_ID = '';
+const DEFAULT_GOOGLE_CLIENT_ID = '160519324912-2igamd7ibvffdc5hec7ujq3g00cg3cc4.apps.googleusercontent.com';
 const Drive = {
   token: null, expires: 0, tokenClient: null, email: '',
   connected(){ return !!this.token && Date.now() < this.expires; },
@@ -2680,10 +2680,10 @@ function vSettings(){
   const origin = location.protocol === 'file:' ? '(open the software from its web address to see this)' : location.origin;
   return `<section class="panel"><div class="head"><div><h1>Settings &amp; backup</h1><p class="sub">Your data is saved in this browser automatically. Keep a backup in Google Drive.</p></div></div></section>
   <section class="panel"><h2>Google Drive</h2>
-    <div class="form-grid">${field('set-cid', 'Google OAuth Client ID', S.clientId, {bind: 'settings.clientId', wide: true, ph: '1234567890-abc.apps.googleusercontent.com'})}
+    <div class="form-grid">${field('set-cid', 'Google OAuth Client ID', S.clientId, {bind: 'settings.clientId', wide: true, ph: DEFAULT_GOOGLE_CLIENT_ID ? 'Fair Tax Client ID already built in – leave blank' : '1234567890-abc.apps.googleusercontent.com'})}
     ${field('set-root', 'Main folder name in Drive', S.rootFolder, {bind: 'settings.rootFolder'})}
     <div class="field"><label>Status</label><div class="row">${Drive.connected() ? '<span class="chip ok">Connected</span>' : '<span class="chip neutral">Not connected</span>'}<button class="btn small primary" data-act="drive-connect">${Drive.connected() ? 'Reconnect' : 'Connect Google Drive'}</button></div></div></div>
-    <details class="ph" ${S.clientId ? '' : 'open'}><summary>One-time setup (about 10 minutes)</summary><ol class="setup">
+    <details class="ph" ${S.clientId || DEFAULT_GOOGLE_CLIENT_ID ? '' : 'open'}><summary>One-time setup (about 10 minutes)</summary><ol class="setup">
       <li>Open <b>console.cloud.google.com</b> and sign in with the Google account that should hold client folders.</li>
       <li>Create a project named <b>Fair Tax Audit Desk</b>.</li>
       <li>APIs &amp; Services → Library → enable <b>Google Drive API</b>.</li>
