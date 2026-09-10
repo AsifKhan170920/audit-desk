@@ -1,0 +1,24 @@
+{
+  "appId": "com.fairtax.portal",
+  "appName": "Fair Tax Portal",
+  "webDir": "www",
+  "server": {
+    "url": "https://asifkhan170920.github.io/audit-desk/",
+    "androidScheme": "https",
+    "allowNavigation": ["asifkhan170920.github.io", "*.gstatic.com", "*.googleapis.com", "fair-tax-audit-desk.firebaseapp.com"]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#14284b"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#0F9D6B"
+    },
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
+  }
+}

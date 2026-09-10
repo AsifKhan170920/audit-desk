@@ -1,0 +1,1599 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FairTax CRM</title>
+<style>
+:root{
+  --brand:#0f9d6b; --brand-d:#0b7e55; --brand-soft:#e7f6ef;
+  --blue:#0b5c9c; --blue-soft:#eaf2fa;
+  --ink:#111827; --muted:#6b7280; --faint:#9ca3af;
+  --line:#e5e7eb; --bg:#f3f5f8; --card:#ffffff;
+  --amber:#b45309; --amber-soft:#fef3c7;
+  --red:#dc2626; --red-soft:#fee2e2;
+  --purple:#7c3aed;
+  --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px}
+::-webkit-scrollbar{height:9px;width:9px}::-webkit-scrollbar-thumb{background:#cdd5df;border-radius:9px}
+
+/* ---------- top nav ---------- */
+.nav{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.nav-in{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:26px;padding:0 22px;height:60px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px}
+.logo .mark{width:34px;height:34px;border-radius:9px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;letter-spacing:-.5px}
+.nav-links{display:flex;align-items:center;gap:4px;height:100%}
+.nav-links a,.nav-drop>span{padding:8px 12px;border-radius:9px;color:#374151;font-weight:600;display:flex;align-items:center;gap:5px;height:36px;cursor:pointer;position:relative}
+.nav-links a:hover,.nav-drop>span:hover{background:#f3f4f6}
+.nav-links a.active{color:var(--brand);position:relative}
+.nav-links a.active::after{content:'';position:absolute;left:12px;right:12px;bottom:-13px;height:2.5px;background:var(--brand);border-radius:2px}
+.nav-drop{position:relative}
+.nav-drop .menu{position:absolute;top:100%;left:0;margin-top:6px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);min-width:180px;padding:6px;display:none;z-index:60}
+.nav-drop.open .menu{display:block}
+.nav-drop .menu a{padding:9px 12px;border-radius:8px;display:block;font-weight:500;height:auto}
+.nav-drop .menu a::after{display:none}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.caret{font-size:10px;color:var(--faint)}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1400px;margin:0 auto;padding:26px 22px 60px}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;gap:16px;flex-wrap:wrap}
+.page-head .eyebrow{color:var(--faint);font-size:13px;margin-bottom:2px}
+.page-head h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.5px}
+.page-head p.sub{margin:2px 0 0;color:var(--muted)}
+
+/* ---------- buttons ---------- */
+.btn{border:1px solid var(--line);background:#fff;color:#374151;padding:9px 15px;border-radius:11px;font-weight:600;display:inline-flex;align-items:center;gap:7px;font-size:14px}
+.btn:hover{background:#f9fafb}
+.btn-primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-d)}
+.btn-danger{background:#fff;border-color:var(--red-soft);color:var(--red)}
+.btn-danger:hover{background:var(--red-soft)}
+.btn-sm{padding:6px 11px;font-size:13px;border-radius:9px}
+.icon-btn{border:none;background:transparent;color:var(--faint);padding:5px;border-radius:7px}
+.icon-btn:hover{background:#f3f4f6;color:#374151}
+
+/* ---------- cards ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-p{padding:20px}
+.grid{display:grid;gap:18px}
+
+/* ---------- stat cards ---------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:20px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.stat .ic{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;margin-bottom:16px}
+.stat .lbl{color:var(--faint);font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.stat .num{font-size:30px;font-weight:800;margin-top:4px;letter-spacing:-1px}
+.stat .foot{color:var(--faint);font-size:12px;margin-top:8px}
+.bg-blue{background:#3b82f6}.bg-green{background:var(--brand)}.bg-red{background:var(--red)}.bg-slate{background:#334155}
+
+/* ---------- pills ---------- */
+.pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.03em}
+.pill.final,.pill.active,.pill.completed{background:var(--brand-soft);color:var(--brand-d)}
+.pill.draft,.pill.pending{background:var(--amber-soft);color:var(--amber)}
+.pill.high{background:var(--red-soft);color:var(--red)}
+.pill.med{background:#fef3c7;color:var(--amber)}
+.pill.low{background:#f1f5f9;color:#475569}
+.pill.new{background:#dbeafe;color:#1d4ed8}
+.pill.tag{background:#f1f5f9;color:#475569;font-weight:600;text-transform:none;letter-spacing:0}
+.pill.blue{background:var(--blue-soft);color:var(--blue)}
+.pill.progress{background:#e0e7ff;color:#4338ca}
+
+/* ---------- tables ---------- */
+table.tbl{width:100%;border-collapse:collapse}
+table.tbl th{text-align:left;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding:12px 14px;border-bottom:1px solid var(--line)}
+table.tbl td{padding:14px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.tbl tr:last-child td{border-bottom:none}
+table.tbl tr:hover td{background:#fafbfc}
+.r{text-align:right}.mono{font-variant-numeric:tabular-nums}
+.link{color:var(--brand-d);font-weight:600;cursor:pointer}
+.link:hover{text-decoration:underline}
+
+/* ---------- search bar ---------- */
+.toolbar{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;display:flex;gap:12px;margin-bottom:20px;align-items:center}
+.search{flex:1;display:flex;align-items:center;gap:9px;padding:9px 14px;border:1px solid var(--line);border-radius:11px;background:#fff}
+.search input{border:none;outline:none;flex:1;font-size:14px;background:transparent}
+select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;background:#fff;font-weight:600;color:#374151}
+
+/* ---------- kanban ---------- */
+.board{display:flex;gap:16px;overflow-x:auto;padding-bottom:16px}
+.col{flex:0 0 300px;min-width:300px;background:#eef1f5;border-radius:var(--radius);padding:12px;max-height:none}
+.col-head{display:flex;align-items:center;gap:8px;padding:6px 6px 12px;font-weight:700}
+.col-head .dot{width:9px;height:9px;border-radius:50%}
+.col-head .count{margin-left:auto;background:#fff;border-radius:20px;padding:1px 9px;font-size:12px;color:var(--muted)}
+.col-body{display:flex;flex-direction:column;gap:10px;min-height:80px}
+.col-body.dropok{outline:2px dashed var(--brand);outline-offset:-4px;border-radius:10px}
+.kcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px;box-shadow:0 1px 2px rgba(16,24,40,.04);cursor:grab}
+.kcard:active{cursor:grabbing}
+.kcard.dragging{opacity:.4}
+.kcard h4{margin:0 0 6px;font-size:14px;font-weight:700;display:flex;justify-content:space-between;gap:8px}
+.kcard .meta{color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:6px;margin:3px 0}
+.kcard .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.kcard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;color:var(--faint);font-size:12px}
+.kcard .who{width:22px;height:22px;border-radius:50%;background:#e5e7eb;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#374151}
+.reddot{width:8px;height:8px;border-radius:50%;background:var(--red)}
+.col.empty-drop .col-body{border:2px dashed #cbd5e1;border-radius:10px;align-items:center;justify-content:center;color:var(--faint);font-size:13px;padding:30px 0}
+
+/* ---------- detail layout ---------- */
+.detail-grid{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start}
+.back{width:38px;height:38px;border-radius:10px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:#374151}
+.sec-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.kv{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line);gap:12px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--faint);font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.kv .v{font-weight:600;text-align:right}
+.note-box{display:flex;gap:12px;align-items:flex-start}
+.note-box textarea{width:100%;border:1px solid var(--line);border-radius:11px;padding:12px;resize:vertical;min-height:60px;outline:none}
+.activity-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.activity-item:last-child{border-bottom:none}
+.mini-av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand-d);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
+.empty{text-align:center;color:var(--faint);padding:40px 10px}
+.tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin-bottom:20px}
+.tabs .tab{padding:12px 2px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+.tabs .tab.active{color:var(--brand-d);border-color:var(--brand)}
+.rel-task{display:flex;gap:10px;align-items:center;padding:11px;border:1px solid var(--line);border-radius:11px;margin-top:10px}
+.rel-task .ic{width:30px;height:30px;border-radius:8px;background:var(--amber-soft);display:flex;align-items:center;justify-content:center}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+
+/* ---------- forms / builder ---------- */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.field input,.field textarea,.field select{width:100%;border:1px solid var(--line);border-radius:11px;padding:11px 13px;outline:none;background:#fff}
+.field input:focus,.field textarea:focus{border-color:var(--brand)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.fee-row{display:grid;grid-template-columns:1fr 80px 120px 120px 30px;gap:10px;align-items:center;margin-bottom:8px}
+.fee-row input{border:1px solid var(--line);border-radius:9px;padding:9px}
+.fee-head{display:grid;grid-template-columns:1fr 80px 120px 120px 30px;gap:10px;font-size:11px;color:var(--faint);text-transform:uppercase;font-weight:700;padding:0 2px 6px}
+
+/* ---------- modal ---------- */
+.overlay{position:fixed;inset:0;background:rgba(17,24,39,.45);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal{background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:100%;max-width:460px;padding:24px;max-height:90vh;overflow:auto}
+.modal.wide{max-width:620px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.modal-head h3{margin:0;font-size:18px;font-weight:800}
+.x{border:none;background:transparent;font-size:20px;color:var(--faint);cursor:pointer}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:11px;font-weight:600;z-index:200;box-shadow:var(--shadow);opacity:0;transition:opacity .2s}
+.toast.show{opacity:1}
+
+@media(max-width:900px){.stats{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr}.two-col{grid-template-columns:1fr}.nav-links{display:none}}
+</style>
+</head>
+<body>
+  <div class="nav">
+    <div class="nav-in">
+      <div class="logo"><span class="mark">FT</span> FairTax</div>
+      <div class="nav-links" id="navLinks"></div>
+      <div class="nav-right">
+        <div class="avatar">WA</div>
+        <span style="font-weight:700">Waseem</span><span class="caret">▾</span>
+      </div>
+    </div>
+  </div>
+  <div class="wrap" id="app"></div>
+  <div id="modalRoot"></div>
+  <div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================= DATA LAYER */
+const STORE_KEY='fairtax_crm_v1';
+const BIZ_DEFAULT={name:'Fair Tax International FZC',licence:'SC252008901',address:'Office No. 31, Ahmed Abdullah Madani Building,\nNad Al Hamar, United Arab Emirates',email:'asif@fairtaxint.com',phone:'+971 50 123 4567',trn:'',bank:'Fair Tax International FZC\nADCB · Account 0000 0000 0000 000\nIBAN AE00 0000 0000 0000 0000 000'};
+function biz(){return Object.assign({},BIZ_DEFAULT,(load().business||{}));}
+function bizAddrBr(){return esc(biz().address).replace(/\n/g,'<br>');}
+function bizAddrLine(){return esc(biz().address).replace(/\n/g,', ');}
+let mem=null;
+function load(){
+  if(mem) return mem;
+  try{const r=localStorage.getItem(STORE_KEY); if(r){mem=migrate(JSON.parse(r)); return mem;}}catch(e){}
+  mem=seed(); save(); return mem;
+}
+function migrate(m){
+  m=m||{};
+  ['team','partners','clients','leads','tasks','quotations','agreements','invoices','receipts','services','genLog'].forEach(k=>{if(!Array.isArray(m[k]))m[k]=[];});
+  m.business=Object.assign({},BIZ_DEFAULT,(m.business||{}));
+  return m;
+}
+function save(){ try{localStorage.setItem(STORE_KEY,JSON.stringify(mem));}catch(e){} }
+function reset(){ mem=seed(); save(); route(); toast('Sample data restored'); }
+const uid=p=>(p||'id')+Math.random().toString(36).slice(2,8);
+const $=s=>document.querySelector(s);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1900);}
+function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function itemAmt(i){return (i&&i.amount!=null)?(+i.amount||0):(((i&&+i.qty)||0)*((i&&+i.unit)||0));}
+function itemsTotal(items){return (items||[]).reduce((s,i)=>s+itemAmt(i),0);}
+function lineVat(i,rate){return (i&&i.vat&&i.vat!=='standard')?0:(itemAmt(i)*(+rate||0)/100);}
+function vatSum(items,rate){return (items||[]).reduce((s,i)=>s+lineVat(i,rate),0);}
+function initials(n){return (n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();}
+function fmtDate(d){if(!d)return'—';const x=new Date(d+'T00:00:00');return x.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});}
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ============================================================= SEED DATA */
+function seed(){
+  const team=['Waseem','Owais','Asif','Ijaz','Shayan'];
+  const partners=[
+    {id:'p_was',name:'Waseem ur Rehman',color:'#0f9d6b'},
+    {id:'p_asif',name:'Asif Khan',color:'#3b82f6'},
+    {id:'p_ijaz',name:'Ijaz Khan',color:'#7c3aed'},
+    {id:'p_un',name:'Unassigned',color:'#64748b'},
+  ];
+  const clients=[
+    {id:uid('c'),name:'Power Poles',status:'Active',partnerId:'p_was',email:'estimation.powerpoles@gmail.com',phone:'-',services:['Corporate Tax','VAT'],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'powerpoles928',portalPassword:'Powerpoles@5054',contractExpiry:'',address:'-',staff:['Owais','Waseem'],invoiced:0,received:0,ledger:[],notes:[]},
+    {id:uid('c'),name:'Al Azizeyah United Real Estate',status:'Active',partnerId:'p_asif',email:'essam_jrd@hotmail.com',phone:'507979075',services:['Corporate Tax'],vatCycle:'Stagger 1',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:'',address:'-',staff:['Asif','Shayan'],invoiced:15000,received:9000,ledger:[{date:'2026-05-02',type:'Invoice',ref:'INV-201',debit:15000,credit:0},{date:'2026-06-10',type:'Receipt',ref:'RCP-88',debit:0,credit:9000}],notes:[]},
+    {id:uid('c'),name:'Art Building Contracting LLC',status:'Active',partnerId:'p_asif',email:'none@none.com',phone:'55 435 5166',services:['Audit','Corporate Tax'],vatCycle:'Stagger 1',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:'2026-12-31',address:'-',staff:['Asif','Shayan'],invoiced:4000,received:4000,ledger:[{date:'2026-05-25',type:'Invoice',ref:'INV-210',debit:4000,credit:0},{date:'2026-05-30',type:'Receipt',ref:'RCP-90',debit:0,credit:4000}],notes:[]},
+    {id:uid('c'),name:'Ali Khan Heavy Equipment Rental LLC',status:'Active',partnerId:'p_asif',email:'none@none.com',phone:'559441877',services:['Corporate Tax','Other'],vatCycle:'Stagger 2',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:'',address:'-',staff:['Asif'],invoiced:0,received:0,ledger:[],notes:[]},
+    {id:uid('c'),name:'Obaid Matrooshi Silk Screen Printing LLC',status:'Active',partnerId:'p_ijaz',email:'554507208',phone:'554507208',services:['Corporate Tax','Other'],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:'',address:'-',staff:['Ijaz'],invoiced:7200,received:0,ledger:[{date:'2026-05-23',type:'Invoice',ref:'INV-215',debit:7200,credit:0}],notes:[]},
+    {id:uid('c'),name:'MRT Trading L.L.C',status:'Active',partnerId:'p_un',email:'faisal@mrt.ae',phone:'-',services:['Bookkeeping','VAT','Corporate Tax'],vatCycle:'Stagger 2',taxYearEnd:'2025-12-31',trn:'-',tradeLicence:'801406',portalId:'mrt801406',portalPassword:'Mrt@2026',contractExpiry:'',address:'Dubai',staff:['Asif'],bookkeepingStart:'2026-01-05',invoiced:9600,received:4533,ledger:[{date:'2026-07-04',type:'Invoice',ref:'INV-220',debit:9600,credit:0},{date:'2026-07-04',type:'Receipt',ref:'CHQ-1',debit:0,credit:4533}],notes:[]},
+    {id:uid('c'),name:'Persona Advertising Gifts Preparing',status:'Active',partnerId:'p_un',email:'amarpersoya@gmail.com',phone:'+971559597523',services:['VAT'],vatCycle:'Stagger 1',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:'',address:'-',staff:['Asif'],invoiced:1200,received:1200,ledger:[],notes:[]},
+    {id:uid('c'),name:'AL ASMA WATER PUMPS LLC',status:'Active',partnerId:'p_un',email:'abc@gmail.com',phone:'-',services:['VAT'],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:'',address:'-',staff:['Asif','Owais'],invoiced:0,received:0,ledger:[],notes:[]},
+    {id:uid('c'),name:'Gill Transport LLC',status:'Active',partnerId:'p_was',email:'gill@transport.ae',phone:'-',services:['Financial Statements','Corporate Tax','VAT'],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'gill12490',portalPassword:'Gill@2026',contractExpiry:'',address:'RAK',staff:['Waseem'],invoiced:5200,received:5200,ledger:[{date:'2026-06-16',type:'Invoice',ref:'INV-230',debit:5200,credit:0},{date:'2026-06-20',type:'Receipt',ref:'RCP-95',debit:0,credit:5200}],notes:[]},
+  ];
+  const cid=n=>{const c=clients.find(c=>c.name.startsWith(n));return c?c.id:null;};
+  const leads=[
+    {id:uid('l'),name:'Al Safra Gold Plating Works LLC',stage:'New',source:'Website',phone:'+971506795726',email:'-',contact:'-',address:'-',services:[],date:'2026-07-03',assignedTo:'Waseem',notes:[]},
+    {id:uid('l'),name:'Raml Al Firozi Building Materials',stage:'New',source:'Referral',phone:'971552007445',email:'-',contact:'-',address:'-',services:[],date:'2026-07-03',assignedTo:'Waseem',notes:[]},
+    {id:uid('l'),name:'Al Adel jewelry llc',stage:'New',source:'Website',phone:'0504690426',email:'-',contact:'-',address:'-',services:[],date:'2026-07-03',assignedTo:'Waseem',notes:[]},
+    {id:uid('l'),name:'Swat Line Passengers Transport',stage:'Quotation Sent',source:'Referral',phone:'0568831225',email:'-',contact:'-',address:'Al satwa',services:[],date:'2026-07-08',assignedTo:'Waseem',notes:[{by:'Waseem',at:'8 Jul',text:'Meeting done on 5th July 2025.'}]},
+    {id:uid('l'),name:'Bottom Line Contracting LLC',stage:'Quotation Sent',source:'Website',phone:'-',email:'-',contact:'-',address:'-',services:['Bookkeeping','Corporate Tax'],date:'2026-07-18',assignedTo:'Asif',notes:[]},
+    {id:uid('l'),name:'Asrab Goods Wholesalers LLC',stage:'Follow-up',source:'Website',phone:'502056840',email:'-',contact:'-',address:'https://share.google/DbR6...',services:['Bookkeeping','Corporate Tax','VAT'],date:'2026-09-03',assignedTo:'Shayan',notes:[{by:'Shayan',at:'3 Sept',text:"Contacted for follow up, But customer didnt answer the call"},{by:'Shayan',at:'1 Sept',text:"Contacted for follow up, But customer didnt answer the call"}]},
+    {id:uid('l'),name:'D J K Foodstuffs Supply LLC',stage:'Follow-up',source:'Website',phone:'+971 54 754 5559',email:'-',contact:'-',address:'-',services:['Corporate Tax','VAT'],date:'2026-08-11',assignedTo:'Asif',notes:[]},
+    {id:uid('l'),name:'Rio General Trading LLC',stage:'Follow-up',source:'Website',phone:'+971568923391',email:'-',contact:'-',address:'-',services:['Audit','Corporate Tax'],date:'2026-08-11',assignedTo:'Asif',notes:[]},
+    {id:uid('l'),name:'AL BANAFSAJ WEDDING',stage:'Closed',source:'Referral',phone:'-',email:'-',contact:'-',address:'-',services:['Audit','Corporate Tax'],date:'2025-09-05',assignedTo:'Waseem',notes:[]},
+  ];
+  const tasks=[
+    {id:uid('t'),title:'VAT Return Due - Power Poles',type:'Reminder',status:'Not Started',dueDate:'2026-07-28',recurrence:'Quarterly',priority:'High',clientId:cid('Power Poles'),assignees:['Owais','Waseem'],source:'auto_reminder',checklist:['Pull period transactions','Prepare VAT return working','Share summary with client','File on FTA portal + record payment'],comments:[],createdBy:'Waseem',createdAt:'2026-07-03'},
+    {id:uid('t'),title:'VAT Return Due - AL RANA AL DHABIA TRANSPORT LLC',type:'Reminder',status:'Not Started',dueDate:'2026-07-28',recurrence:'Quarterly',priority:'High',clientId:cid('Gill'),assignees:['Shayan'],source:'auto_reminder',checklist:['Prepare VAT return','File on FTA portal'],comments:[],createdBy:'Waseem',createdAt:'2026-07-01'},
+    {id:uid('t'),title:'VAT Return Due - Power Poles',type:'Reminder',status:'Completed',dueDate:'2026-04-28',recurrence:'Quarterly',priority:'High',clientId:cid('Power Poles'),assignees:['Owais','Waseem'],source:'auto_reminder',checklist:[],comments:[],createdBy:'Owais',createdAt:'2026-04-10'},
+  ];
+  const quotations=[
+    {id:uid('q'),title:'Service Quotation',forType:'client',refId:cid('Gill'),refName:'Gill Transport LLC',reference:'QT-2026-014',amount:5200,status:'Final',date:'2026-06-16',intro:'We are pleased to present this quotation for our below mentioned scope of services.',scope:[{heading:'Financial Statements Preparation',items:['Preparation of IFRS financial statements']}],items:[{desc:'Financial Statements FY2025',qty:1,unit:5200}],closing:'We look forward to working with you and assure you of our best service at all times.',signatory:'Muhammad Asif Khan',signatoryTitle:'Managing Director',email:'asif@fairtaxint.com',phone:'+971 50 123 4567'},
+    {id:uid('q'),title:'Quotation',forType:'lead',refName:'Al Harib Kitchens Works LLC',reference:'QT-2026-009',amount:1020,status:'Final',date:'2026-03-04',scope:[],items:[{desc:'Corporate Tax Registration',qty:1,unit:1020}],signatory:'Muhammad Asif Khan',signatoryTitle:'Managing Director'},
+    {id:uid('q'),title:'Quotation',forType:'client',refName:'Galaxy Time Trading LLC',reference:'QT-2026-005',amount:10000,status:'Final',date:'2026-03-02',scope:[],items:[{desc:'Annual Accounting & Tax',qty:1,unit:10000}],signatory:'Muhammad Asif Khan',signatoryTitle:'Managing Director'},
+  ];
+  const agreements=[
+    {id:uid('a'),title:'Service Agreement',clientName:'MOTION CONTROL MACHINERY & EQUIP LLC',reference:'FTI-AGR-2026-020',amount:4500,status:'Final',date:'2026-07-03',...agTemplate(4500)},
+    {id:uid('a'),title:'Service Agreement',clientName:'Persona Advertising Gifts Preparing',reference:'FTI-AGR-2026-019',amount:1200,status:'Final',date:'2026-07-02',...agTemplate(1200)},
+    {id:uid('a'),title:'Service Agreement',clientName:'Al Azizeyah Untied Real Estate Invet.Co',reference:'FTI-AGR-2026-018',amount:1500,status:'Final',date:'2026-06-16',...agTemplate(1500)},
+    {id:uid('a'),title:'Service Agreement',clientName:'Expert central Air Conditioner Maintenance',reference:'FTI-AGR-2026-017',amount:7500,status:'Final',date:'2026-06-11',...agTemplate(7500)},
+    {id:uid('a'),title:'Service Agreement',clientName:'Art Building Contracting LLC',reference:'FTI-AGR-2026-015',amount:4000,status:'Final',date:'2026-05-25',...agTemplate(4000)},
+    {id:uid('a'),title:'Service Agreement',clientName:'Adam Packaging Materials LLC',reference:'FTI-AGR-2026-012',amount:2499.99,status:'Draft',date:'2026-05-14',...agTemplate(2500)},
+    {id:uid('a'),title:'Service Agreement',clientName:'AL BURAQ GARMENTS EMBROIDERY WORK SHOP L.L.C',reference:'FTI-AGR-2026-010',amount:12500,status:'Final',date:'2026-05-04',...agTemplate(12500)},
+  ];
+  const invoices=[
+    {id:uid('inv'),title:'Tax Invoice',invoiceNo:'INV-2026-001',clientId:cid('Gill'),clientName:'Gill Transport LLC',trn:'',date:'2026-06-16',dueDate:'2026-06-30',vatRate:5,status:'Paid',items:[{desc:'Financial Statements Preparation FY2025',qty:1,unit:5200,vat:'standard'}],notes:'Thank you for your business.',bank:'Fair Tax International FZC · ADCB · IBAN AE00 0000 0000 0000 0000 000'},
+    {id:uid('inv'),title:'Tax Invoice',invoiceNo:'INV-2026-002',clientId:cid('MRT'),clientName:'MRT Trading L.L.C',trn:'',date:'2026-07-04',dueDate:'2026-07-18',vatRate:5,status:'Unpaid',items:[{desc:'Bookkeeping & VAT (annual)',qty:1,unit:7600,vat:'standard'},{desc:'Corporate Tax Filing FY2025',qty:1,unit:2000,vat:'standard'}],notes:'',bank:'Fair Tax International FZC · ADCB · IBAN AE00 0000 0000 0000 0000 000'},
+  ];
+  const receipts=[
+    {id:uid('rc'),receiptNo:'RCP-2026-001',clientId:cid('Gill'),clientName:'Gill Transport LLC',date:'2026-06-20',amount:5460,method:'Online Transfer',reference:'INV-2026-001',isPDC:false,chequeNo:'',bank:'',chequeDate:'',notes:'Payment received in full.'},
+    {id:uid('rc'),receiptNo:'RCP-2026-002',clientId:cid('MRT'),clientName:'MRT Trading L.L.C',date:'2026-07-04',amount:4533,method:'PDC',reference:'INV-2026-002',isPDC:true,chequeNo:'000123',bank:'Emirates NBD',chequeDate:'2026-10-01',notes:'Post-dated cheque — first instalment.'},
+  ];
+  const services=[
+    {id:uid('svc'),clientId:cid('MRT'),clientName:'MRT Trading L.L.C',type:'Corporate Tax Return Filing',period:'FY2025',cadenceDays:3,oneTime:true,nextDate:ymd(new Date()),deadline:'2026-09-30',status:'Active',feedback:[{date:'2026-07-01',note:'Requested trial balance and fixed-asset register from client.'}],taskId:null,createdAt:'2026-01-01'},
+    {id:uid('svc'),clientId:cid('MRT'),clientName:'MRT Trading L.L.C',type:'Bookkeeping',period:'FY2026',cadenceDays:7,oneTime:false,nextDate:ymd(new Date()),deadline:'',status:'Active',feedback:[],taskId:null,createdAt:'2026-01-01'},
+    {id:uid('svc'),clientId:cid('MRT'),clientName:'MRT Trading L.L.C',type:'VAT Return Filing',period:'Q2 2026',cadenceDays:7,oneTime:false,nextDate:'2026-07-01',deadline:'2026-07-28',status:'Active',feedback:[],taskId:null,createdAt:'2026-01-01'},
+    {id:uid('svc'),clientId:cid('Gill'),clientName:'Gill Transport LLC',type:'Financial Audit',period:'FY2024',cadenceDays:7,oneTime:true,nextDate:'',deadline:'',status:'Completed',completedDate:'2026-05-20',retainUntil:'2033-05-20',feedback:[{date:'2026-05-20',note:'Audit report signed and issued.'}],taskId:null,createdAt:'2025-06-01'},
+  ];
+  return {team,partners,clients,leads,tasks,quotations,agreements,invoices,receipts,services,business:Object.assign({},BIZ_DEFAULT),genLog:[]};
+}
+function agTemplate(total){return{
+  intro:'',
+  periodType:'period',periodStart:'',periodEnd:'',
+  schedule:[],
+  scope:[],
+  disclosure:'The scope of the Services under this Agreement is strictly limited to those expressly described above. Any services not specifically mentioned herein, including but not limited to advisory, consulting, representation, or any other professional services, shall require a separate written agreement between the parties. The Service Provider shall not be obligated to perform any work beyond the scope defined in this Agreement.',
+  items:[{desc:'Professional Services',period:'',amount:total}],
+  payment:'50% in advance and 50% on completion.\nIf payment is not received in accordance with the above schedule, the Service Provider reserves the right to suspend the Services until payment is made.',
+  terms:[
+    {t:'Term and Termination',b:'This Agreement is effective from the commencement of the Service Period and shall remain in effect until completion of the Services, unless terminated earlier as provided herein. Either party may terminate this Agreement by giving fifteen (15) calendar days\u2019 written notice to the other. Upon termination, the Client shall pay for all Services performed up to the date of termination, and any fees relating to work already completed shall be non-refundable. The Service Provider shall return the Client\u2019s records upon request, subject to settlement of any outstanding fees.'},
+    {t:'Termination by Service Provider',b:'The Service Provider may terminate this Agreement with immediate effect in the event of a material breach by the Client, or if the Client fails to pay the agreed fee within seven (7) days of a written reminder. The Service Provider may also suspend or withdraw from the engagement if instructed to act in a manner that is unlawful or unethical, or where applicable anti-money-laundering (AML) or client due-diligence requirements cannot be satisfied.'},
+    {t:'Client Responsibilities',b:'The Client shall provide all necessary documents, information, and supporting materials required for the performance of the Services at least fifteen (15) calendar days before the relevant deadline, and shall review and approve all returns, statements, and filings before submission. The Client remains responsible for the accuracy and completeness of the information provided and for its own compliance obligations. The Service Provider shall not be responsible for delays, penalties, or losses resulting from the Client\u2019s failure to provide timely, accurate, and complete information.'},
+    {t:'Fees, VAT and Expenses',b:'All fees stated in this Agreement are exclusive of Value Added Tax (VAT), which shall be charged at the prevailing rate of 5% where applicable. Out-of-pocket expenses, government and Federal Tax Authority (FTA) charges, and any taxes, fines, or penalties assessed by the authorities are the responsibility of the Client. Any tax payable to the FTA arising from the Client\u2019s filings remains the Client\u2019s own liability.'},
+    {t:'Professional Standards',b:'The Services shall be performed with reasonable skill and care and in accordance with applicable professional standards and the UAE laws in force at the relevant time. All advice and deliverables are based on the laws and regulations in effect and the information made available at the time they are provided. Where laws, regulations, or circumstances change, the Service Provider will advise the Client of any impact as appropriate.'},
+    {t:'Confidentiality',b:'All parties shall keep confidential all information obtained in the course of this Agreement and shall not disclose it to any third party without prior written consent, except where disclosure is required by law or a regulatory authority, or where the information is already in the public domain. The Service Provider may share information with its staff, subcontractors, and professional advisers on a confidential basis. This obligation shall survive termination of this Agreement.'},
+    {t:'Data Protection',b:'Each party shall process personal data in accordance with Federal Decree-Law No. 45 of 2021 on the Protection of Personal Data (UAE PDPL) and other applicable data-protection laws. The Service Provider shall apply reasonable technical and organizational measures to protect the security and confidentiality of the Client\u2019s data.'},
+    {t:'Record Retention and Return of Records',b:'Upon completion or termination of the engagement, the Service Provider shall return the Client\u2019s original records upon request. The Service Provider may retain copies of documents and working papers for its own records and shall retain such records for a minimum of seven (7) years, or such longer period as required under applicable UAE law.'},
+    {t:'Limitation of Liability',b:'The Service Provider\u2019s total liability for any claim arising out of or in connection with this Agreement shall be limited to the total fees paid by the Client under this Agreement. The Service Provider shall not be liable for any indirect, incidental, special, or consequential loss, or for any loss of profits or business interruption. No claim may be brought more than twelve (12) months after the Client becomes aware of the relevant circumstances. Nothing in this Agreement excludes or limits liability for fraud, wilful misconduct, or any liability that cannot be excluded under applicable UAE law.'},
+    {t:'Indemnity',b:'The Client shall indemnify and hold harmless the Service Provider against any claims, losses, damages, or expenses arising out of the Client\u2019s provision of inaccurate or incomplete information, or the Client\u2019s failure to comply with applicable laws and regulations.'},
+    {t:'Reliance',b:'All reports, statements, and deliverables are prepared for the Client\u2019s use only and may not be relied upon by any third party without the prior written consent of the Service Provider. The Service Provider accepts no responsibility to any party other than the Client.'},
+    {t:'Force Majeure',b:'Neither party shall be liable for any failure or delay in performing its obligations where such failure or delay results from events beyond its reasonable control, including but not limited to acts of God, government action, or interruption of utilities or communications.'},
+    {t:'Conflicts of Interest',b:'The Service Provider may act for other clients, including those operating in the same sector as the Client, and shall maintain the confidentiality of each client\u2019s information at all times.'},
+    {t:'Notices',b:'Any notice under this Agreement shall be in writing and delivered by email or to the registered address of the relevant party, and shall be deemed received on the next business day following dispatch.'},
+    {t:'Governing Law and Jurisdiction',b:'This Agreement shall be governed by and construed in accordance with the laws of the United Arab Emirates as applied in the Emirate of Dubai. The parties shall first seek to resolve any dispute amicably; failing which, the dispute shall be referred to the exclusive jurisdiction of the competent courts of Dubai, United Arab Emirates.'},
+    {t:'General',b:'This Agreement constitutes the entire agreement between the parties and supersedes all prior agreements or understandings. Any amendment must be in writing and signed by both parties. Neither party may assign its rights or obligations without the prior written consent of the other. If any provision is held to be invalid, the remaining provisions shall continue in full force. Failure to enforce any provision shall not be a waiver of it. The parties are independent contractors, and nothing in this Agreement creates a partnership or agency. The parties agree that this Agreement may be executed electronically and in counterparts. The clauses relating to Confidentiality, Data Protection, Limitation of Liability, Indemnity, and Record Retention shall survive termination.'},
+  ],
+  signatory:'Muhammad Asif Khan',signatoryTitle:'Managing Director',clientSig:'Authorized Signatory',clientSigTitle:'Director'
+};}
+
+/* ============================================================= DEADLINE ENGINE (ported from PHP) */
+const VAT_MONTHS={'1':[1,4,7,10],'2':[2,5,8,11],'3':[3,6,9,12]};
+function vatMonths(cycle){cycle=(cycle||'').toLowerCase();if(cycle.includes('month'))return[1,2,3,4,5,6,7,8,9,10,11,12];for(const k of['1','2','3'])if(cycle.includes(k))return VAT_MONTHS[k];return VAT_MONTHS['3'];}
+function ymd(d){const z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate());}
+function monthEnd(y,m){return new Date(y,m,0);}
+function addMonthsEnd(d,n){return new Date(d.getFullYear(),d.getMonth()+n+1,0);}
+function vatDue(pe){let due=new Date(pe.getFullYear(),pe.getMonth()+1,28);const dow=due.getDay();if(dow===5)due=new Date(due.getFullYear(),due.getMonth(),30);if(dow===6)due=new Date(due.getFullYear(),due.getMonth(),29);return due;}
+function clientDeadlines(c,today,horizonDays=400){
+  const out=[],horizon=new Date(today.getTime()+horizonDays*864e5);
+  const svc=(c.services||[]).map(s=>s.toLowerCase());const has=k=>svc.includes(k);const name=c.name;
+  if(has('vat')){
+    const months=vatMonths(c.vatCycle);
+    for(let yr=today.getFullYear();yr<=today.getFullYear()+1;yr++)for(const m of months){
+      const pe=monthEnd(yr,m),due=vatDue(pe);if(due<today||due>horizon)continue;
+      const monthly=(c.vatCycle||'').toLowerCase().includes('month');
+      const q=monthly?pe.toLocaleDateString('en',{month:'short'}):'Q'+Math.ceil(m/3);
+      out.push({code:'VAT|'+name+'|'+pe.getFullYear()+'-'+(pe.getMonth()+1),kind:'vat',title:'VAT Return Due — '+name+' ('+q+')',due:ymd(due),createOn:ymd(new Date(pe.getFullYear(),pe.getMonth()+1,1)),recurrence:monthly?'Monthly':'Quarterly',priority:'High',checklist:['Pull period transactions / confirm books closed','Prepare VAT return working (output vs input)','Share summary with client for approval','File on FTA portal + record payment']});
+    }
+  }
+  if(has('corporate tax')&&c.taxYearEnd){const ye=new Date(c.taxYearEnd+'T00:00:00');
+    for(let i=0;i<=1;i++){const end=new Date(ye.getFullYear()+i,ye.getMonth(),ye.getDate());const due=addMonthsEnd(end,9);if(due<today||due>horizon)continue;
+      out.push({code:'CT|'+name+'|'+end.getFullYear(),kind:'corporate_tax',title:'Corporate Tax Filing Due — '+name+' (FY '+end.getFullYear()+')',due:ymd(due),createOn:ymd(new Date(due.getTime()-60*864e5)),recurrence:'Annual',priority:'High',checklist:['Confirm financial statements finalised','Prepare CT computation (9% > AED 375k / SBR if eligible)','Client review & sign-off','Submit on EmaraTax + record payment']});}}
+  if((has('financial statements')||has('audit')||has('corporate tax'))&&c.taxYearEnd){const ye=new Date(c.taxYearEnd+'T00:00:00');
+    for(let i=0;i<=1;i++){const end=new Date(ye.getFullYear()+i,ye.getMonth(),ye.getDate());const start=new Date(end.getTime()+864e5);const target=addMonthsEnd(end,3);if(target<today||start>horizon)continue;
+      out.push({code:'FS|'+name+'|'+end.getFullYear(),kind:'financial_statements',title:'Financial Statements — '+name+' (FY '+end.getFullYear()+')',due:ymd(target),createOn:ymd(start<today?today:start),recurrence:'Weekly',priority:'Medium',checklist:['Request/collect closing trial balance & schedules','Review — reconcile ledgers, fixed assets, borrowings','Engage client on open items','Call client for pending confirmations']});}}
+  if(has('audit')&&c.taxYearEnd){const ye=new Date(c.taxYearEnd+'T00:00:00');
+    for(let i=0;i<=1;i++){const end=new Date(ye.getFullYear()+i,ye.getMonth(),ye.getDate());const start=new Date(end.getTime()+864e5);const target=addMonthsEnd(end,4);if(target<today||start>horizon)continue;
+      out.push({code:'AUD|'+name+'|'+end.getFullYear(),kind:'audit',title:'Audit — '+name+' (FY '+end.getFullYear()+')',due:ymd(target),createOn:ymd(start<today?today:start),recurrence:'Weekly',priority:'Medium',checklist:['Prepare audit file & lead schedules','Review — clear audit queries','Engage client for supporting documents','Call client to close pending items']});}}
+  if(has('bookkeeping')){const anchor=new Date((c.bookkeepingStart||ymd(today))+'T00:00:00');let next;const days=Math.floor((today-anchor)/864e5);
+    if(anchor>today)next=anchor;else{let steps=Math.floor(days/7)+(days%7===0?0:1);next=new Date(anchor.getTime()+steps*7*864e5);}
+    out.push({code:'BK|'+name+'|'+ymd(next),kind:'bookkeeping',title:'Bookkeeping Review — '+name,due:ymd(next),createOn:ymd(next),recurrence:'Weekly',priority:'Medium',checklist:['Review entries posted this week','Engage client for missing invoices / statements','Call client on any pending items']});}
+  out.sort((a,b)=>a.due<b.due?-1:1);return out;
+}
+function runEngine(){
+  const db=load(),today=new Date(new Date().toISOString().slice(0,10)+'T00:00:00');let created=0;
+  for(const c of db.clients.filter(c=>c.status==='Active'))for(const d of clientDeadlines(c,today)){
+    if(d.createOn>ymd(today))continue;if(db.genLog.includes(d.code))continue;
+    db.tasks.unshift({id:uid('t'),title:d.title,type:'Reminder',status:'Not Started',dueDate:d.due,recurrence:d.recurrence,priority:d.priority,clientId:c.id,assignees:(c.staff&&c.staff.length)?[c.staff[0]]:[],source:'auto_reminder',checklist:d.checklist,comments:[],createdBy:'System',createdAt:ymd(today)});
+    db.genLog.push(d.code);created++;
+  }
+  save();return created;
+}
+
+/* ============================================================= ROUTER + NAV */
+const app=$('#app');
+const NAVS=[['Dashboard','#/dashboard'],['CRM','#'],['Accounting','#'],['Apps','#'],['Admin','#']];
+function renderNav(active){
+  $('#navLinks').innerHTML=`
+    <a href="#/dashboard" class="${active==='dashboard'?'active':''}">Dashboard</a>
+    <div class="nav-drop"><span data-navdrop class="${['leads','clients','quotations','agreements','tasks','invoices','receipts','payments','retention'].includes(active)?'active':''}" style="${['leads','clients','quotations','agreements','tasks','invoices','receipts','payments','retention'].includes(active)?'color:var(--brand)':''}">CRM ▾</span>
+      <div class="menu">
+        <a href="#/leads">Leads</a><a href="#/clients">Clients</a>
+        <a href="#/tasks">Tasks</a><a href="#/quotations">Quotations</a>
+        <a href="#/agreements">Agreements</a><a href="#/invoices">Sales Invoices</a>
+        <a href="#/receipts">Receipts</a><a href="#/payments">Payments</a><a href="#/retention">Retention</a>
+      </div></div>
+    <a href="#">Accounting ▾</a><a href="#">Apps</a>
+    <div class="nav-drop"><span data-navdrop class="${active==='settings'?'active':''}" style="${active==='settings'?'color:var(--brand)':''}">Admin ▾</span>
+      <div class="menu"><a href="#/settings">Business Details</a></div></div>`;
+}
+function route(){
+  const h=(location.hash||'#/dashboard').slice(2).split('/');
+  const page=h[0]||'dashboard',id=h[1];
+  window.scrollTo(0,0);
+  try{const _db=load();if(runServiceEngine(_db))save();}catch(e){}
+  const map={dashboard:['dashboard',renderDashboard],leads:['leads',renderLeads],lead:['leads',()=>renderLeadDetail(id)],
+    clients:['clients',renderClients],client:['clients',()=>renderClientDetail(id)],
+    tasks:['tasks',renderTasks],task:['tasks',()=>renderTaskDetail(id)],
+    quotations:['quotations',renderQuotations],quotation:['quotations',()=>renderQuotationBuilder(id)],
+    invoices:['invoices',renderInvoices],invoice:['invoices',()=>renderInvoiceBuilder(id)],
+    receipts:['receipts',renderReceipts],receipt:['receipts',()=>renderReceiptBuilder(id)],
+    settings:['settings',renderSettings],
+    payments:['payments',renderPayments],
+    retention:['retention',renderRetention],
+    agreements:['agreements',renderAgreements],agreement:['agreements',()=>renderAgreementBuilder(id)]};
+  const [nav,fn]=map[page]||map.dashboard;
+  renderNav(nav); fn();
+}
+window.addEventListener('hashchange',route);
+
+/* ============================================================= DASHBOARD */
+function renderDashboard(){
+  const db=load();
+  const openLeads=db.leads.filter(l=>!['Closed'].includes(l.stage)).length;
+  const activeClients=db.clients.filter(c=>c.status==='Active').length;
+  const today=ymd(new Date());
+  const overdue=db.tasks.filter(t=>t.status!=='Completed'&&t.dueDate<today).length;
+  const dueWeek=db.tasks.filter(t=>t.status!=='Completed'&&t.dueDate>=today&&t.dueDate<=ymd(new Date(Date.now()+7*864e5))).length;
+  const receipts=db.clients.reduce((s,c)=>s+(c.received||0),0);
+  const upcoming=db.tasks.filter(t=>t.status!=='Completed').sort((a,b)=>a.dueDate<b.dueDate?-1:1).slice(0,5);
+  const top=[...db.clients].sort((a,b)=>(b.invoiced||0)-(a.invoiced||0)).slice(0,5);
+  const now=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const PA=payAlerts(db);
+  app.innerHTML=`
+  <div class="page-head"><div><div class="eyebrow">${now}</div><h1>Good morning, Waseem</h1></div>
+    <button class="btn" data-act="run-engine">⟳ Run deadline engine</button></div>
+  <div class="stats">
+    ${statCard('bg-blue','＋','Open Leads',openLeads,'')}
+    ${statCard('bg-green','🏢','Active Clients',activeClients,'')}
+    ${statCard('bg-red','⚠','Overdue Tasks',overdue,'Due this week: '+dueWeek)}
+    ${statCard('bg-green','🧾','Receipts',' AED '+money(receipts),'')}
+  </div>
+  ${(PA.overdue||PA.dueSoon||PA.deposit||PA.missing)?`<div class="card" style="margin-top:18px;border-left:4px solid ${PA.overdue?'var(--red)':'var(--amber)'}"><div style="padding:14px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center">
+      <div><span style="font-size:20px;font-weight:800;color:var(--red)">${PA.overdue}</span> <span style="color:var(--muted);font-size:13px">overdue</span></div>
+      <div><span style="font-size:20px;font-weight:800;color:var(--amber)">${PA.dueSoon}</span> <span style="color:var(--muted);font-size:13px">due in 7 days</span></div>
+      <div><span style="font-size:20px;font-weight:800">${PA.deposit}</span> <span style="color:var(--muted);font-size:13px">cheque(s) to deposit</span></div>
+      ${PA.missing?`<div><span style="font-size:20px;font-weight:800;color:var(--amber)">${PA.missing}</span> <span style="color:var(--muted);font-size:13px">agreement(s) missing terms</span></div>`:''}
+      <div style="color:var(--muted);font-size:13px">Outstanding <b>AED ${money(PA.pendingAmt)}</b></div>
+    </div>
+    <a class="btn btn-primary btn-sm" href="#/payments">Open Payments →</a></div></div>`:''}
+  <div class="grid" style="grid-template-columns:1fr 1fr">
+    <div class="card card-p">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><b>Revenue Overview</b><span class="pill tag">Last 12 months</span></div>
+      ${revenueBars(db)}
+    </div>
+    <div class="card card-p">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Upcoming Tasks</b><a class="link" href="#/tasks">View All →</a></div>
+      ${upcoming.length?upcoming.map(t=>{const c=db.clients.find(x=>x.id===t.clientId);return `
+        <div class="rel-task" style="cursor:pointer" data-goto="#/task/${t.id}">
+          <div class="ic">🔔</div><div style="flex:1"><b style="font-size:13px">${esc(t.title)}</b>
+          <div style="color:var(--faint);font-size:12px">${t.type} · ${fmtDate(t.dueDate)}${c?' · '+esc(c.name):''}</div></div>
+          <span class="pill ${statusPill(t.status)}">${t.status}</span></div>`;}).join(''):`<div class="empty">No upcoming tasks</div>`}
+    </div>
+  </div>
+  <div class="card card-p" style="margin-top:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Top Clients</b><a class="link" href="#/clients">View All →</a></div>
+    <table class="tbl"><thead><tr><th>Client</th><th class="r">Invoiced</th><th class="r">Received</th></tr></thead><tbody>
+    ${top.map(c=>`<tr data-goto="#/client/${c.id}" style="cursor:pointer"><td class="link">${esc(c.name)}</td><td class="r mono">AED ${money(c.invoiced)}</td><td class="r mono">AED ${money(c.received)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>`;
+}
+function statCard(bg,ic,lbl,num,foot){return `<div class="stat"><div class="ic ${bg}">${ic}</div><div class="lbl">${lbl}</div><div class="num">${num}</div>${foot?`<div class="foot">${foot}</div>`:''}</div>`;}
+function revenueBars(db){
+  const months=['Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul'];
+  const vals=months.map((m,i)=>2000+((i*3739)%9000));
+  const max=Math.max(...vals);
+  return `<div style="display:flex;align-items:flex-end;gap:8px;height:180px">${vals.map((v,i)=>`
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-end;height:100%">
+      <div style="width:100%;background:var(--brand-soft);border-radius:6px 6px 0 0;height:${Math.round(v/max*140)}px;position:relative"><div style="position:absolute;inset:0;background:linear-gradient(var(--brand),var(--brand-d));border-radius:6px 6px 0 0;opacity:.85"></div></div>
+      <span style="font-size:10px;color:var(--faint)">${months[i]}</span></div>`).join('')}</div>`;
+}
+
+/* ============================================================= LEADS */
+const LEAD_STAGES=['New','Contacted','Quotation Sent','Follow-up','Closed'];
+const STAGE_DOT={'New':'#3b82f6','Contacted':'#f59e0b','Quotation Sent':'#7c3aed','Follow-up':'#0ea5e9','Closed':'#10b981'};
+let leadSearch='';
+function renderLeads(){
+  const db=load();
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Leads</h1><p class="sub">Drag cards between columns to update status</p></div>
+    <button class="btn btn-primary" data-act="add-lead">＋ Add Lead</button></div>
+  <div class="toolbar"><div class="search">🔍<input id="leadSearch" placeholder="Search leads..." value="${esc(leadSearch)}"></div></div>
+  <div class="board" id="leadBoard">
+  ${LEAD_STAGES.map(st=>{
+    const items=db.leads.filter(l=>l.stage===st&&l.name.toLowerCase().includes(leadSearch.toLowerCase()));
+    return `<div class="col ${items.length?'':'empty-drop'}" data-stage="${st}">
+      <div class="col-head"><span class="dot" style="background:${STAGE_DOT[st]}"></span>${st}<span class="count">${items.length}</span></div>
+      <div class="col-body" data-drop="stage" data-stage="${st}">
+        ${items.length?items.map(l=>leadCard(l)).join(''):`<div style="color:var(--faint);font-size:13px;text-align:center;padding:20px 0">Drop leads here</div>`}
+      </div></div>`;}).join('')}
+  </div>`;
+  const s=$('#leadSearch');if(s)s.oninput=e=>{leadSearch=e.target.value;const b=$('#leadBoard');renderLeads();$('#leadSearch').focus();};
+}
+function leadCard(l){return `<div class="kcard" draggable="true" data-drag="lead" data-id="${l.id}" data-goto="#/lead/${l.id}">
+  <h4>${esc(l.name)}<span class="reddot"></span></h4>
+  ${l.phone&&l.phone!=='-'?`<div class="meta">📞 ${esc(l.phone)}</div>`:''}
+  <div class="tags">${(l.services||[]).slice(0,3).map(s=>`<span class="pill tag">${esc(s)}</span>`).join('')}<span class="pill blue">${esc(l.source)}</span></div>
+  <div class="foot"><span class="who">${initials(l.assignedTo)}</span><span>${fmtDate(l.date)}</span></div></div>`;}
+
+function renderLeadDetail(id){
+  const db=load();const l=db.leads.find(x=>x.id===id);if(!l){app.innerHTML='<div class="empty">Lead not found</div>';return;}
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start">
+    <a class="back" href="#/leads">←</a>
+    <div><h1 style="font-size:24px">${esc(l.name)}</h1><div style="display:flex;gap:10px;align-items:center;margin-top:4px"><span class="pill blue">${esc(l.stage)}</span><span style="color:var(--faint);font-size:13px">🔗 ${esc(l.source)}</span></div></div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-quote-for" data-type="lead" data-id="${l.id}">🧾 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">📄 Agreement</button><button class="btn" data-act="edit-lead" data-id="${l.id}">✎ Edit</button><button class="btn" data-act="convert-lead" data-id="${l.id}">✔ Convert to Client</button><button class="btn btn-danger" data-act="del-lead" data-id="${l.id}">🗑 Delete</button></div></div>
+  <div class="detail-grid">
+    <div>
+      <div class="card card-p" style="margin-bottom:18px">
+        <div class="note-box"><div class="mini-av">WA</div><div style="flex:1">
+          <textarea id="leadNote" placeholder="Add a note..."></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary btn-sm" data-act="post-lead-note" data-id="${l.id}">Post</button></div>
+        </div></div>
+      </div>
+      <div class="card card-p">
+        <div class="sec-title">☰ Activity</div>
+        ${(l.notes&&l.notes.length)?l.notes.map(n=>`<div class="activity-item"><div class="mini-av">${initials(n.by)}</div><div style="flex:1"><div style="display:flex;justify-content:space-between"><b>${esc(n.by)}</b><span style="color:var(--faint);font-size:12px">${esc(n.at)}</span></div><div>${esc(n.text)}</div></div></div>`).join(''):`<div class="empty">No activity yet<br><span style="font-size:12px">Add a note to get started</span></div>`}
+      </div>
+    </div>
+    <div>
+      <div class="card card-p" style="margin-bottom:18px">
+        <div class="sec-title">👤 Details</div>
+        ${kv('Phone',l.phone)}${kv('Email',l.email)}${kv('Contact',l.contact)}${kv('Trade Licence',l.tradeLicence)}${kv('Source',l.source)}${kv('Address',l.address)}
+      </div>
+      <div class="card card-p">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div class="sec-title" style="margin:0">✔ Related Tasks</div><button class="btn btn-sm" data-act="new-task-for" data-lead="${l.id}">＋ New Task</button></div>
+        <div class="empty" style="padding:24px">No tasks linked to this lead.</div>
+      </div>
+    </div>
+  </div>`;
+}
+function kv(k,v){return `<div class="kv"><span class="k">${k}</span><span class="v">${esc(v)||'—'}</span></div>`;}
+function statusPill(s){return{'Not Started':'low','In Progress':'progress','Pending to Client':'pending','Completed':'completed'}[s]||'low';}
+
+/* ============================================================= CLIENTS */
+let clientSearch='',clientFilter='Active';
+function renderClients(){
+  const db=load();
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:center"><div class="stat" style="width:auto;padding:0"><div class="ic bg-green" style="margin:0">🏢</div></div>
+    <div><h1>Clients</h1><p class="sub">Drag clients between partners to reassign</p></div></div></div>
+  <div class="toolbar"><div class="search">🔍<input id="clientSearch" placeholder="Search clients..." value="${esc(clientSearch)}"></div>
+    <select class="sel" id="clientFilter"><option ${clientFilter==='Active'?'selected':''}>Active</option><option ${clientFilter==='All'?'selected':''}>All</option></select></div>
+  <div class="board" id="clientBoard">
+  ${db.partners.map(p=>{
+    const items=db.clients.filter(c=>c.partnerId===p.id&&(clientFilter==='All'||c.status===clientFilter)&&c.name.toLowerCase().includes(clientSearch.toLowerCase()));
+    return `<div class="col" data-partner="${p.id}">
+      <div class="col-head"><span class="mini-av" style="width:28px;height:28px;background:${p.color};color:#fff">${initials(p.name)}</span>
+        <div><div style="font-size:14px">${esc(p.name)}</div><div style="font-size:11px;color:var(--muted);font-weight:500">${items.length} client${items.length!==1?'s':''}</div></div>
+        <span class="count">${items.length}</span></div>
+      <div class="col-body" data-drop="partner" data-partner="${p.id}">
+        ${items.map(c=>clientCard(c,p)).join('')||`<div style="color:var(--faint);font-size:13px;text-align:center;padding:20px 0">—</div>`}
+      </div></div>`;}).join('')}
+  </div>`;
+  $('#clientSearch').oninput=e=>{clientSearch=e.target.value;renderClients();$('#clientSearch').focus();};
+  $('#clientFilter').onchange=e=>{clientFilter=e.target.value;renderClients();};
+}
+function clientCard(c,p){return `<div class="kcard" draggable="true" data-drag="client" data-id="${c.id}" data-goto="#/client/${c.id}" style="border-left:3px solid ${p.color}">
+  <h4>${esc(c.name)}<span class="pill active">${c.status}</span></h4>
+  <div class="meta">✉ ${esc(c.email)||'—'}</div>${c.phone&&c.phone!=='-'?`<div class="meta">📞 ${esc(c.phone)}</div>`:''}
+  <div class="tags">${(c.services||[]).map(s=>`<span class="pill tag">${esc(s)}</span>`).join('')}</div>
+  <div class="chip-row">${(c.staff||[]).map(s=>`<span class="who">${initials(s)}</span>`).join('')||'<span style="font-size:11px;color:var(--faint)">No staff</span>'}</div></div>`;}
+
+function renderClientDetail(id){
+  const db=load();const c=db.clients.find(x=>x.id===id);if(!c){app.innerHTML='<div class="empty">Client not found</div>';return;}
+  const p=db.partners.find(x=>x.id===c.partnerId);
+  const outstanding=(c.invoiced||0)-(c.received||0);
+  const rel=db.tasks.filter(t=>t.clientId===c.id);
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/clients">←</a>
+    <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="margin-top:4px;color:var(--muted);font-size:13px"><span class="pill active">${c.status}</span> &nbsp;👤 ${esc(p?p.name:'Unassigned')}${c.trn&&c.trn!=='-'?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><button class="btn" data-act="edit-client" data-id="${c.id}">✎ Edit</button><button class="btn" data-act="gen-client-tasks" data-id="${c.id}">⟳ Deadlines</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
+  <div class="detail-grid">
+    <div>
+      <div class="stats" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:18px">
+        <div class="stat"><div class="lbl">Invoiced</div><div class="num" style="font-size:22px">AED ${money(c.invoiced)}</div></div>
+        <div class="stat"><div class="lbl">Received</div><div class="num" style="font-size:22px;color:var(--brand)">AED ${money(c.received)}</div></div>
+        <div class="stat"><div class="lbl">Outstanding</div><div class="num" style="font-size:22px;color:${outstanding>0?'var(--red)':'var(--ink)'}">AED ${money(outstanding)}</div></div>
+      </div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">📒 Client Ledger</div>
+        <table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Ref</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>
+        ${(c.ledger&&c.ledger.length)?c.ledger.map(r=>`<tr><td>${fmtDate(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.ref)}</td><td class="r mono">${r.debit?money(r.debit):'—'}</td><td class="r mono">${r.credit?money(r.credit):'—'}</td></tr>`).join(''):`<tr><td colspan="5" class="empty">No transactions found.</td></tr>`}
+        </tbody></table></div>
+      <div class="card card-p"><div class="note-box"><div class="mini-av">WA</div><div style="flex:1"><textarea id="clientNote" placeholder="Add a note..."></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary btn-sm" data-act="post-client-note" data-id="${c.id}">Post</button></div></div></div>
+        ${(c.notes&&c.notes.length)?`<div style="margin-top:16px">${c.notes.map(n=>`<div class="activity-item"><div class="mini-av">${initials(n.by)}</div><div style="flex:1"><b>${esc(n.by)}</b><div>${esc(n.text)}</div></div></div>`).join('')}</div>`:''}
+      </div>
+    </div>
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">🏢 Details</div>
+        ${kv('Phone',c.phone)}${kv('Email',c.email)}${kv('Trade Licence',c.tradeLicence)}${kv('Contract Expiry',c.contractExpiry?fmtDate(c.contractExpiry):'-')}${kv('Partner',p?p.name:'-')}${kv('TRN',c.trn)}${kv('VAT Cycle',c.vatCycle)}${kv('Tax Year End',c.taxYearEnd)}${kv('Portal ID',c.portalId||'-')}
+        <div class="kv"><span class="k">Portal Password</span><span class="v" data-mask="${esc(c.portalPassword||'')}">${c.portalPassword?'••••••••':'-'} <span class="link" data-act="toggle-mask" style="font-size:11px">show</span></span></div>
+        ${kv('Address',c.address)}
+        <div class="chip-row" style="margin-top:12px">${(c.services||[]).map(s=>`<span class="pill active">${esc(s)}</span>`).join('')}</div>
+      </div>
+      <div class="card card-p"><div style="display:flex;justify-content:space-between;align-items:center"><div class="sec-title" style="margin:0">✔ Related Tasks</div><button class="btn btn-sm" data-act="new-task-for" data-client="${c.id}">＋ New Task</button></div>
+        ${rel.length?rel.map(t=>`<div class="rel-task" data-goto="#/task/${t.id}" style="cursor:pointer"><div class="ic">🔔</div><div style="flex:1"><b style="font-size:13px">${esc(t.title)}</b><div style="color:var(--faint);font-size:11px">${t.type} · ${fmtDate(t.dueDate)} · ${(t.assignees||[]).join(',')}</div></div><span class="pill ${statusPill(t.status)}">${t.status}</span></div>`).join(''):`<div class="empty" style="padding:24px">No tasks linked yet.</div>`}
+      </div>
+    </div>
+  </div>
+  ${clientServicesSection(c,db)}
+  ${clientDocsSection(c,db)}`;
+}
+
+/* ============================================================= TASKS */
+const TASK_STATUSES=['Not Started','In Progress','Pending to Client','Completed'];
+const TS_DOT={'Not Started':'#3b82f6','In Progress':'#f59e0b','Pending to Client':'#a855f7','Completed':'#10b981'};
+let taskFilter='All';
+function renderTasks(){
+  const db=load();
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Tasks</h1><p class="sub">Drag cards between columns to update status</p></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="run-engine">⟳ Run deadline engine</button><button class="btn btn-primary" data-act="new-task">＋ New Task</button></div></div>
+  <div class="toolbar">${['All','Task','Reminder','Meeting','Renewal'].map(f=>`<button class="btn btn-sm ${taskFilter===f?'btn-primary':''}" data-act="task-filter" data-f="${f}">${f==='All'?'All':f+'s'}</button>`).join('')}
+    <div class="search" style="flex:1">🔍<input id="taskSearch" placeholder="Search..."></div></div>
+  <div class="board" id="taskBoard">
+  ${TASK_STATUSES.map(st=>{
+    const items=db.tasks.filter(t=>t.status===st&&(taskFilter==='All'||t.type===taskFilter));
+    return `<div class="col" data-status="${st}"><div class="col-head"><span class="dot" style="background:${TS_DOT[st]}"></span>${st}<span class="count">${items.length}</span></div>
+      <div class="col-body" data-drop="status" data-status="${st}">
+        ${items.map(t=>taskCard(t,db)).join('')||`<div style="color:var(--faint);font-size:13px;text-align:center;padding:20px 0">Drop tasks here</div>`}
+      </div></div>`;}).join('')}
+  </div>`;
+}
+function taskCard(t,db){const c=db.clients.find(x=>x.id===t.clientId);
+  return `<div class="kcard" draggable="true" data-drag="task" data-id="${t.id}" data-goto="#/task/${t.id}">
+  <h4 style="font-size:13px">🔔 ${esc(t.title)}</h4>
+  ${c?`<div class="meta">🔗 ${esc(c.name)}</div>`:''}
+  <div class="meta">🗓 ${fmtDate(t.dueDate)} ${t.recurrence&&t.recurrence!=='None'?'· ⟳ '+t.recurrence:''}</div>
+  <div class="foot"><span class="pill ${t.priority==='High'?'high':t.priority==='Medium'?'med':'low'}">${t.priority}</span><span>${(t.assignees||[]).join(', ')}</span></div></div>`;}
+
+function renderTaskDetail(id){
+  const db=load();const t=db.tasks.find(x=>x.id===id);if(!t){app.innerHTML='<div class="empty">Task not found</div>';return;}
+  const c=db.clients.find(x=>x.id===t.clientId);
+  const tab=window._taskTab||'details';
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/tasks">←</a>
+    <div><div style="display:flex;gap:10px;align-items:center;margin-bottom:4px"><span class="pill med">🔔 ${t.type}</span>${t.recurrence&&t.recurrence!=='None'?`<span class="pill low">⟳ ${t.recurrence}</span>`:''}${t.source?`<span style="color:var(--faint);font-size:12px">🤖 ${t.source}</span>`:''}</div>
+    <h1 style="font-size:24px">${esc(t.title)}</h1>${c?`<a class="link" href="#/client/${c.id}">🔗 ${esc(c.name)}</a>`:''}</div></div>
+    <button class="btn btn-danger" data-act="del-task" data-id="${t.id}">🗑 Delete</button></div>
+  ${t.serviceId?svcFollowupPanel(t,db):''}
+  <div class="tabs"><div class="tab ${tab==='details'?'active':''}" data-act="task-tab" data-t="details">☰ Details</div><div class="tab ${tab==='comments'?'active':''}" data-act="task-tab" data-t="comments">💬 Comments</div></div>
+  ${tab==='details'?`
+  <div class="card card-p">
+    <div class="field"><label>Title</label><input value="${esc(t.title)}" data-edit="title" data-id="${t.id}"></div>
+    <div class="two-col">
+      <div class="field"><label>Status</label><select data-edit="status" data-id="${t.id}">${TASK_STATUSES.map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Due Date</label><input type="date" value="${t.dueDate}" data-edit="dueDate" data-id="${t.id}"></div>
+    </div>
+    <div class="field"><label>Recurrence</label><select data-edit="recurrence" data-id="${t.id}">${['None','Weekly','Monthly','Quarterly','Annual'].map(s=>`<option ${t.recurrence===s?'selected':''}>${s}</option>`).join('')}</select>
+      <div style="color:var(--faint);font-size:12px;margin-top:6px">ℹ When marked complete, a new task auto-creates with the next due date.</div></div>
+    <div class="field"><label>Assigned Team Members</label><div class="chip-row">${(t.assignees||[]).map(a=>`<span class="btn btn-sm" style="cursor:default">${initials(a)} ${esc(a)}</span>`).join('')||'<span style="color:var(--faint)">Unassigned</span>'}</div></div>
+    ${(t.checklist&&t.checklist.length)?`<div class="field"><label>Checklist</label>${t.checklist.map(s=>`<div style="padding:4px 0">☐ ${esc(s)}</div>`).join('')}</div>`:''}
+    <div style="color:var(--faint);font-size:12px;border-top:1px solid var(--line);padding-top:12px">👤 Created by ${esc(t.createdBy)} · 🕐 ${fmtDate(t.createdAt)}</div>
+  </div>`:`
+  <div class="card card-p">
+    <textarea id="taskComment" placeholder="Add a comment..." style="width:100%;border:1px solid var(--line);border-radius:11px;padding:12px;min-height:80px;outline:none"></textarea>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" data-act="post-comment" data-id="${t.id}">Post Comment</button></div>
+    ${(t.comments&&t.comments.length)?`<div style="margin-top:16px">${t.comments.map(cm=>`<div class="activity-item"><div class="mini-av">${initials(cm.by)}</div><div style="flex:1"><b>${esc(cm.by)}</b> <span style="color:var(--faint);font-size:12px">${esc(cm.at)}</span><div>${esc(cm.text)}</div></div></div>`).join('')}</div>`:''}
+  </div>`}`;
+}
+
+/* ============================================================= QUOTATIONS */
+function renderQuotations(){
+  const db=load();
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Quotations</h1><p class="sub">Quotations sent to leads &amp; clients</p></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="upload-logo">🖼 Logo</button><button class="btn btn-primary" data-act="new-quote">＋ New Quotation</button></div></div>
+  <div class="toolbar"><div class="search">🔍<input placeholder="Search by title or name..."></div><select class="sel"><option>All Statuses</option></select></div>
+  <div class="card"><table class="tbl"><thead><tr><th>Title</th><th>Lead / Client</th><th class="r">Amount</th><th>Status</th><th>Date</th><th class="r">Actions</th></tr></thead><tbody>
+  ${db.quotations.map(q=>`<tr><td><b>${esc(q.title)}</b></td><td><span class="link" data-goto="#/quotation/${q.id}">${esc(q.refName)}</span> <span class="pill ${q.forType==='lead'?'blue':'tag'}">${q.forType==='lead'?'Lead':'Client'}</span></td>
+    <td class="r mono">AED ${money(q.amount)}</td><td><span class="pill ${q.status==='Draft'?'draft':'final'}">${q.status}</span></td><td style="color:var(--faint)">${fmtDate(q.date)}</td>
+    <td class="r"><button class="icon-btn" data-goto="#/quotation/${q.id}">✎</button><button class="icon-btn" data-act="print-quote" data-id="${q.id}">🖨</button><button class="icon-btn" data-act="del-quote" data-id="${q.id}">🗑</button></td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+function renderQuotationBuilder(id){
+  const db=load();const q=db.quotations.find(x=>x.id===id);if(!q){app.innerHTML='<div class="empty">Not found</div>';return;}
+  const total=itemsTotal(q.items);
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/quotations">←</a>
+    <div><h1 style="font-size:24px">Quotation Builder</h1><p class="sub">${esc(q.refName)}</p></div></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="save-quote" data-id="${q.id}">💾 Save Draft</button><button class="btn btn-primary" data-act="finalize-quote" data-id="${q.id}">✔ Finalize</button><button class="btn" data-act="quote-to-invoice" data-id="${q.id}">🧾 Copy to Invoice</button><button class="btn" data-act="print-quote" data-id="${q.id}">🖨 Print</button></div></div>
+  <div class="detail-grid">
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">ⓘ Basic Info</div>
+        <div class="two-col"><div class="field"><label>Title</label><input value="${esc(q.title)}" data-q="title" data-id="${q.id}"></div><div class="field"><label>Reference</label><input value="${esc(q.reference||'')}" placeholder="e.g. QT-2026-001" data-q="reference" data-id="${q.id}"></div></div>
+        <div class="field"><label>Introduction</label><textarea data-q="intro" data-id="${q.id}">${esc(q.intro||'')}</textarea></div>
+      </div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">📅 Engagement</div>
+        <div class="two-col"><div class="field"><label>Client Trade Licence No</label><input value="${esc(q.clientLicence||'')}" data-q="clientLicence" data-id="${q.id}" placeholder="e.g. 801406"></div>
+        <div class="field"><label>Service Type</label><select data-q="periodType" data-id="${q.id}"><option value="">— select —</option><option value="one-time" ${q.periodType==='one-time'?'selected':''}>One-time service</option><option value="period" ${q.periodType==='period'?'selected':''}>Period (from – to)</option></select></div></div>
+        ${q.periodType==='period'?`<div class="two-col"><div class="field"><label>Start Date</label><input type="date" value="${q.periodStart||''}" data-q="periodStart" data-id="${q.id}"></div><div class="field"><label>End Date</label><input type="date" value="${q.periodEnd||''}" data-q="periodEnd" data-id="${q.id}"></div></div>`:''}
+      </div>
+      ${scopeEditorHtml(q,'q')}
+      <div class="card card-p" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between"><div class="sec-title">≡ Fee Schedule</div><button class="btn btn-sm" data-act="q-add-item" data-id="${q.id}">＋ Add Item</button></div>
+        <div class="fee-head" style="grid-template-columns:1fr 128px 108px 92px 30px"><span>Description</span><span>Period</span><span>Amount</span><span>VAT</span><span></span></div>
+        ${(q.items||[]).map((it,i)=>`<div class="fee-row" style="grid-template-columns:1fr 128px 108px 92px 30px"><input value="${esc(it.desc)}" data-qi="desc" data-id="${q.id}" data-i="${i}"><input value="${esc(it.period||'')}" data-qi="period" data-id="${q.id}" data-i="${i}" placeholder="e.g. One-time"><input type="number" value="${itemAmt(it)}" data-qi="amount" data-id="${q.id}" data-i="${i}"><select data-qi="vat" data-id="${q.id}" data-i="${i}" style="border:1px solid var(--line);border-radius:9px;padding:9px"><option value="standard" ${(!it.vat||it.vat==='standard')?'selected':''}>5%</option><option value="zero" ${it.vat==='zero'?'selected':''}>0%</option><option value="exempt" ${it.vat==='exempt'?'selected':''}>Exempt</option></select><button class="icon-btn" data-act="q-del-item" data-id="${q.id}" data-i="${i}">✕</button></div>`).join('')}
+        <div style="border-top:2px solid var(--brand);padding-top:12px;margin-top:8px">
+          <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:8px"><label style="font-size:12px;color:var(--muted);font-weight:700">VAT %</label><input type="number" value="${q.vatRate!=null?q.vatRate:5}" data-q="vatRate" data-id="${q.id}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px;text-align:right"></div>
+          ${(()=>{const r=q.vatRate!=null?+q.vatRate:5;const vat=vatSum(q.items,r);return `<div style="text-align:right;line-height:1.9"><div>Subtotal: <b>AED ${money(total)}</b></div>${r>0?`<div>VAT: <b>AED ${money(vat)}</b></div>`:''}<div style="font-size:16px;margin-top:2px"><b style="color:var(--brand-d)">Total: AED ${money(total+vat)}</b></div></div>`;})()}
+        </div>
+      </div>
+      ${paymentEditorHtml(q,'q')}
+    </div>
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">✍ Signature</div>
+        <div class="field"><label>Signatory Name</label><input value="${esc(q.signatory||'')}" data-q="signatory" data-id="${q.id}"></div>
+        <div class="field"><label>Title</label><input value="${esc(q.signatoryTitle||'')}" data-q="signatoryTitle" data-id="${q.id}"></div>
+        <div class="field"><label>Email</label><input value="${esc(q.email||'asif@fairtaxint.com')}" data-q="email" data-id="${q.id}"></div>
+      </div>
+      <div class="card card-p"><div class="sec-title">Status</div><span class="pill ${q.status==='Draft'?'draft':'final'}">${q.status}</span></div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================= AGREEMENTS */
+function renderAgreements(){
+  const db=load();
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Agreements</h1><p class="sub">Service agreements with clients</p></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="upload-logo">🖼 Logo</button><button class="btn btn-primary" data-act="new-agreement">＋ New Agreement</button></div></div>
+  <div class="toolbar"><div class="search">🔍<input placeholder="Search by title or client name..."></div><select class="sel"><option>All Statuses</option></select></div>
+  <div class="card"><table class="tbl"><thead><tr><th>Title</th><th>Client</th><th class="r">Amount</th><th>Status</th><th>Date</th><th class="r">Actions</th></tr></thead><tbody>
+  ${db.agreements.map(a=>`<tr><td><b>${esc(a.title)}</b></td><td><span class="link" data-goto="#/agreement/${a.id}">${esc(a.clientName)}</span></td>
+    <td class="r mono">AED ${money(a.amount)}</td><td><span class="pill ${a.status==='Draft'?'draft':'final'}">${a.status}</span></td><td style="color:var(--faint)">${fmtDate(a.date)}</td>
+    <td class="r"><button class="icon-btn" data-goto="#/agreement/${a.id}">✎</button><button class="icon-btn" data-act="print-agreement" data-id="${a.id}">🖨</button><button class="icon-btn" data-act="del-agreement" data-id="${a.id}">🗑</button></td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+function renderAgreementBuilder(id){
+  const db=load();const a=db.agreements.find(x=>x.id===id);if(!a){app.innerHTML='<div class="empty">Not found</div>';return;}
+  const total=itemsTotal(a.items);
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/agreements">←</a>
+    <div><h1 style="font-size:24px">Agreement Builder</h1><p class="sub">${esc(a.clientName)}</p></div></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="save-agreement" data-id="${a.id}">💾 Save Draft</button><button class="btn btn-primary" data-act="finalize-agreement" data-id="${a.id}">✔ Finalize</button><button class="btn" data-act="print-agreement" data-id="${a.id}">🖨 Print</button></div></div>
+  <div class="detail-grid">
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">ⓘ Basic Info</div>
+        <div class="two-col"><div class="field"><label>Title</label><input value="${esc(a.title)}" data-a="title" data-id="${a.id}"></div><div class="field"><label>Reference</label><input value="${esc(a.reference||'')}" data-a="reference" data-id="${a.id}"></div></div>
+      </div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">📅 Engagement</div>
+        <div class="two-col"><div class="field"><label>Client Trade Licence No</label><input value="${esc(a.clientLicence||'')}" data-a="clientLicence" data-id="${a.id}" placeholder="e.g. 801406"></div>
+        <div class="field"><label>Service Type</label><select data-a="periodType" data-id="${a.id}"><option value="">— select —</option><option value="one-time" ${a.periodType==='one-time'?'selected':''}>One-time service</option><option value="period" ${a.periodType==='period'?'selected':''}>Period (from – to)</option></select></div></div>
+        ${a.periodType==='period'?`<div class="two-col"><div class="field"><label>Start Date</label><input type="date" value="${a.periodStart||''}" data-a="periodStart" data-id="${a.id}"></div><div class="field"><label>End Date</label><input type="date" value="${a.periodEnd||''}" data-a="periodEnd" data-id="${a.id}"></div></div>`:''}
+      </div>
+      ${scopeEditorHtml(a,'a')}
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">🛡 General Disclosure</div>
+        <div class="field"><textarea style="min-height:110px" data-a="disclosure" data-id="${a.id}">${esc(a.disclosure||'')}</textarea></div></div>
+      <div class="card card-p" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between"><div class="sec-title">≡ Fee Schedule</div><button class="btn btn-sm" data-act="a-add-item" data-id="${a.id}">＋ Add Item</button></div>
+        <div class="fee-head" style="grid-template-columns:1fr 128px 108px 92px 30px"><span>Description</span><span>Period</span><span>Amount</span><span>VAT</span><span></span></div>
+        ${(a.items||[]).map((it,i)=>`<div class="fee-row" style="grid-template-columns:1fr 128px 108px 92px 30px"><input value="${esc(it.desc)}" data-ai="desc" data-id="${a.id}" data-i="${i}"><input value="${esc(it.period||'')}" data-ai="period" data-id="${a.id}" data-i="${i}" placeholder="e.g. 12 months / 4 quarters"><input type="number" value="${itemAmt(it)}" data-ai="amount" data-id="${a.id}" data-i="${i}"><select data-ai="vat" data-id="${a.id}" data-i="${i}" style="border:1px solid var(--line);border-radius:9px;padding:9px"><option value="standard" ${(!it.vat||it.vat==='standard')?'selected':''}>5%</option><option value="zero" ${it.vat==='zero'?'selected':''}>0%</option><option value="exempt" ${it.vat==='exempt'?'selected':''}>Exempt</option></select><button class="icon-btn" data-act="a-del-item" data-id="${a.id}" data-i="${i}">✕</button></div>`).join('')}
+        <div style="border-top:2px solid var(--brand);padding-top:12px;margin-top:8px">
+          <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:8px"><label style="font-size:12px;color:var(--muted);font-weight:700">VAT %</label><input type="number" value="${a.vatRate!=null?a.vatRate:5}" data-a="vatRate" data-id="${a.id}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px;text-align:right"></div>
+          ${(()=>{const r=a.vatRate!=null?+a.vatRate:5;const vat=vatSum(a.items,r);return `<div style="text-align:right;line-height:1.9"><div>Subtotal: <b>AED ${money(total)}</b></div>${r>0?`<div>VAT: <b>AED ${money(vat)}</b></div>`:''}<div style="font-size:16px;margin-top:2px"><b style="color:var(--brand-d)">Total: AED ${money(total+vat)}</b></div></div>`;})()}
+        </div></div>
+      ${paymentEditorHtml(a,'a')}
+      ${scheduleEditorHtml(a)}
+    </div>
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">✍ Signature</div>
+        <div class="field"><label>Signatory Name</label><input value="${esc(a.signatory||'')}" data-a="signatory" data-id="${a.id}"></div>
+        <div class="field"><label>Title</label><input value="${esc(a.signatoryTitle||'')}" data-a="signatoryTitle" data-id="${a.id}"></div>
+        <div class="field"><label>Client Signatory</label><input value="${esc(a.clientSig||'')}" data-a="clientSig" data-id="${a.id}"></div>
+      </div>
+      <div class="card card-p"><div class="sec-title">Status</div><span class="pill ${a.status==='Draft'?'draft':'final'}">${a.status}</span></div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================= SERVICE CATALOG */
+const SCOPE_CATALOG={
+  'Access to Accounting Software':['Granting a non-exclusive, non-transferable right to access and use the cloud edition of Manager.io accounting software for internal business purposes only.'],
+  'Anti Money Laundering':['Assessing the Client\u2019s AML risk exposure based on the nature of its business activities and legal structure.','Assisting the Client in developing, implementing, and maintaining an AML Compliance Program.','Conducting Customer Due Diligence (CDD) and Enhanced Due Diligence (EDD) reviews.','Providing support for onboarding and verification procedures aligned with KYC standards.','Conducting periodic AML awareness sessions or staff training.','Supporting the preparation and submission of Suspicious Transaction Reports (STRs).','Providing general advisory and updates on changes in AML regulations.'],
+  'Bookkeeping':['Recording all financial transactions in accordance with IFRS and UAE laws.','Maintaining accurate ledgers, journals, and supporting documentation.','Monthly, quarterly, or annual reconciliation of bank accounts.','Preparation of management reports such as trial balance, P&L, and balance sheets.','Setting up and maintaining chart of accounts.','Ensuring timely recording of AR, AP, payroll, and expense claims.','Supporting clients in implementing accounting software.','Assisting in maintaining compliance with UAE corporate and tax regulations.'],
+  'Corporate Tax Return Filing':['Reviewing and analyzing your company\u2019s financial information to determine taxable profits.','Preparing and filing corporate tax returns in accordance with FTA requirements.','Advising on allowable deductions, exemptions, and tax credits.','Ensuring compliance with all relevant UAE corporate tax regulations.','Keeping the client informed on updates or changes in legislation.'],
+  'Financial Audit':['Conducting statutory audits in compliance with IFRS and UAE laws.','Examining and evaluating the accuracy of financial statements.','Assessing the effectiveness of internal controls.','Preparing and issuing an independent auditor\u2019s report.','Providing recommendations to enhance financial and operational controls.','Coordinating with relevant government authorities.','Assisting in the preparation of financial statements.','Offering management letters outlining audit findings.'],
+  'VAT Return Filing':['Reviewing and verifying sales and purchase invoices and supporting documentation for VAT compliance.','Calculating output VAT, input VAT, and determining the net VAT liability or refund position.','Preparing all necessary forms and documentation required for VAT return submission.','Advising on VAT record-keeping requirements and deadlines.','Filing the periodic VAT return with the FTA on behalf of the client.','Providing confirmation of successful filing and a copy of the VAT return submitted.'],
+  'Preparation of Financial Statements':['Compiling and organizing the Client\u2019s financial data from books of accounts and supporting records.','Preparing a complete set of financial statements including Statement of Financial Position, Statement of Profit or Loss, Statement of Changes in Equity, and Statement of Cash Flows.','Ensuring financial statements are prepared in accordance with International Financial Reporting Standards (IFRS) and applicable UAE regulations.','Preparing notes to the financial statements including accounting policies, disclosures, and supplementary schedules.','Coordinating with auditors or regulatory authorities as required for submission of financial statements.','Advising the Client on adjustments, reclassifications, and compliance matters arising during preparation.'],
+};
+function scopeEditorHtml(doc,k){
+  return `<div class="card card-p" style="margin-bottom:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+      <div class="sec-title" style="margin:0">≣ Scope of Services</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <select class="sel" data-catalog="${k}" data-id="${doc.id}"><option value="">+ Add from catalog...</option>${Object.keys(SCOPE_CATALOG).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>
+        <button class="link" data-act="scope-custom" data-k="${k}" data-id="${doc.id}" style="background:none;border:none;font-weight:600">+ Custom</button>
+      </div>
+    </div>
+    ${(doc.scope||[]).map((g,i)=>`<div style="border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;gap:10px;margin-bottom:8px"><input value="${esc(g.heading)}" data-scope-h="${k}" data-id="${doc.id}" data-i="${i}" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:9px;font-weight:700"><button class="icon-btn" data-act="scope-del" data-k="${k}" data-id="${doc.id}" data-i="${i}">🗑</button></div>
+      <textarea data-scope-i="${k}" data-id="${doc.id}" data-i="${i}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;min-height:96px;font-size:13px;line-height:1.55" placeholder="One item per line">${esc((g.items||[]).join('\n'))}</textarea>
+    </div>`).join('')||`<div style="color:var(--faint);font-size:13px;padding:8px 0">No scope items yet — pick a service from the catalog or add a custom one.</div>`}
+  </div>`;
+}
+
+/* ============================================================= PAYMENT EDITOR (3 options) */
+function paymentEditorHtml(doc,k){
+  const mode=doc.paymentMode||'split';
+  const total=(doc.cheques||[]).reduce((s,c)=>s+(+c.amount||0),0);
+  return `<div class="card card-p" style="margin-bottom:18px"><div class="sec-title">💳 Payment Terms</div>
+    <div class="field"><label>Payment Option</label><select data-pay="${k}" data-id="${doc.id}">
+      <option value="advance" ${mode==='advance'?'selected':''}>All payment in advance</option>
+      <option value="split" ${mode==='split'?'selected':''}>50% in advance, 50% on completion</option>
+      <option value="cheques" ${mode==='cheques'?'selected':''}>Cheque schedule (CDC / PDC)</option></select></div>
+    ${mode==='cheques'?`
+      <div class="fee-head" style="grid-template-columns:44px 110px 1fr 120px 30px"><span>#</span><span>Type</span><span>Cheque Date</span><span>Amount</span><span></span></div>
+      ${(doc.cheques||[]).map((c,i)=>`<div class="fee-row" style="grid-template-columns:44px 110px 1fr 120px 30px">
+        <div style="padding:9px 0;color:var(--faint)">${i+1}</div>
+        <select data-chq="type" data-k="${k}" data-id="${doc.id}" data-i="${i}" style="border:1px solid var(--line);border-radius:9px;padding:9px"><option ${c.type==='CDC'?'selected':''}>CDC</option><option ${c.type==='PDC'?'selected':''}>PDC</option></select>
+        <input type="date" value="${c.date||''}" data-chq="date" data-k="${k}" data-id="${doc.id}" data-i="${i}">
+        <input type="number" value="${c.amount||0}" data-chq="amount" data-k="${k}" data-id="${doc.id}" data-i="${i}">
+        <button class="icon-btn" data-act="chq-del" data-k="${k}" data-id="${doc.id}" data-i="${i}">✕</button></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><button class="btn btn-sm" data-act="chq-add" data-k="${k}" data-id="${doc.id}">＋ Add Cheque</button><b style="color:var(--brand-d)">Total: AED ${money(total)}</b></div>
+      <div style="color:var(--faint);font-size:12px;margin-top:8px">CDC = Current Dated Cheque · PDC = Post-Dated Cheque</div>`
+    :`<div style="color:var(--muted);font-size:13px;padding:6px 0">${mode==='advance'?'100% of the fee is payable in advance before commencement of the Services.':'50% of the fee in advance and the remaining 50% upon completion of the Services.'}</div>`}
+  </div>`;
+}
+/* Paste your real logo here as a data URI or URL to override the SVG below.
+   e.g. const FT_LOGO_SRC="data:image/png;base64,iVBOR...";  */
+const FT_LOGO_SRC="";
+const FT_LOGO_SVG=`<svg width="46" height="46" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="28" r="22" fill="#eef3f6"/><g fill="#2b8fd6"><path d="M15 18 q3 -2 5 1 q1 3 -1 6 q2 2 1 5 q-2 4 -5 3 q-3 -2 -2 -6 q-2 -3 -1 -6 q1 -2 3 -3Z"/><path d="M28 14 q4 -1 6 2 q-1 3 1 4 q3 2 2 6 q-1 3 -4 4 q1 4 -2 7 q-3 2 -5 -1 q-1 -4 1 -7 q-3 -3 -1 -7 q1 -5 5 -8Z"/><path d="M40 16 q6 0 8 4 q1 4 -2 6 q3 2 1 5 q-3 3 -7 1 q-3 -2 -2 -6 q-3 -3 -1 -6 q1 -3 4 -4Z"/><path d="M43 38 q4 -1 5 2 q0 3 -3 4 q-4 0 -4 -3 q0 -2 2 -3Z"/></g><circle cx="30" cy="28" r="22" fill="none" stroke="#cbd5dd" stroke-width="1"/><path d="M7 42 q23 20 48 3" fill="none" stroke="#333a41" stroke-width="2.6" stroke-linecap="round"/><path d="M50 47 l6 -3 l-1 7 Z" fill="#333a41"/></svg>`;
+const FT_LOGO=FT_LOGO_SRC?`<img src="${FT_LOGO_SRC}" alt="FairTax International" style="height:46px;width:auto">`:FT_LOGO_SVG;
+function resolveLogo(){const b=load().logo;return b?`<img src="${b}" alt="FairTax International" style="height:48px;width:auto">`:FT_LOGO;}
+function printDoc(kind,d){
+  const isQuote=kind==='quotation';
+  const total=itemsTotal(d.items);
+  let n=0;
+  const periodHtml=d.periodType?(()=>{const sn=++n;let body;
+    if(d.periodType==='period'&&d.periodStart&&d.periodEnd){body=`The Services under this ${isQuote?'Quotation':'Agreement'} cover the period commencing <b>${fmtDate(d.periodStart)}</b> and ending <b>${fmtDate(d.periodEnd)}</b> (the “Service Period”).${!isQuote?' Notwithstanding the date of signing, this Agreement applies to the full Service Period.':''}`;}
+    else if(d.periodType==='period'){body=`The Services under this ${isQuote?'Quotation':'Agreement'} cover the Service Period as agreed between the parties.`;}
+    else{body=`The Services under this ${isQuote?'Quotation':'Agreement'} are provided on a one-time basis.`;}
+    return `<h2><span class="num">${sn}.</span>Service Period</h2><p>${body}</p>`;})():'';
+  const scopeHtml=(d.scope&&d.scope.length)?(()=>{const sn=++n;return `<h2><span class="num">${sn}.</span>Scope of Services</h2>`+
+    d.scope.map((g,i)=>`<div class="sub"><div class="subh">${sn}.${i+1}&nbsp;&nbsp;${esc(g.heading)}</div><ol class="items">${(g.items||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div>`).join('')+
+    (d.disclosure?`<div class="disc">${esc(d.disclosure)}</div>`:'');})():'';
+  const feeSn=++n;
+  const hasPeriod=(d.items||[]).some(i=>i.period&&String(i.period).trim());
+  const vatRate=d.vatRate!=null?+d.vatRate:5;
+  const showVat=vatRate>0;
+  const descCols=hasPeriod?2:1;
+  const netTotal=itemsTotal(d.items);
+  const vatTotal=vatSum(d.items,vatRate);
+  const grossTotal=netTotal+vatTotal;
+  const rows=(d.items||[]).map(i=>{const amt=itemAmt(i);const v=lineVat(i,vatRate);return `<tr><td>${esc(i.desc)||'&nbsp;'}</td>${hasPeriod?`<td class="ctr">${esc(i.period||'')}</td>`:''}<td class="r">${money(amt)}</td>${showVat?`<td class="r">${(i.vat&&i.vat!=='standard')?(i.vat==='exempt'?'Exempt':'0.00'):money(v)}</td><td class="r">${money(amt+v)}</td>`:''}</tr>`;}).join('');
+  const suspend='If payment is not received in accordance with the above, the Service Provider reserves the right to suspend the Services until payment is made.';
+  const payMode=d.paymentMode||(d.payment?'text':'');
+  let payBody='';
+  if(payMode==='cheques'&&d.cheques&&d.cheques.length){
+    const ct=d.cheques.reduce((s,c)=>s+(+c.amount||0),0);
+    payBody=`<p class="pay">The total professional fee shall be settled by ${d.cheques.length} cheque(s) provided in advance, in accordance with the schedule below:</p>
+      <table class="f" style="margin-top:4px"><thead><tr><th class="ctr" style="width:64px">Cheque</th><th style="width:90px">Type</th><th>Cheque Date</th><th class="r" style="width:120px">Amount (AED)</th></tr></thead><tbody>
+      ${d.cheques.map((c,i)=>`<tr><td class="ctr">${i+1}</td><td>${esc(c.type||'PDC')}</td><td>${c.date?fmtDate(c.date):'—'}</td><td class="r">${money(c.amount||0)}</td></tr>`).join('')}
+      <tr class="tot"><td colspan="3" class="r">Total (AED)</td><td class="r">${money(ct)}</td></tr></tbody></table>
+      <p class="pay" style="margin-top:6px;font-size:8.5pt;color:#7b8794">CDC = Current Dated Cheque &nbsp;|&nbsp; PDC = Post-Dated Cheque</p>
+      <p class="pay">${suspend}</p>`;
+  } else if(payMode==='advance'){payBody=`<div class="pay">100% of the total professional fee is payable in advance before commencement of the Services.</div><p class="pay">${suspend}</p>`;}
+  else if(payMode==='split'){payBody=`<div class="pay">50% of the total professional fee is payable in advance and the remaining 50% upon completion of the Services.</div><p class="pay">${suspend}</p>`;}
+  else if(d.payment){payBody=`<div class="pay">${esc(d.payment)}</div>`;}
+  const payHtml=payBody?`<div class="subh" style="margin-top:16px">${feeSn}.1&nbsp;&nbsp;Payment Terms</div>${payBody}`:'';
+  const feeHtml=`<h2><span class="num">${feeSn}.</span>${isQuote?'Fee':'Fee and Payment Terms'}</h2>
+    <p class="lead">The fee proposed for our scope of services is tabulated below;</p>
+    <table class="f"><thead><tr><th>Description</th>${hasPeriod?'<th class="ctr" style="width:130px">Period</th>':''}<th class="r" style="width:110px">Amount (AED)</th>${showVat?`<th class="r" style="width:88px">VAT (${vatRate}%)</th><th class="r" style="width:110px">Total (AED)</th>`:''}</tr></thead><tbody>${rows}<tr class="tot"><td colspan="${descCols}" class="r">Total (AED)</td><td class="r">${money(netTotal)}</td>${showVat?`<td class="r">${money(vatTotal)}</td><td class="r">${money(grossTotal)}</td>`:''}</tr></tbody></table>
+    ${payHtml}`;
+  const termsHtml=(!isQuote&&d.terms&&d.terms.length)?`<div class="terms2">`+d.terms.map(t=>`<div class="term"><div class="th"><span class="tnum">${++n}.</span>${esc(t.t)}</div><p>${esc(t.b)}</p></div>`).join('')+`</div>`:'';
+  const closingHtml=isQuote&&d.closing?`<p class="clo">${esc(d.closing)}</p>`:'';
+  const sign=isQuote
+    ? `<div class="sig-one"><div class="sig-l"></div><div class="sig-n">${esc(d.signatory||'')}</div><div class="sig-t">${esc(d.signatoryTitle||'')}</div><div class="sig-t">${esc(biz().name)}</div><div class="sig-t">${esc(d.email||biz().email)}</div><div class="sig-t">${esc(d.phone||biz().phone)}</div></div>`
+    : `<div class="signwrap"><p class="lead" style="margin-top:0">IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.</p>
+       <div class="sign"><div class="b"><div class="slab">Service Provider</div><div style="font-size:9pt;color:#54687c">For ${esc(biz().name)}</div><div class="sig-l"></div><div class="sig-n">${esc(d.signatory||'')}</div><div class="sig-t">${esc(d.signatoryTitle||'')}</div><div class="sig-t">Date: ${fmtDate(d.date)}</div></div>
+       <div class="b"><div class="slab">Client</div><div style="font-size:9pt;color:#54687c">For ${esc(d.clientName||'')}</div><div class="sig-l"></div><div class="sig-n">${esc(d.clientSig||'Authorized Signatory')}</div><div class="sig-t">Title: ${esc(d.clientSigTitle||'Director')}</div><div class="sig-t">Date: ${fmtDate(d.date)}</div></div></div></div>`;
+  const eyebrow=isQuote?'PROPOSAL DOCUMENT':'ENGAGEMENT DOCUMENT';
+  const sub=isQuote?`This quotation is issued on <b>${fmtDate(d.date)}</b>`:`This Agreement is made and signed on <b>${fmtDate(d.date)}</b>`;
+  const clientName=esc(d.clientName||d.refName||'');
+  const clientBadge=d.clientLicence?`<span class="badge">Licence No. ${esc(d.clientLicence)}</span>`:'';
+  const b=biz();
+  const header=`<div class="rh"><div class="lh"><div class="lh-l">${resolveLogo()}<div><div class="fx">${esc(b.name)}</div><div class="intl">AUDIT · TAX · ADVISORY</div></div></div>
+      <div class="lh-r"><div class="addr">${b.licence?'Licence No. '+esc(b.licence)+'<br>':''}${bizAddrBr()}${b.email?'<br>'+esc(b.email)+' · '+esc(b.phone):''}</div></div></div>
+    <div class="rule"><div class="n"></div><div class="g"></div></div></div>`;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(d.title)}</title><style>
+  @page{size:A4;margin:13mm 15mm 12mm;@bottom-right{content:"Page " counter(page) " of " counter(pages);font:7.5pt Arial;color:#aab3bd}}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  html,body{margin:0;padding:0}
+  body{background:#e7ebf0;font:10pt/1.5 Georgia,'Times New Roman',serif;color:#2b3440}
+  .toolbar{width:210mm;margin:14px auto 0;text-align:right}
+  .toolbar button{background:#1c3d5a;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:600 10pt Arial;cursor:pointer}
+  .page{width:210mm;background:#fff;margin:14px auto;padding:14mm 16mm;box-shadow:0 6px 30px rgba(0,0,0,.14)}
+  @media print{body{background:#fff}.page{width:auto;margin:0;padding:0;box-shadow:none}.toolbar{display:none}
+    thead{display:table-header-group}tfoot{display:table-footer-group}}
+  table.doc{width:100%;border-collapse:collapse}table.doc>thead>tr>td,table.doc>tbody>tr>td,table.doc>tfoot>tr>td{padding:0}
+  .rh{padding-bottom:8px}
+  .rf{border-top:1px solid #e3e8ee;margin-top:16px;padding-top:8px;text-align:center;font:7.5pt Arial;color:#aab3bd;letter-spacing:.6px}
+  .lh{display:flex;justify-content:space-between;align-items:center}
+  .lh-l{display:flex;gap:11px;align-items:center}
+  .fx{font:800 16pt Arial;color:#1c3d5a;line-height:1}.intl{font:700 8pt Arial;color:#c1922b;letter-spacing:4px;margin-top:2px}
+  .lh-r{text-align:right}.atv{font:800 8pt Arial;color:#c1922b;letter-spacing:2px}.addr{font:8pt Arial;color:#7b8794;margin-top:4px;line-height:1.4}
+  .rule{margin:8px 0 2px}.rule .n{height:2.5px;background:#1c3d5a}.rule .g{height:2px;background:#c1922b;margin-top:2px}
+  .tw{text-align:center;margin:20px 0 18px}.eyebrow{font:700 8pt Arial;color:#54687c;letter-spacing:4px}
+  .tw h1{font:800 21pt Arial;color:#1c3d5a;margin:5px 0 0;letter-spacing:.5px}
+  .uline{width:56px;height:3px;background:#c1922b;margin:10px auto 0;border-radius:2px}.tw .s{font-size:9.5pt;color:#54687c;margin-top:10px}
+  .party{background:#f5f7fa;border:1px solid #e3e8ee;border-left:4px solid #c1922b;border-radius:6px;padding:14px 16px;margin-bottom:18px}
+  .plabel{font:800 7.5pt Arial;color:#c1922b;letter-spacing:2px;margin-bottom:3px}
+  .pname{font:700 11pt Arial;color:#1c3d5a;margin-bottom:4px}
+  .badge{display:inline-block;font:600 7pt Arial;color:#54687c;background:#fff;border:1px solid #d8dee6;border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:middle;letter-spacing:.3px}
+  .pdesc{font-size:9pt;color:#3f4a57;margin-bottom:12px}.party .prow:last-child .pdesc{margin-bottom:0}
+  p.intro{margin:0 0 4px}
+  h2{font:700 12.5pt Arial;color:#1c3d5a;margin:22px 0 9px;padding-bottom:5px;border-bottom:1px solid #e3e8ee}
+  h2 .num{color:#c1922b;margin-right:8px}
+  .sub{margin:0 0 9px}.subh{font:700 10pt Arial;color:#28405a;margin:11px 0 5px}
+  ol.items{margin:0 0 6px;padding-left:20px}ol.items li{margin:3px 0}
+  .disc{font-size:9pt;color:#3f4a57;background:#f5f7fa;border-left:3px solid #c1922b;padding:11px 13px;border-radius:0 6px 6px 0;margin-top:12px;text-align:justify}
+  p.lead{margin:0 0 9px}
+  table.f{width:100%;border-collapse:collapse;margin-top:6px;font-size:9.5pt;border:1px solid #cfd6de}
+  table.f th{background:#17324c;color:#fff;text-align:left;padding:9px 12px;font:700 8.8pt Arial;border-right:1px solid #274863}
+  table.f th:last-child{border-right:none}
+  table.f th.r,table.f td.r{text-align:right}table.f th.ctr,table.f td.ctr{text-align:center}
+  table.f td{padding:9px 12px;border-right:1px solid #e3e8ee;border-top:1px solid #e3e8ee;color:#2b3440}
+  table.f td:last-child{border-right:none}
+  table.f tbody tr:nth-child(even):not(.tot){background:#f5f7fa}
+  tr.tot td{font-weight:700;color:#17324c;background:#eef2f6;border-top:1.5px solid #17324c}
+  .pay{white-space:pre-line;font-size:9.5pt;color:#3f4a57}
+  p{text-align:justify;margin:0 0 8px}
+  .clo{margin-top:18px;color:#3f4a57}
+  .terms2{column-count:2;column-gap:24px;margin-top:14px}
+  .signwrap{break-inside:avoid;page-break-inside:avoid;margin-top:16px}
+  .term{-webkit-column-break-inside:avoid;break-inside:avoid;margin-bottom:11px}
+  .term .th{font:700 9.5pt Arial;color:#1c3d5a;margin-bottom:2px}
+  .term .th .tnum{color:#c1922b;margin-right:5px}
+  .term p{font-size:8.4pt;line-height:1.42;margin:0;text-align:justify;color:#3f4a57}
+  .sign{display:flex;gap:44px;margin-top:18px}.sign .b{flex:1}
+  .slab{font:800 7.5pt Arial;color:#c1922b;letter-spacing:2px;margin-bottom:8px}
+  .sig-l{border-top:1px solid #1c3d5a;margin-top:38px;width:82%}
+  .sig-one{margin-top:38px}.sig-one .sig-l{margin-top:0;margin-bottom:6px}
+  .sig-n{font:700 10.5pt Arial;color:#1c3d5a;margin-top:6px}.sig-t{font-size:8.5pt;color:#54687c}
+  </style></head><body>
+  <div class="toolbar"><button onclick="window.print()">🖨 Print / Save as PDF</button></div>
+  <div class="page"><table class="doc">
+    <thead><tr><td>${header}</td></tr></thead>
+    <tfoot><tr><td><div class="rf">Strictly Private &amp; Confidential &nbsp;·&nbsp; ${esc(b.name)}</div></td></tr></tfoot>
+    <tbody><tr><td>
+      <div class="tw"><div class="eyebrow">${eyebrow}</div><h1>${esc(d.title).toUpperCase()}</h1><div class="uline"></div><div class="s">${sub}${d.reference?' &nbsp;·&nbsp; Ref: '+esc(d.reference):''}</div></div>
+      <div class="party">
+        <div class="prow"><div class="plabel">Service Provider</div><div class="pname">${esc(b.name)}${b.licence?`<span class="badge">Licence No. ${esc(b.licence)}</span>`:''}</div>
+          <div class="pdesc">a Free Zone Company incorporated under the laws of the United Arab Emirates, with its principal office at ${bizAddrLine()} (the “Service Provider”).</div></div>
+        <div class="prow"><div class="plabel">And — ${isQuote?'Prepared For':'Client'}</div><div class="pname">${clientName}${clientBadge}</div>
+          <div class="pdesc">${isQuote?'the party to whom this quotation is addressed (the “Client”).':'a company incorporated under the laws of the United Arab Emirates (the “Client”).'}</div></div>
+      </div>
+      ${d.intro?`<p class="intro">${esc(d.intro)}</p>`:''}
+      ${periodHtml}
+      ${scopeHtml}
+      ${feeHtml}
+      ${termsHtml}
+      ${closingHtml}
+      ${sign}
+    </td></tr></tbody>
+  </table></div>
+  </body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+}
+
+
+/* ============================================================= INVOICES & RECEIPTS */
+function invStatusPill(s){return {Paid:'final',Unpaid:'draft',Partial:'blue'}[s]||'draft';}
+function mkInvoice(db,clientId){const c=db.clients.find(x=>x.id===clientId);const inv={id:uid('inv'),title:'Tax Invoice',invoiceNo:'INV-'+new Date().getFullYear()+'-'+String(db.invoices.length+1).padStart(3,'0'),clientId,clientName:c?c.name:'',trn:(c&&c.trn&&c.trn!=='-'?c.trn:''),date:ymd(new Date()),dueDate:ymd(new Date(Date.now()+14*864e5)),vatRate:5,status:'Unpaid',items:[{desc:'',qty:1,unit:0,vat:'standard'}],notes:'',bank:biz().bank};db.invoices.unshift(inv);return inv;}
+function mkReceipt(db,clientId){const c=db.clients.find(x=>x.id===clientId);const rc={id:uid('rc'),receiptNo:'RCP-'+new Date().getFullYear()+'-'+String(db.receipts.length+1).padStart(3,'0'),clientId,clientName:c?c.name:'',date:ymd(new Date()),amount:0,method:'Online Transfer',reference:'',isPDC:false,chequeNo:'',bank:'',chequeDate:'',notes:''};db.receipts.unshift(rc);return rc;}
+function syncPdcTask(db,rc){if(!rc)return;if(rc.taskId){db.tasks=db.tasks.filter(t=>t.id!==rc.taskId);rc.taskId=null;}
+  if(rc.method==='PDC'&&rc.chequeDate){const t={id:uid('t'),title:'PDC Due — '+rc.clientName+' ('+(rc.chequeNo||rc.receiptNo)+')',type:'Reminder',status:'Not Started',dueDate:rc.chequeDate,recurrence:'None',priority:'High',clientId:rc.clientId,assignees:[],source:'pdc',checklist:['Present / deposit cheque on due date','Confirm clearance with bank','Update receipt status'],comments:[],createdBy:'System',createdAt:ymd(new Date())};db.tasks.unshift(t);rc.taskId=t.id;}}
+function clientDocsSection(c,db){
+  const invs=db.invoices.filter(v=>v.clientId===c.id);
+  const rcs=db.receipts.filter(r=>r.clientId===c.id);
+  const ags=db.agreements.filter(a=>a.clientId===c.id||a.clientName===c.name);
+  const qts=db.quotations.filter(q=>q.refId===c.id||q.refName===c.name);
+  const listCard=(title,icon,items,btnAct,rowsHtml)=>`<div class="card card-p"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="sec-title" style="margin:0">${icon} ${title}</div><button class="btn btn-sm" data-act="${btnAct}" data-id="${c.id}">＋ New</button></div>${items.length?rowsHtml:`<div class="empty" style="padding:18px;font-size:13px">None yet.</div>`}</div>`;
+  const invRows=invs.map(v=>{const g=itemsTotal(v.items)+vatSum(v.items,v.vatRate!=null?v.vatRate:5);return `<div class="rel-task" data-goto="#/invoice/${v.id}" style="cursor:pointer"><div class="ic">🧾</div><div style="flex:1"><b style="font-size:13px">${esc(v.invoiceNo)}</b><div style="color:var(--faint);font-size:11px">${fmtDate(v.date)} · AED ${money(g)}</div></div><span class="pill ${invStatusPill(v.status)}">${v.status}</span></div>`;}).join('');
+  const rcRows=rcs.map(r=>`<div class="rel-task" data-goto="#/receipt/${r.id}" style="cursor:pointer"><div class="ic">💵</div><div style="flex:1"><b style="font-size:13px">${esc(r.receiptNo)}</b><div style="color:var(--faint);font-size:11px">${fmtDate(r.date)} · ${esc(r.method)}${r.method==='PDC'?' · PDC due '+(r.chequeDate?fmtDate(r.chequeDate):'—'):''}</div></div><b class="mono">AED ${money(r.amount)}</b></div>`).join('');
+  const agRows=ags.map(a=>`<div class="rel-task" data-goto="#/agreement/${a.id}" style="cursor:pointer"><div class="ic">📄</div><div style="flex:1"><b style="font-size:13px">${esc(a.title)}</b><div style="color:var(--faint);font-size:11px">${fmtDate(a.date)} · AED ${money(a.amount)}</div></div><span class="pill ${a.status==='Draft'?'draft':'final'}">${a.status}</span></div>`).join('');
+  const qtRows=qts.map(q=>`<div class="rel-task" data-goto="#/quotation/${q.id}" style="cursor:pointer"><div class="ic">📝</div><div style="flex:1"><b style="font-size:13px">${esc(q.title)}</b><div style="color:var(--faint);font-size:11px">${fmtDate(q.date)} · AED ${money(q.amount)}</div></div><span class="pill ${q.status==='Draft'?'draft':'final'}">${q.status}</span></div>`).join('');
+  return `<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+    ${listCard('Sales Invoices','🧾',invs,'new-invoice-for',invRows)}
+    ${listCard('Receipts','💵',rcs,'new-receipt-for',rcRows)}
+    ${listCard('Agreements','📄',ags,'agr-for-client',agRows)}
+    ${listCard('Quotations','📝',qts,'quo-for-client',qtRows)}
+  </div>`;
+}
+function numToWords(num){
+  num=Math.round((+num||0)*100)/100;const dh=Math.floor(num);const fils=Math.round((num-dh)*100);
+  const ones=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const three=n=>{let s='';if(n>99){s+=ones[Math.floor(n/100)]+' Hundred ';n%=100;}if(n>19){s+=tens[Math.floor(n/10)]+' ';n%=10;}if(n>0)s+=ones[n]+' ';return s;};
+  const words=n=>{if(n===0)return 'Zero';let s='';const bn=Math.floor(n/1e9);n%=1e9;const mn=Math.floor(n/1e6);n%=1e6;const th=Math.floor(n/1e3);n%=1e3;if(bn)s+=three(bn)+'Billion ';if(mn)s+=three(mn)+'Million ';if(th)s+=three(th)+'Thousand ';s+=three(n);return s.trim();};
+  let r='AED '+words(dh);if(fils>0)r+=' and '+words(fils)+' Fils';return r+' only';
+}
+
+/* -------- Invoices list -------- */
+function renderInvoices(){
+  const db=load();
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Sales Invoices</h1><p class="sub">Tax invoices issued to clients</p></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="upload-logo">🖼 Logo</button><button class="btn btn-primary" data-act="new-invoice">＋ New Invoice</button></div></div>
+  <div class="toolbar"><div class="search">🔍<input placeholder="Search by number or client..."></div><select class="sel"><option>All Statuses</option></select></div>
+  <div class="card"><table class="tbl"><thead><tr><th>Invoice #</th><th>Client</th><th class="r">Total</th><th>Status</th><th>Date</th><th>Due</th><th class="r">Actions</th></tr></thead><tbody>
+  ${db.invoices.map(v=>{const net=itemsTotal(v.items);const g=net+vatSum(v.items,v.vatRate!=null?v.vatRate:5);return `<tr><td><b>${esc(v.invoiceNo||'—')}</b></td><td><span class="link" data-goto="#/invoice/${v.id}">${esc(v.clientName)}</span></td>
+    <td class="r mono">AED ${money(g)}</td><td><span class="pill ${invStatusPill(v.status)}">${v.status}</span></td><td style="color:var(--faint)">${fmtDate(v.date)}</td><td style="color:var(--faint)">${fmtDate(v.dueDate)}</td>
+    <td class="r"><button class="icon-btn" data-goto="#/invoice/${v.id}">✎</button><button class="icon-btn" data-act="print-invoice" data-id="${v.id}">🖨</button><button class="icon-btn" data-act="del-invoice" data-id="${v.id}">🗑</button></td></tr>`;}).join('')||`<tr><td colspan="7" class="empty">No invoices yet.</td></tr>`}
+  </tbody></table></div>`;
+}
+/* -------- Invoice builder -------- */
+function renderInvoiceBuilder(id){
+  const db=load();const v=db.invoices.find(x=>x.id===id);if(!v){app.innerHTML='<div class="empty">Not found</div>';return;}
+  const net=itemsTotal(v.items);const r=v.vatRate!=null?+v.vatRate:5;const vat=vatSum(v.items,r);const gross=net+vat;
+  const c=db.clients.find(x=>x.id===v.clientId);
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/invoices">←</a>
+    <div><h1 style="font-size:24px">Invoice Builder</h1><p class="sub">${esc(v.clientName)}</p></div></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="save-invoice" data-id="${v.id}">💾 Save</button><button class="btn btn-primary" data-act="finalize-invoice" data-id="${v.id}">✔ Finalize &amp; Preview</button><button class="btn" data-act="print-invoice" data-id="${v.id}">🖨 Print</button></div></div>
+  <div class="detail-grid">
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">ⓘ Invoice Details</div>
+        <div class="two-col"><div class="field"><label>Title</label><input value="${esc(v.title||'Tax Invoice')}" data-inv="title" data-id="${v.id}" placeholder="e.g. Tax Invoice"></div><div class="field"><label>Invoice No</label><input value="${esc(v.invoiceNo||'')}" data-inv="invoiceNo" data-id="${v.id}" placeholder="INV-2026-001"></div></div>
+        <div class="two-col"><div class="field"><label>Date</label><input type="date" value="${v.date||''}" data-inv="date" data-id="${v.id}"></div><div class="field"><label>Due Date</label><input type="date" value="${v.dueDate||''}" data-inv="dueDate" data-id="${v.id}"></div></div>
+        <div class="field"><label>Client TRN</label><input value="${esc(v.trn||(c&&c.trn!=='-'?c.trn:'')||'')}" data-inv="trn" data-id="${v.id}" placeholder="Tax Registration Number"></div>
+      </div>
+      <div class="card card-p" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between"><div class="sec-title">≡ Line Items</div><button class="btn btn-sm" data-act="inv-add-item" data-id="${v.id}">＋ Add Item</button></div>
+        <div class="fee-head" style="grid-template-columns:1fr 60px 100px 88px 100px 30px"><span>Description</span><span>Qty</span><span>Unit Price</span><span>VAT</span><span>Amount</span><span></span></div>
+        ${(v.items||[]).map((it,i)=>`<div class="fee-row" style="grid-template-columns:1fr 60px 100px 88px 100px 30px"><input value="${esc(it.desc)}" data-ii="desc" data-id="${v.id}" data-i="${i}"><input type="number" value="${it.qty!=null?it.qty:1}" data-ii="qty" data-id="${v.id}" data-i="${i}"><input type="number" value="${it.unit!=null?it.unit:0}" data-ii="unit" data-id="${v.id}" data-i="${i}"><select data-ii="vat" data-id="${v.id}" data-i="${i}" style="border:1px solid var(--line);border-radius:9px;padding:9px"><option value="standard" ${(!it.vat||it.vat==='standard')?'selected':''}>5%</option><option value="zero" ${it.vat==='zero'?'selected':''}>0%</option><option value="exempt" ${it.vat==='exempt'?'selected':''}>Exempt</option></select><div class="r mono" style="padding:9px">${money(itemAmt(it))}</div><button class="icon-btn" data-act="inv-del-item" data-id="${v.id}" data-i="${i}">✕</button></div>`).join('')}
+        <div style="border-top:2px solid var(--brand);padding-top:12px;margin-top:8px"><div style="display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-bottom:6px"><label style="font-size:12px;color:var(--muted);font-weight:700">VAT %</label><input type="number" value="${r}" data-inv="vatRate" data-id="${v.id}" style="width:66px;border:1px solid var(--line);border-radius:8px;padding:6px;text-align:right"></div>
+          <div style="text-align:right;line-height:1.9"><div>Subtotal: <b>AED ${money(net)}</b></div>${r>0?`<div>VAT: <b>AED ${money(vat)}</b></div>`:''}<div style="font-size:16px"><b style="color:var(--brand-d)">Total: AED ${money(gross)}</b></div></div></div>
+      </div>
+      <div class="card card-p"><div class="sec-title">🏦 Bank &amp; Notes</div>
+        <div class="field"><label>Bank / Payment Details</label><input value="${esc(v.bank||'')}" data-inv="bank" data-id="${v.id}"></div>
+        <div class="field"><label>Notes</label><textarea data-inv="notes" data-id="${v.id}">${esc(v.notes||'')}</textarea></div></div>
+    </div>
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">Status</div>
+        <select data-inv="status" data-id="${v.id}"><option ${v.status==='Unpaid'?'selected':''}>Unpaid</option><option ${v.status==='Partial'?'selected':''}>Partial</option><option ${v.status==='Paid'?'selected':''}>Paid</option></select></div>
+      <div class="card card-p"><div class="sec-title">Bill To</div><div style="font-weight:700">${esc(v.clientName)}</div>${c&&c.tradeLicence?`<div style="color:var(--muted);font-size:13px">Licence ${esc(c.tradeLicence)}</div>`:''}${c&&c.address&&c.address!=='-'?`<div style="color:var(--muted);font-size:13px">${esc(c.address)}</div>`:''}</div>
+    </div>
+  </div>`;
+}
+/* -------- Receipts list -------- */
+function renderReceipts(){
+  const db=load();
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Receipts</h1><p class="sub">Payments received · post-dated cheque tracking</p></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="upload-logo">🖼 Logo</button><button class="btn btn-primary" data-act="new-receipt">＋ New Receipt</button></div></div>
+  <div class="toolbar"><div class="search">🔍<input placeholder="Search receipts..."></div></div>
+  <div class="card"><table class="tbl"><thead><tr><th>Receipt #</th><th>Client</th><th class="r">Amount</th><th>Method</th><th>Date</th><th>PDC Due</th><th class="r">Actions</th></tr></thead><tbody>
+  ${db.receipts.map(rc=>`<tr><td><b>${esc(rc.receiptNo||'—')}</b></td><td><span class="link" data-goto="#/receipt/${rc.id}">${esc(rc.clientName)}</span></td>
+    <td class="r mono">AED ${money(rc.amount)}</td><td>${esc(rc.method)}</td><td style="color:var(--faint)">${fmtDate(rc.date)}</td>
+    <td style="color:${rc.method==='PDC'?'var(--amber)':'var(--faint)'}">${rc.method==='PDC'&&rc.chequeDate?fmtDate(rc.chequeDate):'—'}</td>
+    <td class="r"><button class="icon-btn" data-goto="#/receipt/${rc.id}">✎</button><button class="icon-btn" data-act="print-receipt" data-id="${rc.id}">🖨</button><button class="icon-btn" data-act="del-receipt" data-id="${rc.id}">🗑</button></td></tr>`).join('')||`<tr><td colspan="7" class="empty">No receipts yet.</td></tr>`}
+  </tbody></table></div>`;
+}
+/* -------- Receipt builder -------- */
+function renderReceiptBuilder(id){
+  const db=load();const rc=db.receipts.find(x=>x.id===id);if(!rc){app.innerHTML='<div class="empty">Not found</div>';return;}
+  const clientInvoices=db.invoices.filter(v=>v.clientId===rc.clientId);
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/receipts">←</a>
+    <div><h1 style="font-size:24px">Receipt Builder</h1><p class="sub">${esc(rc.clientName)}</p></div></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="save-receipt" data-id="${rc.id}">💾 Save</button><button class="btn btn-primary" data-act="finalize-receipt" data-id="${rc.id}">✔ Save &amp; Preview</button><button class="btn" data-act="print-receipt" data-id="${rc.id}">🖨 Print</button></div></div>
+  <div class="detail-grid">
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">ⓘ Receipt Details</div>
+        <div class="two-col"><div class="field"><label>Receipt No</label><input value="${esc(rc.receiptNo||'')}" data-rc="receiptNo" data-id="${rc.id}" placeholder="RCP-2026-001"></div><div class="field"><label>Date</label><input type="date" value="${rc.date||''}" data-rc="date" data-id="${rc.id}"></div></div>
+        <div class="two-col"><div class="field"><label>Amount (AED)</label><input type="number" value="${rc.amount||0}" data-rc="amount" data-id="${rc.id}"></div>
+        <div class="field"><label>Payment Method</label><select data-rc="method" data-id="${rc.id}">${['Cash','Online Transfer','CDC','PDC'].map(m=>`<option ${rc.method===m?'selected':''}>${m}</option>`).join('')}</select></div></div>
+        <div class="field"><label>Against Invoice</label><select data-rc="reference" data-id="${rc.id}"><option value="">— none —</option>${clientInvoices.map(iv=>`<option value="${esc(iv.invoiceNo)}" ${rc.reference===iv.invoiceNo?'selected':''}>${esc(iv.invoiceNo)}</option>`).join('')}</select></div>
+      </div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">🧾 Cheque Details</div>
+        ${(rc.method==='CDC'||rc.method==='PDC')?`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">${rc.method==='PDC'?'Post-Dated Cheque (PDC)':'Current Dated Cheque (CDC)'}</div>
+        <div class="two-col"><div class="field"><label>Cheque No</label><input value="${esc(rc.chequeNo||'')}" data-rc="chequeNo" data-id="${rc.id}"></div><div class="field"><label>Bank</label><input value="${esc(rc.bank||'')}" data-rc="bank" data-id="${rc.id}"></div></div>
+        <div class="field"><label>${rc.method==='PDC'?'Cheque Due Date':'Cheque Date'}</label><input type="date" value="${rc.chequeDate||''}" data-rc="chequeDate" data-id="${rc.id}"></div>
+        ${rc.method==='PDC'?`<div style="color:var(--amber);font-size:12px">🔔 A High-priority reminder task will be created for the PDC due date when you save.</div>`:''}`:'<div style="color:var(--faint);font-size:13px">Select the <b>CDC</b> or <b>PDC</b> payment method to enter cheque details.</div>'}
+      </div>
+      <div class="card card-p"><div class="field"><label>Notes</label><textarea data-rc="notes" data-id="${rc.id}">${esc(rc.notes||'')}</textarea></div></div>
+    </div>
+    <div>
+      <div class="card card-p"><div class="sec-title">Summary</div>
+        <div style="font-size:26px;font-weight:800;color:var(--brand-d)">AED ${money(rc.amount)}</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:4px">${numToWords(rc.amount)}</div>
+        <div style="margin-top:12px;color:var(--muted);font-size:13px">Received from<br><b style="color:var(--ink)">${esc(rc.clientName)}</b></div>
+        ${rc.method==='PDC'?`<div style="margin-top:12px"><span class="pill blue">PDC due ${rc.chequeDate?fmtDate(rc.chequeDate):'—'}</span></div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* -------- Elegant invoice print -------- */
+function printInvoice(v){
+  const b=biz();
+  const r=v.vatRate!=null?+v.vatRate:5;const showVat=r>0;
+  const net=itemsTotal(v.items);const vat=vatSum(v.items,r);const gross=net+vat;
+  const c=(load().clients||[]).find(x=>x.id===v.clientId);
+  const rows=(v.items||[]).map((i,ix)=>{const amt=itemAmt(i);const lv=lineVat(i,r);return `<tr><td class="ctr">${ix+1}</td><td>${esc(i.desc)}</td><td class="ctr">${i.qty!=null?i.qty:1}</td><td class="r">${money(i.unit!=null?i.unit:0)}</td>${showVat?`<td class="r">${(i.vat&&i.vat!=='standard')?(i.vat==='exempt'?'Exempt':'0.00'):money(lv)}</td>`:''}<td class="r">${money(amt+lv)}</td></tr>`;}).join('');
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(v.title||'Tax Invoice')} ${esc(v.invoiceNo||'')}</title><style>
+  @page{size:A4;margin:14mm 15mm;@bottom-right{content:"Page " counter(page);font:7.5pt Arial;color:#aab3bd}}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  html,body{margin:0;padding:0}body{background:#e7ebf0;font:10pt/1.5 Georgia,serif;color:#2b3440}
+  .toolbar{width:210mm;margin:14px auto 0;text-align:right}.toolbar button{background:#17324c;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:600 10pt Arial;cursor:pointer}
+  .page{width:210mm;background:#fff;margin:14px auto;padding:15mm 16mm;box-shadow:0 6px 30px rgba(0,0,0,.14)}
+  @media print{body{background:#fff}.page{width:auto;margin:0;padding:0;box-shadow:none}.toolbar{display:none}}
+  .top{display:flex;justify-content:space-between;align-items:flex-start}
+  .lh-l{display:flex;gap:11px;align-items:center}.fx{font:800 16pt Arial;color:#1c3d5a;line-height:1}.intl{font:700 8pt Arial;color:#c1922b;letter-spacing:4px;margin-top:2px}
+  .co{font-size:8.5pt;color:#7b8794;text-align:right;line-height:1.5}
+  .rule{margin:10px 0 0}.rule .n{height:2.5px;background:#17324c}.rule .g{height:2px;background:#c1922b;margin-top:2px}
+  .band{display:flex;justify-content:space-between;align-items:flex-end;margin:18px 0 16px}
+  .band h1{font:800 24pt Arial;color:#17324c;margin:0;letter-spacing:1px}
+  .meta{font-size:9pt;color:#54687c;text-align:right;line-height:1.7}.meta b{color:#17324c}
+  .billto{background:#f5f7fa;border:1px solid #e3e8ee;border-left:4px solid #c1922b;border-radius:6px;padding:12px 14px;margin-bottom:16px;font-size:9.5pt}
+  .billto .l{font:700 7.5pt Arial;color:#c1922b;letter-spacing:2px;margin-bottom:3px}.billto .nm{font:700 12pt Arial;color:#17324c}
+  table.f{width:100%;border-collapse:collapse;font-size:9.5pt;border:1px solid #cfd6de}
+  table.f th{background:#17324c;color:#fff;text-align:left;padding:9px 11px;font:700 8.6pt Arial;border-right:1px solid #274863}
+  table.f th:last-child{border-right:none}table.f th.r,table.f td.r{text-align:right}table.f th.ctr,table.f td.ctr{text-align:center}
+  table.f td{padding:9px 11px;border-right:1px solid #e3e8ee;border-top:1px solid #e3e8ee}table.f td:last-child{border-right:none}
+  table.f tbody tr:nth-child(even){background:#f5f7fa}
+  .totals{margin-top:14px;display:flex;justify-content:flex-end}.totals table{font-size:10pt;min-width:260px}
+  .totals td{padding:6px 11px}.totals .lbl{color:#54687c;text-align:right}.totals .val{text-align:right;font-weight:700;color:#17324c}
+  .totals tr.grand td{border-top:2px solid #17324c;font-size:11.5pt;background:#eef2f6}
+  .words{margin-top:10px;font-size:9pt;color:#3f4a57;font-style:italic}
+  .pay{margin-top:18px;font-size:9pt;color:#3f4a57}.pay .h{font:700 8pt Arial;color:#17324c;letter-spacing:1px;margin-bottom:3px}
+  .notes{margin-top:14px;font-size:9pt;color:#3f4a57}
+  .foot{margin-top:26px;border-top:1px solid #e3e8ee;padding-top:8px;text-align:center;font:7.5pt Arial;color:#aab3bd}
+  </style></head><body>
+  <div class="toolbar"><button onclick="window.print()">🖨 Print / Save as PDF</button></div>
+  <div class="page">
+    <div class="top"><div class="lh-l">${resolveLogo()}<div><div class="fx">${esc(b.name)}</div><div class="intl">AUDIT · TAX · ADVISORY</div></div></div>
+      <div class="co"><b style="color:#17324c;font:700 9pt Arial">${esc(b.name)}</b><br>${b.licence?"Licence No. "+esc(b.licence)+"<br>":""}${b.trn?"TRN: "+esc(b.trn)+"<br>":""}${bizAddrBr()}<br>${esc(b.email)} · ${esc(b.phone)}</div></div>
+    <div class="rule"><div class="n"></div><div class="g"></div></div>
+    <div class="band"><h1>${esc((v.title||'Tax Invoice')).toUpperCase()}</h1>
+      <div class="meta"><div>Invoice No: <b>${esc(v.invoiceNo||'—')}</b></div><div>Date: <b>${fmtDate(v.date)}</b></div><div>Due Date: <b>${fmtDate(v.dueDate)}</b></div>${v.trn?`<div>Client TRN: <b>${esc(v.trn)}</b></div>`:''}</div></div>
+    <div class="billto"><div class="l">Bill To</div><div class="nm">${esc(v.clientName)}</div>${c&&c.tradeLicence?`Licence No. ${esc(c.tradeLicence)}<br>`:''}${c&&c.address&&c.address!=='-'?esc(c.address):''}</div>
+    <table class="f"><thead><tr><th class="ctr" style="width:34px">#</th><th>Description</th><th class="ctr" style="width:48px">Qty</th><th class="r" style="width:96px">Unit Price</th>${showVat?`<th class="r" style="width:84px">VAT (${r}%)</th>`:''}<th class="r" style="width:104px">Amount (AED)</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="totals"><table>
+      <tr><td class="lbl">Subtotal</td><td class="val">AED ${money(net)}</td></tr>
+      ${showVat?`<tr><td class="lbl">VAT</td><td class="val">AED ${money(vat)}</td></tr>`:''}
+      <tr class="grand"><td class="lbl">Total</td><td class="val">AED ${money(gross)}</td></tr></table></div>
+    <div class="words">Amount in words: ${numToWords(gross)}</div>
+    ${(v.bank||b.bank)?`<div class="pay"><div class="h">PAYMENT DETAILS</div>${esc(v.bank||b.bank).replace(/\n/g,"<br>")}</div>`:''}
+    ${v.notes?`<div class="notes">${esc(v.notes)}</div>`:''}
+    <div class="foot">This is a computer-generated tax invoice issued by ${esc(b.name)}.</div>
+  </div></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+}
+
+/* -------- Receipt print -------- */
+function printReceipt(rc){
+  const b=biz();
+  const c=(load().clients||[]).find(x=>x.id===rc.clientId);
+  const pdc=rc.method==='PDC';
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Receipt ${esc(rc.receiptNo||'')}</title><style>
+  @page{size:A4;margin:16mm 15mm}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0}
+  body{background:#e7ebf0;font:10.5pt/1.6 Georgia,serif;color:#2b3440}
+  .toolbar{width:190mm;margin:14px auto 0;text-align:right}.toolbar button{background:#17324c;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:600 10pt Arial;cursor:pointer}
+  .page{width:190mm;background:#fff;margin:14px auto;padding:16mm;box-shadow:0 6px 30px rgba(0,0,0,.14)}
+  @media print{body{background:#fff}.page{width:auto;margin:0;padding:0;box-shadow:none}.toolbar{display:none}}
+  .top{display:flex;justify-content:space-between;align-items:center}.fx{font:800 16pt Arial;color:#1c3d5a}.intl{font:700 8pt Arial;color:#c1922b;letter-spacing:4px}
+  .lh-l{display:flex;gap:11px;align-items:center}.co{font-size:8.5pt;color:#7b8794;text-align:right;line-height:1.5}
+  .rule{margin:10px 0}.rule .n{height:2.5px;background:#17324c}.rule .g{height:2px;background:#c1922b;margin-top:2px}
+  .title{text-align:center;margin:14px 0 20px}.title h1{font:800 20pt Arial;color:#17324c;margin:0;letter-spacing:3px}.title .u{width:60px;height:3px;background:#c1922b;margin:8px auto 0}
+  .meta{display:flex;justify-content:space-between;font-size:9.5pt;color:#54687c;margin-bottom:18px}.meta b{color:#17324c}
+  .amt{background:#f5f7fa;border:1px solid #e3e8ee;border-radius:8px;padding:16px 18px;text-align:center;margin-bottom:16px}
+  .amt .n{font:800 26pt Arial;color:#17324c}.amt .w{font-style:italic;color:#3f4a57;font-size:9.5pt;margin-top:4px}
+  .row{display:flex;padding:8px 0;border-bottom:1px solid #eef1f4;font-size:9.5pt}.row .k{width:170px;color:#7b8794;font:700 8pt Arial;letter-spacing:1px;text-transform:uppercase}.row .v{color:#2b3440}
+  .pdc{margin-top:14px;background:#fff8e6;border:1px solid #f0d98a;border-radius:8px;padding:12px 14px;font-size:9pt;color:#7a5b12}
+  .sign{display:flex;justify-content:flex-end;margin-top:40px}.sign .b{text-align:center}.sign .l{border-top:1px solid #17324c;width:200px;margin-bottom:4px}.sign .t{font-size:8.5pt;color:#54687c}
+  .foot{margin-top:24px;border-top:1px solid #e3e8ee;padding-top:8px;text-align:center;font:7.5pt Arial;color:#aab3bd}
+  </style></head><body>
+  <div class="toolbar"><button onclick="window.print()">🖨 Print / Save as PDF</button></div>
+  <div class="page">
+    <div class="top"><div class="lh-l">${resolveLogo()}<div><div class="fx">${esc(b.name)}</div><div class="intl">AUDIT · TAX · ADVISORY</div></div></div>
+      <div class="co"><b style="color:#17324c;font:700 9pt Arial">${esc(b.name)}</b><br>${b.licence?"Licence No. "+esc(b.licence)+"<br>":""}${bizAddrBr()}</div></div>
+    <div class="rule"><div class="n"></div><div class="g"></div></div>
+    <div class="title"><h1>PAYMENT RECEIPT</h1><div class="u"></div></div>
+    <div class="meta"><div>Receipt No: <b>${esc(rc.receiptNo||'—')}</b></div><div>Date: <b>${fmtDate(rc.date)}</b></div></div>
+    <div class="amt"><div class="n">AED ${money(rc.amount)}</div><div class="w">${numToWords(rc.amount)}</div></div>
+    <div class="row"><div class="k">Received From</div><div class="v"><b>${esc(rc.clientName)}</b>${c&&c.tradeLicence?' · Licence '+esc(c.tradeLicence):''}</div></div>
+    <div class="row"><div class="k">Payment Method</div><div class="v">${esc(rc.method)}${rc.method==='CDC'?' (Current Dated Cheque)':(pdc?' (Post-Dated Cheque)':'')}</div></div>
+    ${rc.reference?`<div class="row"><div class="k">Against Invoice</div><div class="v">${esc(rc.reference)}</div></div>`:''}
+    ${(rc.method==='CDC'||pdc)?`<div class="row"><div class="k">Cheque No</div><div class="v">${esc(rc.chequeNo||'—')} · ${esc(rc.bank||'')}</div></div><div class="row"><div class="k">${pdc?'Cheque Due Date':'Cheque Date'}</div><div class="v">${rc.chequeDate?fmtDate(rc.chequeDate):'—'}</div></div>`:''}
+    ${rc.notes?`<div class="row"><div class="k">Notes</div><div class="v">${esc(rc.notes)}</div></div>`:''}
+    ${(pdc&&!rc.cleared)?`<div class="pdc">⚠ This receipt acknowledges a post-dated cheque due on <b>${rc.chequeDate?fmtDate(rc.chequeDate):'—'}</b>. Payment is subject to realization of the cheque on the due date.</div>`:''}
+    ${rc.cleared?`<div class="pdc" style="background:#eef7f0;border-color:#bfe0c8;color:#1f6b3a">✓ Cheque ${esc(rc.chequeNo||'')} realized/cleared. Payment received in full.</div>`:''}
+    <div class="sign"><div class="b"><div class="l"></div><div class="t">Authorized Signature · ${esc(b.name)}</div></div></div>
+    <div class="foot">This is a computer-generated receipt issued by ${esc(b.name)}.</div>
+  </div></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+}
+
+/* ============================================================= PAYMENT SCHEDULE / RECEIVABLES */
+function agGross(a){return itemsTotal(a.items)+vatSum(a.items,a.vatRate!=null?+a.vatRate:5);}
+function buildScheduleFromTerms(a){
+  const g=agGross(a);const r2=n=>Math.round(n*100)/100;
+  const mk=(label,amount,dueDate,method)=>({id:uid('sc'),label,amount:r2(amount),dueDate:dueDate||'',method:method||'Online Transfer',status:'Pending',chequeNo:'',bank:''});
+  const mode=a.paymentMode||'split';
+  if(mode==='cheques'&&(a.cheques||[]).length){return a.cheques.map((c,i)=>mk('Cheque '+(i+1)+' ('+(c.type||'PDC')+')',+c.amount||0,c.date||'',c.type||'PDC'));}
+  if(mode==='advance'){return [mk('Advance Payment (100%)',g,a.date||'','Online Transfer')];}
+  return [mk('Advance Payment (50%)',g*0.5,a.date||'','Online Transfer'),mk('Balance on Completion (50%)',g*0.5,'','Online Transfer')];
+}
+function syncPaymentTasks(db,a){
+  (a.schedule||[]).forEach(r=>{
+    if(r.taskId){db.tasks=db.tasks.filter(t=>t.id!==r.taskId);r.taskId=null;}
+    if(r.status==='Pending'&&r.dueDate){
+      const isChq=(r.method==='CDC'||r.method==='PDC');
+      const title=(isChq?'Deposit cheque — ':'Payment follow-up — ')+a.clientName+(isChq&&r.chequeNo?' ('+r.chequeNo+')':'')+' · AED '+money(r.amount);
+      const t={id:uid('t'),title,type:'Reminder',status:'Not Started',dueDate:r.dueDate,recurrence:'None',priority:'High',clientId:a.clientId||null,assignees:[],source:'payment',checklist:isChq?['Deposit / present cheque on due date','Confirm clearance with bank','Mark payment Received (issues receipt)']:['Follow up with client for payment','Confirm payment received','Mark payment Received (issues receipt)'],comments:[],createdBy:'System',createdAt:ymd(new Date())};
+      db.tasks.unshift(t);r.taskId=t.id;
+    }
+  });
+}
+function markSchedReceived(db,agId,rowId){
+  const a=db.agreements.find(x=>x.id===agId);if(!a)return null;const r=(a.schedule||[]).find(x=>x.id===rowId);if(!r)return null;
+  r.status='Received';r.receivedDate=ymd(new Date());
+  if(r.taskId){db.tasks=db.tasks.filter(t=>t.id!==r.taskId);r.taskId=null;}
+  const isChq=(r.method==='CDC'||r.method==='PDC');
+  const rc={id:uid('rc'),receiptNo:'RCP-'+new Date().getFullYear()+'-'+String(db.receipts.length+1).padStart(3,'0'),clientId:a.clientId||null,clientName:a.clientName,date:ymd(new Date()),amount:r.amount,method:r.method,reference:a.reference||a.title,isPDC:false,cleared:isChq,chequeNo:r.chequeNo||'',bank:r.bank||'',chequeDate:isChq?r.dueDate:'',notes:'Received against agreement '+(a.reference||a.title)+' — '+r.label+(isChq?' (cheque cleared)':'')};
+  db.receipts.unshift(rc);r.receiptId=rc.id;return rc;
+}
+function payAlerts(db){
+  const today=ymd(new Date());const soon=ymd(new Date(Date.now()+7*864e5));
+  let overdue=0,dueSoon=0,deposit=0,pendingAmt=0,receivedAmt=0;
+  (db.agreements||[]).forEach(a=>(a.schedule||[]).forEach(r=>{
+    if(r.status==='Received'){receivedAmt+=+r.amount||0;return;}
+    pendingAmt+=+r.amount||0;
+    if(r.dueDate){if(r.dueDate<today)overdue++;else if(r.dueDate<=soon)dueSoon++;
+      if((r.method==='CDC'||r.method==='PDC')&&r.dueDate<=soon)deposit++;}
+  }));
+  const missing=(db.agreements||[]).filter(a=>a.status==='Final'&&!((a.schedule||[]).length)).length;
+  return {overdue,dueSoon,deposit,pendingAmt,receivedAmt,missing};
+}
+function scheduleEditorHtml(a){
+  const sc=a.schedule||[];
+  const scheduled=sc.reduce((s,r)=>s+(+r.amount||0),0);
+  const received=sc.filter(r=>r.status==='Received').reduce((s,r)=>s+(+r.amount||0),0);
+  return `<div class="card card-p" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="sec-title" style="margin:0">📅 Payment Schedule &amp; Follow-up</div><div style="display:flex;gap:8px"><button class="btn btn-sm" data-act="sched-build" data-id="${a.id}">⚙ Build from terms</button><button class="btn btn-sm" data-act="sched-add" data-id="${a.id}">＋ Add</button></div></div>
+    ${sc.length?`<div class="fee-head" style="grid-template-columns:1fr 104px 122px 96px 118px 28px"><span>Label</span><span>Amount</span><span>Due Date</span><span>Method</span><span>Status</span><span></span></div>
+    ${sc.map(r=>`<div class="fee-row" style="grid-template-columns:1fr 104px 122px 96px 118px 28px;align-items:center">
+      <input value="${esc(r.label)}" data-sc="label" data-id="${a.id}" data-row="${r.id}">
+      <input type="number" value="${r.amount||0}" data-sc="amount" data-id="${a.id}" data-row="${r.id}">
+      <input type="date" value="${r.dueDate||''}" data-sc="dueDate" data-id="${a.id}" data-row="${r.id}">
+      <select data-sc="method" data-id="${a.id}" data-row="${r.id}" style="border:1px solid var(--line);border-radius:9px;padding:8px">${['Cash','Online Transfer','CDC','PDC'].map(m=>`<option ${r.method===m?'selected':''}>${m}</option>`).join('')}</select>
+      ${r.status==='Received'?`<span class="pill final">✓ Received</span>`:`<button class="btn btn-sm" data-act="sched-received" data-id="${a.id}" data-row="${r.id}">Mark Received</button>`}
+      <button class="icon-btn" data-act="sched-del" data-id="${a.id}" data-row="${r.id}">✕</button></div>
+      ${(r.method==='CDC'||r.method==='PDC')&&r.status!=='Received'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px;padding:0 2px"><input placeholder="Cheque No" value="${esc(r.chequeNo||'')}" data-sc="chequeNo" data-id="${a.id}" data-row="${r.id}" style="font-size:12px"><input placeholder="Bank" value="${esc(r.bank||'')}" data-sc="bank" data-id="${a.id}" data-row="${r.id}" style="font-size:12px"></div>`:''}
+      ${r.status==='Received'&&r.receiptId?`<div style="font-size:11px;color:var(--muted);margin:-2px 0 8px;padding-left:2px">🧾 Receipt issued · <span class="link" data-goto="#/receipt/${r.receiptId}">view</span></div>`:''}`).join('')}
+    <div style="text-align:right;margin-top:10px;color:var(--muted);font-size:13px">Scheduled <b>AED ${money(scheduled)}</b> &nbsp;·&nbsp; Received <b style="color:var(--brand)">AED ${money(received)}</b> &nbsp;·&nbsp; Outstanding <b style="color:var(--amber)">AED ${money(scheduled-received)}</b></div>`
+    :`<div style="color:var(--faint);font-size:13px;padding:8px 0">No schedule yet. Click <b>Build from terms</b> to generate rows from the payment option above, or <b>Add</b> a row manually. Cheque rows create a deposit reminder on their due date.</div>`}
+  </div>`;
+}
+function renderPayments(){
+  const db=load();const today=ymd(new Date());const soon=ymd(new Date(Date.now()+7*864e5));
+  const rows=[];(db.agreements||[]).forEach(a=>(a.schedule||[]).forEach(r=>rows.push({r,a})));
+  const cat=g=>rows.filter(g).sort((x,y)=>(x.r.dueDate||'9999').localeCompare(y.r.dueDate||'9999'));
+  const overdue=cat(({r})=>r.status==='Pending'&&r.dueDate&&r.dueDate<today);
+  const dueSoon=cat(({r})=>r.status==='Pending'&&r.dueDate&&r.dueDate>=today&&r.dueDate<=soon);
+  const upcoming=cat(({r})=>r.status==='Pending'&&(!r.dueDate||r.dueDate>soon));
+  const received=cat(({r})=>r.status==='Received');
+  const missing=(db.agreements||[]).filter(a=>a.status==='Final'&&!((a.schedule||[]).length));
+  const A=payAlerts(db);
+  const rowHtml=({r,a})=>{const isChq=(r.method==='CDC'||r.method==='PDC');const od=r.status==='Pending'&&r.dueDate&&r.dueDate<today;
+    return `<tr><td><span class="link" data-goto="#/agreement/${a.id}">${esc(a.clientName)}</span><div style="color:var(--faint);font-size:11px">${esc(r.label)}${isChq&&r.chequeNo?' · '+esc(r.chequeNo):''}</div></td>
+      <td>${esc(r.method)}</td><td class="r mono">AED ${money(r.amount)}</td>
+      <td style="color:${od?'var(--red)':'var(--faint)'}">${r.dueDate?fmtDate(r.dueDate):'—'}</td>
+      <td>${r.status==='Received'?'<span class="pill final">Received</span>':(od?'<span class="pill high">Overdue</span>':'<span class="pill draft">Pending</span>')}</td>
+      <td class="r">${r.status==='Pending'?`<button class="btn btn-sm" data-act="sched-received" data-id="${a.id}" data-row="${r.id}">✔ ${isChq?'Cleared':'Received'}</button>`:(r.receiptId?`<button class="icon-btn" data-act="print-receipt" data-id="${r.receiptId}" title="Print receipt">🖨</button>`:'')}</td></tr>`;};
+  const section=(title,list,color)=>`<div class="card" style="margin-bottom:18px"><div style="padding:13px 16px;font-weight:700;color:${color||'var(--ink)'};border-bottom:1px solid var(--line);display:flex;justify-content:space-between"><span>${title}</span><span style="color:var(--faint);font-weight:600">${list.length}</span></div>${list.length?`<table class="tbl"><thead><tr><th>Client / Item</th><th>Method</th><th class="r">Amount</th><th>Due</th><th>Status</th><th class="r">Action</th></tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table>`:'<div class="empty" style="padding:16px">Nothing here.</div>'}</div>`;
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Payments</h1><p class="sub">Receivables follow-up across all agreements</p></div></div>
+  <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
+    <div class="stat"><div class="lbl">Overdue</div><div class="num" style="font-size:22px;color:var(--red)">${A.overdue}</div></div>
+    <div class="stat"><div class="lbl">Due in 7 days</div><div class="num" style="font-size:22px;color:var(--amber)">${A.dueSoon}</div></div>
+    <div class="stat"><div class="lbl">Cheques to deposit</div><div class="num" style="font-size:22px">${A.deposit}</div></div>
+    <div class="stat"><div class="lbl">Outstanding</div><div class="num" style="font-size:22px">AED ${money(A.pendingAmt)}</div></div>
+  </div>
+  ${missing.length?`<div class="card" style="margin-bottom:18px;border-left:4px solid var(--amber);background:var(--amber-soft)"><div style="padding:14px 16px"><b>⚠ ${missing.length} finalized agreement(s) have no payment schedule.</b> <span style="color:var(--muted)">Open them and click "Build from terms" so payments get tracked.</span><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${missing.map(a=>`<button class="btn btn-sm" data-goto="#/agreement/${a.id}">${esc(a.clientName)} →</button>`).join('')}</div></div></div>`:''}
+  ${section('🔴 Overdue',overdue,'var(--red)')}
+  ${section('🟡 Due within 7 days',dueSoon,'var(--amber)')}
+  ${section('📅 Upcoming',upcoming)}
+  ${section('✅ Received',received,'var(--brand-d)')}`;
+}
+
+/* ============================================================= SERVICE FOLLOW-UP ENGINE */
+const SVC_TYPES=['Bookkeeping','VAT Return Filing','Corporate Tax Return Filing','Financial Audit','Preparation of Financial Statements','Anti Money Laundering','Access to Accounting Software'];
+const SVC_CADENCE={
+ 'Bookkeeping':{days:7,oneTime:false,label:'Weekly review'},
+ 'VAT Return Filing':{days:7,oneTime:false,label:'In due month'},
+ 'Corporate Tax Return Filing':{days:3,oneTime:true,label:'Every 3 days'},
+ 'Financial Audit':{days:7,oneTime:true,label:'Weekly review'},
+ 'Preparation of Financial Statements':{days:7,oneTime:true,label:'Weekly review'},
+ 'Anti Money Laundering':{days:7,oneTime:false,label:'Weekly review'},
+ 'Access to Accounting Software':{days:30,oneTime:false,label:'Monthly'},
+};
+const SVC_ICON={'Corporate Tax Return Filing':'🧮','VAT Return Filing':'🧾','Bookkeeping':'📒','Financial Audit':'🔍','Preparation of Financial Statements':'📊','Anti Money Laundering':'🛡','Access to Accounting Software':'💻'};
+function svcCfg(t){return SVC_CADENCE[t]||{days:7,oneTime:false,label:'Weekly'};}
+function addDaysY(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return ymd(x);}
+function addYearsY(d,n){const x=new Date(d);x.setFullYear(x.getFullYear()+n);return ymd(x);}
+function daysUntil(d){if(!d)return 9999;return Math.round((new Date(d)-new Date(ymd(new Date())))/864e5);}
+function svcSticky(s){return !!s.deadline&&daysUntil(s.deadline)<=7&&daysUntil(s.deadline)>=-3650;}
+function createService(db,clientId,type,period,start,deadline){const c=db.clients.find(x=>x.id===clientId);const cfg=svcCfg(type);
+  const s={id:uid('svc'),clientId,clientName:c?c.name:'',type,period:period||'',cadenceDays:cfg.days,oneTime:cfg.oneTime,nextDate:start||ymd(new Date()),deadline:deadline||'',status:'Active',feedback:[],taskId:null,createdAt:ymd(new Date())};
+  db.services.unshift(s);return s;}
+function runServiceEngine(db){
+  const today=ymd(new Date());let created=0;
+  (db.services||[]).forEach(s=>{
+    if(s.status!=='Active')return;
+    const open=s.taskId&&db.tasks.find(t=>t.id===s.taskId&&t.status!=='Completed');
+    if(!open&&s.nextDate&&s.nextDate<=today){
+      const sticky=svcSticky(s);
+      const t={id:uid('t'),title:s.type+' — '+s.clientName+' ('+s.period+')',type:'Service Follow-up',status:'Not Started',dueDate:s.nextDate,recurrence:'None',priority:sticky?'High':'Medium',clientId:s.clientId,serviceId:s.id,assignees:[],source:'service',checklist:[],comments:[],createdBy:'System',createdAt:today};
+      db.tasks.unshift(t);s.taskId=t.id;created++;
+    } else if(open&&svcSticky(s)){open.priority='High';}
+  });
+  return created;
+}
+function svcLog(s,note){if(note&&note.trim()){s.feedback=s.feedback||[];s.feedback.unshift({date:ymd(new Date()),note:note.trim()});}}
+function svcCloseTask(db,s){if(s.taskId){db.tasks=db.tasks.filter(t=>t.id!==s.taskId);s.taskId=null;}}
+function svcSnooze(db,id,note){const s=(db.services||[]).find(x=>x.id===id);if(!s)return{kept:false};svcLog(s,note);
+  if(svcSticky(s)){s.nextDate=ymd(new Date());return{kept:true,sticky:true};}
+  let nd=addDaysY(s.nextDate||ymd(new Date()),s.cadenceDays||7);
+  if(s.deadline&&nd>s.deadline)nd=s.deadline;
+  s.nextDate=nd;svcCloseTask(db,s);return{kept:false,next:nd};}
+function svcSetDate(db,id,date,note){const s=(db.services||[]).find(x=>x.id===id);if(!s||!date)return{err:true};svcLog(s,note);
+  let capped=false,nd=date;if(s.deadline&&nd>s.deadline){nd=s.deadline;capped=true;}
+  s.nextDate=nd;
+  if(svcSticky(s))return{kept:true,capped};
+  svcCloseTask(db,s);return{kept:false,capped,next:nd};}
+function svcComplete(db,id,note){const s=(db.services||[]).find(x=>x.id===id);if(!s)return;svcLog(s,note);s.status='Completed';s.completedDate=ymd(new Date());s.retainUntil=addYearsY(s.completedDate,7);svcCloseTask(db,s);}
+function svcReactivate(db,id){const s=(db.services||[]).find(x=>x.id===id);if(!s)return;s.status='Active';s.completedDate='';s.retainUntil='';s.nextDate=ymd(new Date());}
+
+function clientServicesSection(c,db){
+  const act=(db.services||[]).filter(s=>s.clientId===c.id&&s.status==='Active');
+  const ret=(db.services||[]).filter(s=>s.clientId===c.id&&s.status==='Completed');
+  const row=s=>{const sticky=svcSticky(s);const du=daysUntil(s.deadline);return `<div class="rel-task" style="cursor:default"><div class="ic">${SVC_ICON[s.type]||'📌'}</div>
+    <div style="flex:1"><b style="font-size:13px">${esc(s.type)} <span style="color:var(--faint);font-weight:500">· ${esc(s.period)}</span></b>
+    <div style="color:var(--faint);font-size:11px">${svcCfg(s.type).label} · next ${s.nextDate?fmtDate(s.nextDate):'—'}${s.deadline?' · due '+fmtDate(s.deadline):''}${(s.feedback&&s.feedback.length)?' · '+s.feedback.length+' note(s)':''}</div></div>
+    ${sticky?`<span class="pill high">Due ≤7d</span>`:''}
+    ${s.taskId?`<button class="btn btn-sm" data-goto="#/task/${s.taskId}">Follow-up</button>`:''}
+    <button class="btn btn-sm" data-act="svc-complete-btn" data-id="${s.id}">✓ Complete</button>
+    <button class="icon-btn" data-act="svc-del" data-id="${s.id}">✕</button></div>`;};
+  return `<div style="margin-top:20px">
+    <div class="card card-p" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="sec-title" style="margin:0">🔁 Active Services &amp; Follow-ups</div><button class="btn btn-sm" data-act="add-service" data-id="${c.id}">＋ Add Service</button></div>
+    ${act.length?act.map(row).join(''):'<div class="empty" style="padding:16px;font-size:13px">No active services. Add one to start automatic follow-up tasks.</div>'}</div>
+    ${ret.length?`<div class="card card-p"><div class="sec-title">🗄 Retention — Completed Services</div>${ret.map(s=>`<div class="rel-task" style="cursor:default"><div class="ic">🗄</div><div style="flex:1"><b style="font-size:13px">${esc(s.type)} · ${esc(s.period)}</b><div style="color:var(--faint);font-size:11px">Completed ${fmtDate(s.completedDate)} · retain until ${fmtDate(s.retainUntil)}</div></div><button class="btn btn-sm" data-act="svc-reactivate" data-id="${s.id}">↩ Reactivate</button></div>`).join('')}</div>`:''}
+  </div>`;
+}
+function svcFollowupPanel(task,db){
+  const s=(db.services||[]).find(x=>x.id===task.serviceId);if(!s)return '';
+  const cfg=svcCfg(s.type);const sticky=svcSticky(s);
+  return `<div class="card card-p" style="margin-bottom:18px;${sticky?'border:1px solid var(--red);':''}">
+    <div class="sec-title">${SVC_ICON[s.type]||'📌'} Service Follow-up — ${esc(s.period)}</div>
+    ${sticky?`<div style="background:var(--red-soft);color:var(--red);padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;font-weight:600">⚠ Within 7 days of the ${fmtDate(s.deadline)} deadline — this stays in your task list until completed.</div>`:''}
+    <div style="color:var(--muted);font-size:13px;margin-bottom:10px">Cadence: <b>${cfg.label}</b>${s.deadline?` · Submission due <b>${fmtDate(s.deadline)}</b>`:''}</div>
+    <div class="field"><label>Feedback / progress note</label><textarea id="svcNote" placeholder="e.g. Awaiting bank statements from client..."></textarea></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <button class="btn btn-primary" data-act="svc-snooze" data-id="${s.id}">💬 Log &amp; next (+${cfg.days}d)</button>
+      <div style="display:flex;gap:6px;align-items:flex-end"><div class="field" style="margin:0"><label>Or specific date</label><input type="date" id="svcDate" max="${s.deadline||''}"></div><button class="btn" data-act="svc-setdate" data-id="${s.id}">Set</button></div>
+      <button class="btn" data-act="svc-done" data-id="${s.id}" style="margin-left:auto">✓ Mark service complete</button>
+    </div>
+    ${(s.feedback&&s.feedback.length)?`<div style="margin-top:14px"><div style="font:700 8pt Arial;color:var(--faint);letter-spacing:1px;margin-bottom:6px">HISTORY</div>${s.feedback.map(f=>`<div style="border-left:2px solid var(--line);padding:2px 0 6px 10px;margin-bottom:4px;font-size:12px"><b style="color:var(--muted)">${fmtDate(f.date)}</b> — ${esc(f.note)}</div>`).join('')}</div>`:''}
+  </div>`;
+}
+function renderRetention(){
+  const db=load();const ret=(db.services||[]).filter(s=>s.status==='Completed').sort((a,b)=>(b.completedDate||'').localeCompare(a.completedDate||''));
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Retention</h1><p class="sub">Completed services archived for record retention</p></div></div>
+  <div class="card"><table class="tbl"><thead><tr><th>Client</th><th>Service</th><th>Period</th><th>Completed</th><th>Retain Until</th><th class="r">Action</th></tr></thead><tbody>
+  ${ret.map(s=>`<tr><td><span class="link" data-goto="#/client/${s.clientId}">${esc(s.clientName)}</span></td><td>${SVC_ICON[s.type]||''} ${esc(s.type)}</td><td>${esc(s.period)}</td><td>${fmtDate(s.completedDate)}</td><td>${fmtDate(s.retainUntil)}</td><td class="r"><button class="btn btn-sm" data-act="svc-reactivate" data-id="${s.id}">↩ Reactivate</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">No completed services yet.</td></tr>'}
+  </tbody></table></div>`;
+}
+function openAddServiceModal(clientId){
+  modal(`<div class="modal"><div class="modal-head"><h3>Add Service</h3><button class="x" data-act="close">×</button></div>
+    <div class="field"><label>Service</label><select id="sv_type">${SVC_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Period</label><input id="sv_period" placeholder="e.g. FY2025, Q1 2026, FY2026"></div>
+    <div class="two-col"><div class="field"><label>First follow-up date</label><input type="date" id="sv_start" value="${ymd(new Date())}"></div><div class="field"><label>Submission deadline</label><input type="date" id="sv_deadline"></div></div>
+    <p style="color:var(--faint);font-size:12px;margin-top:0">Corporate Tax starts every 3 days from the follow-up date; Bookkeeping/Audit weekly; VAT appears in the due month. Near the deadline it becomes sticky.</p>
+    <button class="btn btn-primary" style="width:100%" data-act="save-service" data-id="${clientId}">＋ Add Service</button></div>`);
+}
+function openServiceCompleteModal(id){
+  const s=(load().services||[]).find(x=>x.id===id);if(!s)return;
+  modal(`<div class="modal"><div class="modal-head"><h3>Complete Service</h3><button class="x" data-act="close">×</button></div>
+    <p style="margin-top:0">Mark <b>${esc(s.type)} · ${esc(s.period)}</b> as complete? It will move to <b>Retention</b> and stop generating follow-up tasks.</p>
+    <div class="field"><label>Closing note (optional)</label><textarea id="svcCNote" placeholder="e.g. Return filed on the FTA portal, ack no. ..."></textarea></div>
+    <button class="btn btn-primary" style="width:100%" data-act="confirm-svc-complete" data-id="${id}">✓ Complete &amp; move to Retention</button></div>`);
+}
+
+function renderSettings(){
+  const b=biz();const db=load();
+  app.innerHTML=`
+  <div class="page-head"><div><h1>Business Details</h1><p class="sub">Your company information — used on every quotation, agreement, invoice &amp; receipt</p></div>
+    <button class="btn btn-primary" data-act="save-business">💾 Save</button></div>
+  <div class="detail-grid">
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">🏢 Company</div>
+        <div class="field"><label>Business Name</label><input value="${esc(b.name)}" data-biz="name"></div>
+        <div class="two-col"><div class="field"><label>Trade Licence No</label><input value="${esc(b.licence)}" data-biz="licence"></div><div class="field"><label>TRN No</label><input value="${esc(b.trn)}" data-biz="trn"></div></div>
+        <div class="field"><label>Address</label><textarea data-biz="address" style="min-height:66px">${esc(b.address)}</textarea></div>
+        <div class="two-col"><div class="field"><label>Email</label><input value="${esc(b.email)}" data-biz="email"></div><div class="field"><label>Phone Number</label><input value="${esc(b.phone)}" data-biz="phone"></div></div>
+      </div>
+      <div class="card card-p"><div class="sec-title">🏦 Bank Details</div>
+        <div class="field"><label>Bank Details (one item per line)</label><textarea data-biz="bank" style="min-height:100px">${esc(b.bank)}</textarea></div>
+        <p style="color:var(--faint);font-size:12px;margin:0">Shown on invoices in the Payment Details section.</p></div>
+    </div>
+    <div>
+      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">🖼 Logo</div>
+        <div style="text-align:center;background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:12px;min-height:80px;display:flex;align-items:center;justify-content:center">${db.logo?`<img src="${db.logo}" style="max-height:80px;max-width:100%">`:'<span style="color:var(--faint);font-size:13px">No logo uploaded — a placeholder is used</span>'}</div>
+        <button class="btn btn-primary" style="width:100%" data-act="upload-logo">Upload / Change Logo</button>
+        ${db.logo?`<button class="btn btn-danger btn-sm" style="width:100%;margin-top:8px" data-act="remove-logo">Remove logo</button>`:''}
+        <p style="color:var(--faint);font-size:12px;margin-top:10px">Appears on the letterhead of every document.</p></div>
+      <div class="card card-p"><div class="sec-title">Preview</div>
+        <div style="display:flex;gap:10px;align-items:center;border-bottom:2px solid #17324c;padding-bottom:8px">${resolveLogo()}<div><div style="font-weight:800;color:#17324c">${esc(b.name)}</div><div style="font-size:11px;color:#7b8794">${esc((b.address||'').split('\n')[0])}</div></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">Licence ${esc(b.licence)}${b.trn?` · TRN ${esc(b.trn)}`:''}<br>${esc(b.email)} · ${esc(b.phone)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+/* ============================================================= MODALS */
+function modal(html){$('#modalRoot').innerHTML=`<div class="overlay" data-close-overlay>${html}</div>`;}
+function closeModal(){$('#modalRoot').innerHTML='';}
+function openLogoModal(){const db=load();modal(`<div class="modal"><div class="modal-head"><h3>Brand Logo</h3><button class="x" data-act="close">×</button></div>
+  <p style="color:var(--muted);font-size:13px;margin-top:0">Upload your logo (PNG, JPG or SVG). It appears on every printed quotation and agreement. Best results with a square/transparent PNG.</p>
+  <div style="text-align:center;margin:8px 0 14px;min-height:60px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:10px;padding:12px">${db.logo?`<img src="${db.logo}" style="max-height:70px;max-width:100%">`:'<span style="color:var(--faint);font-size:13px">No logo uploaded — a placeholder globe is used</span>'}</div>
+  <input type="file" accept="image/png,image/jpeg,image/svg+xml" onchange="pickLogo(this)" style="width:100%;padding:12px;border:1.5px dashed var(--line);border-radius:10px;cursor:pointer">
+  ${db.logo?`<button class="btn btn-danger btn-sm" style="margin-top:14px;width:100%" data-act="remove-logo">Remove logo</button>`:''}
+  </div>`);}
+function pickLogo(input){const f=input.files&&input.files[0];if(!f)return;if(f.size>2*1024*1024){toast('Image too large (max 2MB)');return;}const r=new FileReader();r.onload=()=>{const db=load();db.logo=r.result;save();openLogoModal();toast('Logo saved — it will appear on all prints');};r.readAsDataURL(f);}
+function openAddLead(){modal(`<div class="modal"><div class="modal-head"><h3>Add Lead</h3><button class="x" data-act="close">×</button></div>
+  <div class="field"><label>Company / Lead Name</label><input id="m_name" placeholder="e.g. Al Safra Gold Plating"></div>
+  <div class="two-col"><div class="field"><label>Phone</label><input id="m_phone"></div><div class="field"><label>Email</label><input id="m_email"></div></div>
+  <div class="two-col"><div class="field"><label>Source</label><select id="m_source"><option>Website</option><option>Referral</option><option>Walk-in</option><option>Social</option></select></div>
+  <div class="field"><label>Stage</label><select id="m_stage">${LEAD_STAGES.map(s=>`<option>${s}</option>`).join('')}</select></div></div>
+  <div class="field"><label>Trade Licence No</label><input id="m_licence" placeholder="e.g. 801406"></div>
+  <button class="btn btn-primary" style="width:100%" data-act="save-lead">＋ Create Lead</button></div>`);}
+function openNewTask(pre){const db=load();modal(`<div class="modal"><div class="modal-head"><h3>New Task</h3><button class="x" data-act="close">×</button></div>
+  <div class="field"><label>Title</label><input id="m_title" placeholder="e.g. VAT Return Due"></div>
+  <div class="two-col"><div class="field"><label>Type</label><select id="m_type"><option>Task</option><option selected>Reminder</option><option>Meeting</option><option>Renewal</option></select></div>
+  <div class="field"><label>Priority</label><select id="m_prio"><option>High</option><option selected>Medium</option><option>Low</option></select></div></div>
+  <div class="field"><label>Client</label><select id="m_client"><option value="">— none —</option>${db.clients.map(c=>`<option value="${c.id}" ${pre&&pre.client===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
+  <div class="two-col"><div class="field"><label>Due Date</label><input type="date" id="m_due" value="${ymd(new Date())}"></div>
+  <div class="field"><label>Recurrence</label><select id="m_recur"><option>None</option><option>Weekly</option><option>Monthly</option><option>Quarterly</option><option>Annual</option></select></div></div>
+  <button class="btn btn-primary" style="width:100%" data-act="save-task-modal">＋ Create Task</button></div>`);}
+function openNewQuote(){const db=load();modal(`<div class="modal"><div class="modal-head"><h3>New Quotation</h3><button class="x" data-act="close">×</button></div>
+  <div class="field"><label>For</label><select id="m_for"><option value="lead">Lead</option><option value="client">Client</option></select></div>
+  <div class="field"><label>Select</label><select id="m_ref"></select></div>
+  <button class="btn btn-primary" style="width:100%" data-act="save-quote-modal">＋ Create Quotation</button></div>`);
+  const fill=()=>{const t=$('#m_for').value;const list=t==='lead'?load().leads:load().clients;$('#m_ref').innerHTML=list.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');};
+  $('#m_for').onchange=fill;fill();}
+function openNewAgreement(){const db=load();modal(`<div class="modal"><div class="modal-head"><h3>New Agreement</h3><button class="x" data-act="close">×</button></div>
+  <div class="field"><label>Select Client</label><select id="m_ref">${db.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
+  <button class="btn btn-primary" style="width:100%" data-act="save-agreement-modal">＋ Create Agreement</button></div>`);}
+function openEditLead(id){const db=load();const l=db.leads.find(x=>x.id===id);if(!l)return;
+  modal(`<div class="modal"><div class="modal-head"><h3>Edit Lead</h3><button class="x" data-act="close">×</button></div>
+    <div class="field"><label>Company / Lead Name</label><input id="e_name" value="${esc(l.name)}"></div>
+    <div class="two-col"><div class="field"><label>Phone</label><input id="e_phone" value="${esc(l.phone)}"></div><div class="field"><label>Email</label><input id="e_email" value="${esc(l.email)}"></div></div>
+    <div class="two-col"><div class="field"><label>Contact</label><input id="e_contact" value="${esc(l.contact)}"></div><div class="field"><label>Source</label><select id="e_source">${['Website','Referral','Walk-in','Social'].map(s=>`<option ${l.source===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
+    <div class="two-col"><div class="field"><label>Stage</label><select id="e_stage">${LEAD_STAGES.map(s=>`<option ${l.stage===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Assigned To</label><select id="e_assigned">${db.team.map(s=>`<option ${l.assignedTo===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
+    <div class="field"><label>Services (comma separated)</label><input id="e_services" value="${esc((l.services||[]).join(', '))}"></div>
+    <div class="two-col"><div class="field"><label>Trade Licence No</label><input id="e_licence" value="${esc(l.tradeLicence||'')}" placeholder="e.g. 801406"></div><div class="field"><label>Address</label><input id="e_address" value="${esc(l.address)}"></div></div>
+    <button class="btn btn-primary" style="width:100%" data-act="save-edit-lead" data-id="${id}">Save Changes</button></div>`);}
+function openEditClient(id){const db=load();const c=db.clients.find(x=>x.id===id);if(!c)return;
+  modal(`<div class="modal wide"><div class="modal-head"><h3>Edit Client</h3><button class="x" data-act="close">×</button></div>
+    <div class="two-col"><div class="field"><label>Client Name</label><input id="c_name" value="${esc(c.name)}"></div><div class="field"><label>Status</label><select id="c_status"><option ${c.status==='Active'?'selected':''}>Active</option><option ${c.status==='Inactive'?'selected':''}>Inactive</option></select></div></div>
+    <div class="two-col"><div class="field"><label>Partner</label><select id="c_partner">${db.partners.map(p=>`<option value="${p.id}" ${c.partnerId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div><div class="field"><label>Email</label><input id="c_email" value="${esc(c.email)}"></div></div>
+    <div class="two-col"><div class="field"><label>Phone</label><input id="c_phone" value="${esc(c.phone)}"></div><div class="field"><label>TRN</label><input id="c_trn" value="${esc(c.trn)}"></div></div>
+    <div class="field"><label>Trade Licence No</label><input id="c_licence" value="${esc(c.tradeLicence||'')}" placeholder="e.g. 801406"></div>
+    <div class="two-col"><div class="field"><label>VAT Cycle</label><select id="c_vat">${['Monthly','Stagger 1','Stagger 2','Stagger 3'].map(s=>`<option ${c.vatCycle===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Tax Year End</label><input type="date" id="c_ye" value="${c.taxYearEnd||''}"></div></div>
+    <div class="two-col"><div class="field"><label>Portal ID</label><input id="c_pid" value="${esc(c.portalId||'')}"></div><div class="field"><label>Portal Password</label><input id="c_ppw" value="${esc(c.portalPassword||'')}"></div></div>
+    <div class="two-col"><div class="field"><label>Contract Expiry</label><input type="date" id="c_exp" value="${c.contractExpiry||''}"></div><div class="field"><label>Address</label><input id="c_addr" value="${esc(c.address)}"></div></div>
+    <div class="field"><label>Services (comma separated)</label><input id="c_svc" value="${esc((c.services||[]).join(', '))}"></div>
+    <button class="btn btn-primary" style="width:100%" data-act="save-edit-client" data-id="${id}">Save Changes</button></div>`);}
+
+/* ============================================================= CLICK HANDLER */
+document.addEventListener('click',e=>{
+  if(e.target.hasAttribute&&e.target.hasAttribute('data-close-overlay')){closeModal();return;}
+  const nd=e.target.closest('[data-navdrop]');
+  if(nd){e.preventDefault();const parent=nd.closest('.nav-drop');const willOpen=!parent.classList.contains('open');document.querySelectorAll('.nav-drop.open').forEach(x=>x.classList.remove('open'));if(willOpen)parent.classList.add('open');return;}
+  document.querySelectorAll('.nav-drop.open').forEach(x=>x.classList.remove('open'));
+  const actEl=e.target.closest('[data-act]');
+  if(actEl){e.preventDefault();handleAct(actEl.getAttribute('data-act'),actEl);return;}
+  const go=e.target.closest('[data-goto]');
+  if(go){location.hash=go.getAttribute('data-goto');}
+});
+function handleAct(act,el){
+  const db=load();const id=el.getAttribute('data-id');
+  switch(act){
+    case'save-business':{save();toast('Business details saved');route();break;}
+    case'close':closeModal();break;
+    case'upload-logo':openLogoModal();break;
+    case'remove-logo':{delete db.logo;save();openLogoModal();toast('Logo removed');break;}
+    case'run-engine':case'gen-client-tasks':{const n=runEngine();toast(n?`${n} task${n>1?'s':''} generated`:'No new tasks due — all up to date');route();break;}
+    case'add-lead':openAddLead();break;
+    case'edit-lead':openEditLead(id);break;
+    case'save-edit-lead':{const l=db.leads.find(x=>x.id===id);if(l){l.name=$('#e_name').value.trim()||l.name;l.phone=$('#e_phone').value||'-';l.email=$('#e_email').value||'-';l.contact=$('#e_contact').value||'-';l.source=$('#e_source').value;l.stage=$('#e_stage').value;l.assignedTo=$('#e_assigned').value;l.services=$('#e_services').value.split(',').map(s=>s.trim()).filter(Boolean);l.tradeLicence=$('#e_licence').value;l.address=$('#e_address').value||'-';save();closeModal();toast('Lead updated');route();}break;}
+    case'new-quote-for':{const type=el.getAttribute('data-type');const src=(type==='lead'?db.leads:db.clients).find(x=>x.id===id);const q={id:uid('q'),title:'Service Quotation',forType:type,refId:id,refName:src?src.name:'',clientLicence:src?(src.tradeLicence||''):'',reference:'',amount:0,status:'Draft',date:ymd(new Date()),intro:'We are pleased to present this quotation for our below mentioned scope of services.',scope:[],items:[{desc:'',period:'',amount:0}],closing:'We look forward to working with you and assure you of our best service at all times.',signatory:'Muhammad Asif Khan',signatoryTitle:'Managing Director',email:'asif@fairtaxint.com'};db.quotations.unshift(q);save();toast('Quotation created');location.hash='#/quotation/'+q.id;break;}
+    case'new-agreement-for':{const type=el.getAttribute('data-type');const src=(type==='lead'?db.leads:db.clients).find(x=>x.id===id);const a={id:uid('a'),title:'Service Agreement',clientId:type==='client'?id:null,clientName:src?src.name:'',clientLicence:src?(src.tradeLicence||''):'',reference:'',amount:0,status:'Draft',date:ymd(new Date()),...agTemplate(0)};a.items=[{desc:'',qty:1,unit:0}];db.agreements.unshift(a);save();toast('Agreement created');location.hash='#/agreement/'+a.id;break;}
+    case'save-lead':{const name=$('#m_name').value.trim();if(!name){toast('Enter a name');return;}db.leads.unshift({id:uid('l'),name,stage:$('#m_stage').value,source:$('#m_source').value,phone:$('#m_phone').value||'-',email:$('#m_email').value||'-',contact:'-',address:'-',tradeLicence:$('#m_licence').value||'',services:[],date:ymd(new Date()),assignedTo:'Waseem',notes:[]});save();closeModal();toast('Lead added');route();break;}
+    case'del-lead':db.leads=db.leads.filter(l=>l.id!==id);save();location.hash='#/leads';toast('Lead deleted');break;
+    case'convert-lead':{const l=db.leads.find(x=>x.id===id);if(l){db.clients.unshift({id:uid('c'),name:l.name,status:'Active',partnerId:'p_un',email:l.email,phone:l.phone,services:l.services||[],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:'',address:l.address,staff:[],invoiced:0,received:0,ledger:[],notes:[]});l.stage='Closed';save();toast('Converted to client');location.hash='#/clients';}break;}
+    case'post-lead-note':{const l=db.leads.find(x=>x.id===id);const v=$('#leadNote').value.trim();if(v){l.notes.unshift({by:'Waseem',at:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'}),text:v});save();route();}break;}
+    case'post-client-note':{const c=db.clients.find(x=>x.id===id);const v=$('#clientNote').value.trim();if(v){c.notes.unshift({by:'Waseem',text:v});save();route();}break;}
+    case'del-client':db.clients=db.clients.filter(c=>c.id!==id);save();location.hash='#/clients';toast('Client deleted');break;
+    case'edit-client':openEditClient(id);break;
+    case'save-edit-client':{const c=db.clients.find(x=>x.id===id);if(c){c.name=$('#c_name').value.trim()||c.name;c.status=$('#c_status').value;c.partnerId=$('#c_partner').value;c.email=$('#c_email').value;c.phone=$('#c_phone').value;c.trn=$('#c_trn').value;c.tradeLicence=$('#c_licence').value;c.vatCycle=$('#c_vat').value;c.taxYearEnd=$('#c_ye').value;c.portalId=$('#c_pid').value;c.portalPassword=$('#c_ppw').value;c.contractExpiry=$('#c_exp').value;c.address=$('#c_addr').value;c.services=$('#c_svc').value.split(',').map(s=>s.trim()).filter(Boolean);save();closeModal();toast('Client updated');route();}break;}
+    case'toggle-mask':{const span=el.closest('.v');const m=span.getAttribute('data-mask');const showing=el.textContent==='hide';span.childNodes[0].textContent=(showing?'••••••••':m)+' ';el.textContent=showing?'show':'hide';break;}
+    case'new-task':openNewTask();break;
+    case'new-task-for':openNewTask({client:el.getAttribute('data-client')});break;
+    case'save-task-modal':{const title=$('#m_title').value.trim();if(!title){toast('Enter a title');return;}db.tasks.unshift({id:uid('t'),title,type:$('#m_type').value,status:'Not Started',dueDate:$('#m_due').value,recurrence:$('#m_recur').value,priority:$('#m_prio').value,clientId:$('#m_client').value||null,assignees:['Waseem'],source:'',checklist:[],comments:[],createdBy:'Waseem',createdAt:ymd(new Date())});save();closeModal();toast('Task created');route();break;}
+    case'del-task':db.tasks=db.tasks.filter(t=>t.id!==id);save();location.hash='#/tasks';toast('Task deleted');break;
+    case'task-tab':window._taskTab=el.getAttribute('data-t');route();break;
+    case'task-filter':taskFilter=el.getAttribute('data-f');renderTasks();break;
+    case'post-comment':{const t=db.tasks.find(x=>x.id===id);const v=$('#taskComment').value.trim();if(v){t.comments.unshift({by:'Waseem',at:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'}),text:v});save();route();}break;}
+    case'post-comment':break;
+    /* quotations */
+    case'new-quote':openNewQuote();break;
+    case'save-quote-modal':{const t=$('#m_for').value,rid=$('#m_ref').value;const src=(t==='lead'?db.leads:db.clients).find(x=>x.id===rid);const q={id:uid('q'),title:'Service Quotation',forType:t,refId:rid,refName:src?src.name:'',clientLicence:src?(src.tradeLicence||''):'',reference:'',amount:0,status:'Draft',date:ymd(new Date()),intro:'We are pleased to present this quotation for our below mentioned scope of services.',scope:[],items:[{desc:'',period:'',amount:0}],closing:'We look forward to working with you and assure you of our best service at all times.',signatory:'Muhammad Asif Khan',signatoryTitle:'Managing Director',email:'asif@fairtaxint.com'};db.quotations.unshift(q);save();closeModal();location.hash='#/quotation/'+q.id;break;}
+    case'q-add-item':{const q=db.quotations.find(x=>x.id===id);q.items.push({desc:'',period:'',amount:0});save();route();break;}
+    case'scope-custom':{const k=el.getAttribute('data-k');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);dd.scope=dd.scope||[];dd.scope.push({heading:'New Service',items:['']});save();k==='q'?renderQuotationBuilder(id):renderAgreementBuilder(id);break;}
+    case'chq-add':{const k=el.getAttribute('data-k');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);dd.cheques=dd.cheques||[];dd.cheques.push({type:'PDC',date:'',amount:0});save();k==='q'?renderQuotationBuilder(id):renderAgreementBuilder(id);break;}
+    case'chq-del':{const k=el.getAttribute('data-k');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);dd.cheques.splice(+el.getAttribute('data-i'),1);save();k==='q'?renderQuotationBuilder(id):renderAgreementBuilder(id);break;}
+    case'scope-del':{const k=el.getAttribute('data-k');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);dd.scope.splice(+el.getAttribute('data-i'),1);save();k==='q'?renderQuotationBuilder(id):renderAgreementBuilder(id);break;}
+    case'q-del-item':{const q=db.quotations.find(x=>x.id===id);q.items.splice(+el.getAttribute('data-i'),1);save();route();break;}
+    case'save-quote':{const q=db.quotations.find(x=>x.id===id);q.amount=itemsTotal(q.items);q.status='Draft';save();toast('Draft saved');route();break;}
+    case'finalize-quote':{const q=db.quotations.find(x=>x.id===id);q.amount=itemsTotal(q.items);q.status='Final';save();toast('Finalized — opening preview');route();printDoc('quotation',q);break;}
+    case'print-quote':{const q=db.quotations.find(x=>x.id===id);printDoc('quotation',q);break;}
+    case'del-quote':db.quotations=db.quotations.filter(q=>q.id!==id);save();toast('Deleted');route();break;
+    /* agreements */
+    case'new-agreement':openNewAgreement();break;
+    case'save-agreement-modal':{const rid=$('#m_ref').value;const c=db.clients.find(x=>x.id===rid);const a={id:uid('a'),title:'Service Agreement',clientId:rid,clientName:c?c.name:'',clientLicence:c?(c.tradeLicence||''):'',reference:'',amount:0,status:'Draft',date:ymd(new Date()),...agTemplate(0)};a.items=[{desc:'',qty:1,unit:0}];db.agreements.unshift(a);save();closeModal();location.hash='#/agreement/'+a.id;break;}
+    case'a-add-item':{const a=db.agreements.find(x=>x.id===id);a.items.push({desc:'',period:'',amount:0});save();route();break;}
+    case'a-del-item':{const a=db.agreements.find(x=>x.id===id);a.items.splice(+el.getAttribute('data-i'),1);save();route();break;}
+    case'save-agreement':{const a=db.agreements.find(x=>x.id===id);a.amount=itemsTotal(a.items);a.status='Draft';save();toast('Draft saved');route();break;}
+    case'finalize-agreement':{const a=db.agreements.find(x=>x.id===id);a.amount=itemsTotal(a.items);a.status='Final';save();toast('Finalized — opening preview');route();printDoc('agreement',a);break;}
+    case'print-agreement':{const a=db.agreements.find(x=>x.id===id);printDoc('agreement',a);break;}
+    case'del-agreement':db.agreements=db.agreements.filter(a=>a.id!==id);save();toast('Deleted');route();break;
+    /* payment schedule */
+    case'sched-add':{const a=db.agreements.find(x=>x.id===id);a.schedule=a.schedule||[];a.schedule.push({id:uid('sc'),label:'Payment',amount:0,dueDate:'',method:'Online Transfer',status:'Pending',chequeNo:'',bank:''});save();renderAgreementBuilder(id);break;}
+    case'sched-del':{const a=db.agreements.find(x=>x.id===id);const rid=el.getAttribute('data-row');const r=(a.schedule||[]).find(x=>x.id===rid);if(r&&r.taskId)db.tasks=db.tasks.filter(t=>t.id!==r.taskId);a.schedule=(a.schedule||[]).filter(x=>x.id!==rid);save();renderAgreementBuilder(id);break;}
+    case'sched-build':{const a=db.agreements.find(x=>x.id===id);(a.schedule||[]).forEach(r=>{if(r.taskId)db.tasks=db.tasks.filter(t=>t.id!==r.taskId);});a.schedule=buildScheduleFromTerms(a);syncPaymentTasks(db,a);save();toast('Schedule built from payment terms');renderAgreementBuilder(id);break;}
+    case'sched-received':{const rc=markSchedReceived(db,id,el.getAttribute('data-row'));save();toast(rc?('Received · receipt '+rc.receiptNo+' issued'):'Marked received');const hs=location.hash||'';if(hs.indexOf('#/payments')===0)renderPayments();else if(hs.indexOf('#/agreement/')===0)renderAgreementBuilder(id);else route();break;}
+    /* services */
+    case'add-service':openAddServiceModal(id);break;
+    case'save-service':{const type=$('#sv_type').value,period=$('#sv_period').value.trim();if(!period){toast('Enter a period (e.g. FY2025)');return;}createService(db,id,type,period,$('#sv_start').value,$('#sv_deadline').value);runServiceEngine(db);save();closeModal();toast('Service added');route();break;}
+    case'svc-del':{db.services=db.services.filter(s=>{if(s.id===el.getAttribute('data-id')){if(s.taskId)db.tasks=db.tasks.filter(t=>t.id!==s.taskId);return false;}return true;});save();route();break;}
+    case'svc-complete-btn':openServiceCompleteModal(el.getAttribute('data-id'));break;
+    case'confirm-svc-complete':{svcComplete(db,id,($('#svcCNote')||{}).value||'');save();closeModal();toast('Service completed → moved to Retention');route();break;}
+    case'svc-reactivate':{svcReactivate(db,el.getAttribute('data-id'));runServiceEngine(db);save();toast('Service reactivated');route();break;}
+    case'svc-snooze':{const r=svcSnooze(db,id,($('#svcNote')||{}).value||'');save();toast(r.sticky?'Logged · stays until deadline':'Logged · next follow-up '+(r.next?fmtDate(r.next):''));if(r.kept)route();else location.hash='#/tasks';break;}
+    case'svc-setdate':{const dt=($('#svcDate')||{}).value;if(!dt){toast('Pick a date');return;}const r=svcSetDate(db,id,dt,($('#svcNote')||{}).value||'');save();toast(r.capped?'Date capped to the submission deadline':'Next follow-up set');if(r.kept)route();else location.hash='#/tasks';break;}
+    case'svc-done':{svcComplete(db,id,($('#svcNote')||{}).value||'');save();toast('Service completed → Retention');location.hash='#/tasks';break;}
+    /* invoices */
+    case'new-invoice':{modal(`<div class="modal"><div class="modal-head"><h3>New Invoice</h3><button class="x" data-act="close">×</button></div><div class="field"><label>Select Client</label><select id="m_ref">${db.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><button class="btn btn-primary" style="width:100%" data-act="save-invoice-modal">＋ Create Invoice</button></div>`);break;}
+    case'save-invoice-modal':{const inv=mkInvoice(db,$('#m_ref').value);save();closeModal();location.hash='#/invoice/'+inv.id;break;}
+    case'new-invoice-for':{const inv=mkInvoice(db,id);save();toast('Invoice created');location.hash='#/invoice/'+inv.id;break;}
+    case'inv-add-item':{const v=db.invoices.find(x=>x.id===id);v.items.push({desc:'',qty:1,unit:0,vat:'standard'});save();renderInvoiceBuilder(id);break;}
+    case'inv-del-item':{const v=db.invoices.find(x=>x.id===id);v.items.splice(+el.getAttribute('data-i'),1);save();renderInvoiceBuilder(id);break;}
+    case'save-invoice':{save();toast('Invoice saved');route();break;}
+    case'finalize-invoice':{const v=db.invoices.find(x=>x.id===id);save();toast('Opening preview');route();printInvoice(v);break;}
+    case'print-invoice':{const v=db.invoices.find(x=>x.id===id);printInvoice(v);break;}
+    case'del-invoice':db.invoices=db.invoices.filter(v=>v.id!==id);save();location.hash='#/invoices';toast('Invoice deleted');break;
+    /* receipts */
+    case'new-receipt':{modal(`<div class="modal"><div class="modal-head"><h3>New Receipt</h3><button class="x" data-act="close">×</button></div><div class="field"><label>Select Client</label><select id="m_ref">${db.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><button class="btn btn-primary" style="width:100%" data-act="save-receipt-modal">＋ Create Receipt</button></div>`);break;}
+    case'save-receipt-modal':{const rc=mkReceipt(db,$('#m_ref').value);save();closeModal();location.hash='#/receipt/'+rc.id;break;}
+    case'new-receipt-for':{const rc=mkReceipt(db,id);save();toast('Receipt created');location.hash='#/receipt/'+rc.id;break;}
+    case'save-receipt':{syncPdcTask(db,db.receipts.find(x=>x.id===id));save();toast('Receipt saved');route();break;}
+    case'finalize-receipt':{const rc=db.receipts.find(x=>x.id===id);syncPdcTask(db,rc);save();toast(rc.method==='PDC'?'Saved · PDC reminder set':'Receipt saved — opening preview');route();printReceipt(rc);break;}
+    case'print-receipt':{const rc=db.receipts.find(x=>x.id===id);printReceipt(rc);break;}
+    case'del-receipt':{const rc=db.receipts.find(x=>x.id===id);if(rc&&rc.taskId)db.tasks=db.tasks.filter(t=>t.id!==rc.taskId);db.receipts=db.receipts.filter(x=>x.id!==id);save();location.hash='#/receipts';toast('Receipt deleted');break;}
+    case'agr-for-client':{const c=db.clients.find(x=>x.id===id);const a={id:uid('a'),title:'Service Agreement',clientId:id,clientName:c?c.name:'',clientLicence:c?(c.tradeLicence||''):'',reference:'',amount:0,status:'Draft',date:ymd(new Date()),...agTemplate(0)};a.items=[{desc:'',period:'',amount:0}];db.agreements.unshift(a);save();location.hash='#/agreement/'+a.id;break;}
+    case'quo-for-client':{const c=db.clients.find(x=>x.id===id);const q={id:uid('q'),title:'Service Quotation',forType:'client',refId:id,refName:c?c.name:'',clientLicence:c?(c.tradeLicence||''):'',reference:'',amount:0,status:'Draft',date:ymd(new Date()),intro:'We are pleased to present this quotation for our below mentioned scope of services.',scope:[],items:[{desc:'',period:'',amount:0}],closing:'We look forward to working with you and assure you of our best service at all times.',signatory:'Muhammad Asif Khan',signatoryTitle:'Managing Director',email:'asif@fairtaxint.com'};db.quotations.unshift(q);save();location.hash='#/quotation/'+q.id;break;}
+    case'quote-to-invoice':{const q=db.quotations.find(x=>x.id===id);let clientId=q.forType==='client'?q.refId:((db.clients.find(c=>c.name===q.refName)||{}).id||null);const c=db.clients.find(x=>x.id===clientId);const inv={id:uid('inv'),title:'Tax Invoice',invoiceNo:'INV-'+new Date().getFullYear()+'-'+String(db.invoices.length+1).padStart(3,'0'),clientId:clientId,clientName:q.refName||(c?c.name:''),trn:(c&&c.trn&&c.trn!=='-'?c.trn:''),date:ymd(new Date()),dueDate:ymd(new Date(Date.now()+14*864e5)),vatRate:q.vatRate!=null?q.vatRate:5,status:'Unpaid',items:(q.items||[]).map(it=>({desc:it.desc,qty:1,unit:itemAmt(it),vat:it.vat||'standard'})),notes:q.reference?('Ref quotation '+q.reference):'',bank:biz().bank};db.invoices.unshift(inv);save();toast('Invoice created from quotation');location.hash='#/invoice/'+inv.id;break;}
+  }
+}
+
+/* ============================================================= INLINE EDITS */
+document.addEventListener('change',e=>{
+  const t=e.target,db=load();const id=t.getAttribute&&t.getAttribute('data-id');
+  if(t.hasAttribute&&t.hasAttribute('data-sc')){const a=db.agreements.find(x=>x.id===id);const rid=t.getAttribute('data-row');const r=(a.schedule||[]).find(x=>x.id===rid);if(r){const f=t.getAttribute('data-sc');r[f]=(f==='amount')?(+t.value||0):t.value;syncPaymentTasks(db,a);save();if(f==='method')renderAgreementBuilder(id);}return;}
+  if(t.hasAttribute&&t.hasAttribute('data-biz')){const db2=load();db2.business=Object.assign({},BIZ_DEFAULT,db2.business||{});db2.business[t.getAttribute('data-biz')]=t.value;save();return;}
+  if(t.hasAttribute&&t.hasAttribute('data-inv')){const v=db.invoices.find(x=>x.id===id);const f=t.getAttribute('data-inv');v[f]=t.value;save();if(f==='vatRate')renderInvoiceBuilder(id);return;}
+  if(t.hasAttribute&&t.hasAttribute('data-ii')){const v=db.invoices.find(x=>x.id===id);const i=+t.getAttribute('data-i');const f=t.getAttribute('data-ii');v.items[i][f]=(f==='desc'||f==='vat')?t.value:(+t.value||0);save();renderInvoiceBuilder(id);return;}
+  if(t.hasAttribute&&t.hasAttribute('data-rc')){const rc=db.receipts.find(x=>x.id===id);const f=t.getAttribute('data-rc');rc[f]=(f==='amount')?(+t.value||0):t.value;if(f==='method')rc.isPDC=(t.value==='PDC');save();if(['method','amount'].includes(f))renderReceiptBuilder(id);return;}
+  if(t.hasAttribute&&t.hasAttribute('data-pay')){const k=t.getAttribute('data-pay');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);dd.paymentMode=t.value;
+    if(t.value==='advance')dd.payment='100% of the total professional fee is payable in advance before commencement of the Services.';
+    else if(t.value==='split')dd.payment='50% of the fee in advance and the remaining 50% upon completion of the Services.';
+    else if(t.value==='cheques'&&(!dd.cheques||!dd.cheques.length))dd.cheques=[{type:'CDC',date:'',amount:0}];
+    save();k==='q'?renderQuotationBuilder(id):renderAgreementBuilder(id);return;}
+  if(t.hasAttribute&&t.hasAttribute('data-chq')){const k=t.getAttribute('data-k');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);const i=+t.getAttribute('data-i');const f=t.getAttribute('data-chq');dd.cheques[i][f]=(f==='amount')?(+t.value||0):t.value;save();k==='q'?renderQuotationBuilder(id):renderAgreementBuilder(id);return;}
+  if(t.hasAttribute&&t.hasAttribute('data-catalog')){const k=t.getAttribute('data-catalog');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);const v=t.value;if(v&&SCOPE_CATALOG[v]){dd.scope=dd.scope||[];dd.scope.push({heading:v,items:[...SCOPE_CATALOG[v]]});save();k==='q'?renderQuotationBuilder(id):renderAgreementBuilder(id);}return;}
+  if(t.hasAttribute&&t.hasAttribute('data-scope-h')){const k=t.getAttribute('data-scope-h');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);dd.scope[+t.getAttribute('data-i')].heading=t.value;save();return;}
+  if(t.hasAttribute&&t.hasAttribute('data-scope-i')){const k=t.getAttribute('data-scope-i');const arr=k==='q'?db.quotations:db.agreements;const dd=arr.find(x=>x.id===id);dd.scope[+t.getAttribute('data-i')].items=t.value.split('\n').map(s=>s.trim()).filter(Boolean);save();return;}
+  if(t.hasAttribute&&t.hasAttribute('data-edit')){const task=db.tasks.find(x=>x.id===id);const f=t.getAttribute('data-edit');const old=task.status;task[f]=t.value;
+    if(f==='status'&&t.value==='Completed'&&old!=='Completed'&&task.recurrence&&task.recurrence!=='None'){nextRecurring(db,task);}save();if(f==='status')route();return;}
+  if(t.hasAttribute&&t.hasAttribute('data-q')){const f=t.getAttribute('data-q');const q=db.quotations.find(x=>x.id===id);q[f]=t.value;save();if(f==='periodType'||f==='vatRate')renderQuotationBuilder(id);return;}
+  if(t.hasAttribute&&t.hasAttribute('data-a')){const f=t.getAttribute('data-a');const a=db.agreements.find(x=>x.id===id);a[f]=t.value;save();if(f==='periodType'||f==='vatRate')renderAgreementBuilder(id);return;}
+  if(t.hasAttribute&&t.hasAttribute('data-qi')){const q=db.quotations.find(x=>x.id===id);const i=+t.getAttribute('data-i');const f=t.getAttribute('data-qi');q.items[i][f]=(f==='desc'||f==='period'||f==='vat')?t.value:(+t.value||0);save();renderQuotationBuilder(id);return;}
+  if(t.hasAttribute&&t.hasAttribute('data-ai')){const a=db.agreements.find(x=>x.id===id);const i=+t.getAttribute('data-i');const f=t.getAttribute('data-ai');a.items[i][f]=(f==='desc'||f==='period'||f==='vat')?t.value:(+t.value||0);save();renderAgreementBuilder(id);return;}
+});
+function nextRecurring(db,task){const add={'Weekly':7,'Monthly':30,'Quarterly':91,'Annual':365}[task.recurrence]||0;if(!add)return;const nd=ymd(new Date(new Date(task.dueDate+'T00:00:00').getTime()+add*864e5));db.tasks.unshift({...task,id:uid('t'),status:'Not Started',dueDate:nd,comments:[],createdBy:'System',createdAt:ymd(new Date())});toast('Recurring task auto-created for '+fmtDate(nd));}
+
+/* ============================================================= DRAG & DROP */
+let dragId=null,dragType=null;
+document.addEventListener('dragstart',e=>{const c=e.target.closest('[data-drag]');if(!c)return;dragId=c.getAttribute('data-id');dragType=c.getAttribute('data-drag');c.classList.add('dragging');});
+document.addEventListener('dragend',e=>{const c=e.target.closest('[data-drag]');if(c)c.classList.remove('dragging');document.querySelectorAll('.dropok').forEach(x=>x.classList.remove('dropok'));});
+document.addEventListener('dragover',e=>{const z=e.target.closest('[data-drop]');if(z){e.preventDefault();z.classList.add('dropok');}});
+document.addEventListener('dragleave',e=>{const z=e.target.closest('[data-drop]');if(z)z.classList.remove('dropok');});
+document.addEventListener('drop',e=>{const z=e.target.closest('[data-drop]');if(!z||!dragId)return;e.preventDefault();const db=load();const kind=z.getAttribute('data-drop');
+  if(kind==='stage'&&dragType==='lead'){const l=db.leads.find(x=>x.id===dragId);if(l)l.stage=z.getAttribute('data-stage');save();renderLeads();}
+  if(kind==='partner'&&dragType==='client'){const c=db.clients.find(x=>x.id===dragId);if(c)c.partnerId=z.getAttribute('data-partner');save();renderClients();toast('Client reassigned');}
+  if(kind==='status'&&dragType==='task'){const t=db.tasks.find(x=>x.id===dragId);const old=t.status;const ns=z.getAttribute('data-status');t.status=ns;if(ns==='Completed'&&old!=='Completed'&&t.recurrence&&t.recurrence!=='None')nextRecurring(db,t);save();renderTasks();}
+  dragId=null;dragType=null;});
+
+/* ============================================================= INIT */
+load();route();
+</script>
+</body>
+</html>

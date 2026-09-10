@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "160519324912",
+    "project_id": "fair-tax-audit-desk",
+    "storage_bucket": "fair-tax-audit-desk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:160519324912:android:013eac877d5e6c8cefee35",
+        "android_client_info": {
+          "package_name": "com.fairtax.portal"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "160519324912-029uakkm01d5ugec29eqhj1hegbds7s3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCi99HrNPxzxTm7G_plNo0Phn2XQnXyNWk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "160519324912-029uakkm01d5ugec29eqhj1hegbds7s3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
