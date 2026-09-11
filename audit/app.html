@@ -336,6 +336,14 @@ table.cfpy th[scope=row]{font-weight:400}
 .nn-btn{border:1px dashed var(--line);background:var(--surface);border-radius:6px;cursor:pointer;padding:1px 4px;text-align:center}
 .nn-btn:hover{border-color:var(--accent)}
 .qd table.ui td input{min-width:0}.qd .q-tab td,.qd .q-tab th{padding:4px 6px}.qd .q-ppe input{min-width:78px}
+.ck-btn{display:flex;gap:8px;align-items:baseline;width:100%;background:none;border:0;padding:2px 4px;margin:-2px -4px;font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:6px}
+.ck-btn:hover{background:var(--surface)}.ck-btn:hover .ck-t{text-decoration:underline}.ck-btn .ck-t{flex:1}.ck-btn .ck-why{font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap}.ck.ok .ck-why{color:var(--muted);font-weight:400}
+.checks.one{grid-template-columns:1fr;margin:6px 0 12px}
+.why-list{list-style:none;padding:0;margin:6px 0 12px;display:grid;gap:8px}.why-list li{display:flex;gap:14px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.why-list li.full{border-color:var(--ok);background:var(--ok-soft)}.why-list .why-txt{flex:1}.why-list .why-amt{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}.why-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.why-det{margin-top:10px}.why-det summary{cursor:pointer;font-weight:600}.q-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:700px){.q-2col{grid-template-columns:1fr}}
+.qd .q-why tr.grp th{font-weight:600;background:var(--surface)}.qd td.q-acts{white-space:nowrap;text-align:right}.qd .q-mv{font-size:10px;padding:2px 5px}.qd .q-mv[disabled]{opacity:.25;cursor:default}.qd th.q-acts-h{text-align:right;font-weight:500}
+.rgrid.ratio td{vertical-align:top}.rgrid.ratio th{text-align:left}.rgrid.ratio th.r{text-align:right}.rgrid.ratio td:nth-child(2){color:#555;font-size:.92em}
 .qd th.q-hl,.qd td.q-hl{background:#FFF6E3}.qd tr.q-hlr th,.qd tr.q-hlr td{background:#FFF6E3}
 .qd .q-tot{display:flex;gap:18px;font-size:14px;color:var(--muted)}.qd .q-tot b{color:var(--ink);font-variant-numeric:tabular-nums}
 .qd .q-fig th[scope=row]{font-weight:400;font-size:14px;text-transform:none;letter-spacing:0;color:var(--ink);background:transparent;white-space:normal}
@@ -626,35 +634,36 @@ function compute(eng, prevEng){
   }
   cfp = applyCfLayout(eng, cf, cfp, cy, py);
   const checks = [];
-  const add = (ok, text, level) => checks.push({ok, text, level: ok ? 'ok' : (level || 'bad')});
-  { const crT = cr - eqTbAdj, note = eqTbAdj ? ' (reserves taken as closing balances)' : ''; add(dr === crT, dr === crT ? 'Trial balance balances' + note : `Trial balance is out by ${fmtN(dr - crT)}${note}`); }
-  add(unmapped === 0, unmapped ? `${unmapped} ledger line(s) not in any schedule` : 'All ledger lines are in schedules');
-  add(cy.ta === cy.tel, cy.ta === cy.tel ? `Statement of financial position ${eng.year} agrees` : `Statement of financial position ${eng.year} out by ${fmtN(cy.ta - cy.tel)}`);
-  add(py.ta === py.tel, py.ta === py.tel ? `Statement of financial position ${eng.year-1} agrees` : `Prior year (${eng.year-1}) figures out by ${fmtN(py.ta - py.tel)}`);
+  let K = '';
+  const add = (ok, text, level) => checks.push({ok, text, level: ok ? 'ok' : (level || 'bad'), key: K});
+  K = 'tb'; { const crT = cr - eqTbAdj, note = eqTbAdj ? ' (reserves taken as closing balances)' : ''; add(dr === crT, dr === crT ? 'Trial balance balances' + note : `Trial balance is out by ${fmtN(dr - crT)}${note}`); }
+  K = 'unmapped'; add(unmapped === 0, unmapped ? `${unmapped} ledger line(s) not in any schedule` : 'All ledger lines are in schedules');
+  K = 'sofp-cy'; add(cy.ta === cy.tel, cy.ta === cy.tel ? `Statement of financial position ${eng.year} agrees` : `Statement of financial position ${eng.year} out by ${fmtN(cy.ta - cy.tel)}`);
+  K = 'sofp-py'; add(py.ta === py.tel, py.ta === py.tel ? `Statement of financial position ${eng.year-1} agrees` : `Prior year (${eng.year-1}) figures out by ${fmtN(py.ta - py.tel)}`);
   if (ppe.length){
     if (ppeLines.n){
-      add(ppeLines.cy === ppeT.nbv, ppeLines.cy === ppeT.nbv ? 'PPE ledger lines agree with PPE schedule' : `PPE ledger lines differ from PPE schedule by ${fmtN(ppeLines.cy - ppeT.nbv)}`);
-      add(ppeLines.py === ppeT.nbvPy, ppeLines.py === ppeT.nbvPy ? 'PPE prior year agrees with PPE schedule' : `PPE prior year ledger figure differs from schedule by ${fmtN(ppeLines.py - ppeT.nbvPy)}`);
+      K = 'ppe-cy'; add(ppeLines.cy === ppeT.nbv, ppeLines.cy === ppeT.nbv ? 'PPE ledger lines agree with PPE schedule' : `PPE ledger lines differ from PPE schedule by ${fmtN(ppeLines.cy - ppeT.nbv)}`);
+      K = 'ppe-py'; add(ppeLines.py === ppeT.nbvPy, ppeLines.py === ppeT.nbvPy ? 'PPE prior year agrees with PPE schedule' : `PPE prior year ledger figure differs from schedule by ${fmtN(ppeLines.py - ppeT.nbvPy)}`);
     }
     if (depLines.n){
-      add(depLines.cy === ppeT.charge, depLines.cy === ppeT.charge ? 'Depreciation agrees with PPE schedule' : `Depreciation differs from PPE schedule by ${fmtN(depLines.cy - ppeT.charge)}`);
-      add(depLines.py === ppeT.pyCharge, depLines.py === ppeT.pyCharge ? 'Prior year depreciation agrees with PPE schedule' : `Prior year depreciation differs from PPE schedule by ${fmtN(depLines.py - ppeT.pyCharge)}`, 'warn');
+      K = 'dep-cy'; add(depLines.cy === ppeT.charge, depLines.cy === ppeT.charge ? 'Depreciation agrees with PPE schedule' : `Depreciation differs from PPE schedule by ${fmtN(depLines.cy - ppeT.charge)}`);
+      K = 'dep-py'; add(depLines.py === ppeT.pyCharge, depLines.py === ppeT.pyCharge ? 'Prior year depreciation agrees with PPE schedule' : `Prior year depreciation differs from PPE schedule by ${fmtN(depLines.py - ppeT.pyCharge)}`, 'warn');
     }
-    if (ppeT.pyDiff) { const n0 = v => Math.round(v || 0).toLocaleString('en-US'); add(false, `PPE comparative ${eng.year - 1} does not add up: opening ${n0(ppeT.nbvPyOpen)} + additions ${n0(ppeT.pyAdd)} − disposals ${n0(ppeT.pyDispWdv)} − depreciation ${n0(ppeT.pyCharge)} = ${n0(ppeT.pyCloseCalc)}, but the ${eng.year} opening balances give ${n0(ppeT.nbvPy)} – difference ${n0(ppeT.pyDiff)}`); }
-    if (!ppeT.pyOpenTyped && ppeT.nbvPyOpen < 0) add(false, `Comparative PPE opening written down value is negative (${fmtN(ppeT.nbvPyOpen)}) – check prior year additions and depreciation`, 'warn');
+    K = 'ppe-pydiff'; if (ppeT.pyDiff) { const n0 = v => Math.round(v || 0).toLocaleString('en-US'); add(false, `PPE comparative ${eng.year - 1} does not add up: opening ${n0(ppeT.nbvPyOpen)} + additions ${n0(ppeT.pyAdd)} − disposals ${n0(ppeT.pyDispWdv)} − depreciation ${n0(ppeT.pyCharge)} = ${n0(ppeT.pyCloseCalc)}, but the ${eng.year} opening balances give ${n0(ppeT.nbvPy)} – difference ${n0(ppeT.pyDiff)}`); }
+    K = 'ppe-pydiff'; if (!ppeT.pyOpenTyped && ppeT.nbvPyOpen < 0) add(false, `Comparative PPE opening written down value is negative (${fmtN(ppeT.nbvPyOpen)}) – check prior year additions and depreciation`, 'warn');
   }
-  add(cf.diff === 0, cf.diff === 0 ? `Cash flow ${eng.year} reconciles to cash balance` : `Cash flow ${eng.year} does not reconcile – difference ${fmtN(cf.diff)}`);
-  add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} reconciles` : `Prior year cash flow does not reconcile – difference ${fmtN(cfp.diff)} (enter prior year cash flow figures)`, 'warn');
-  if (cy.lrClose < cy.cap * 0.5 && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below 50% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
+  K = 'cf-cy'; add(cf.diff === 0, cf.diff === 0 ? `Cash flow ${eng.year} reconciles to cash balance` : `Cash flow ${eng.year} does not reconcile – difference ${fmtN(cf.diff)}`);
+  K = 'cf-py'; add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} reconciles` : `Prior year cash flow does not reconcile – difference ${fmtN(cfp.diff)} (enter prior year cash flow figures)`, 'warn');
+  K = 'lr'; if (cy.lrClose < cy.cap * 0.5 && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below 50% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
   { const Y0 = eng.year, P0 = eng.year - 1;
-    if (py.reAdj) add(false, `Retained earnings at the end of FY${P0} (${fmtN(py.reClose)}) differ from the FY${P0} profit less transfers (${fmtN(py.reClose - py.reAdj)}) by ${fmtN(py.reAdj)} – shown as ${Math.abs(py.reAdj) <= 10 ? 'a rounding difference' : 'a difference'} in changes in equity`, 'warn');
+    K = 're'; if (py.reAdj) add(false, `Retained earnings at the end of FY${P0} (${fmtN(py.reClose)}) differ from the FY${P0} profit less transfers (${fmtN(py.reClose - py.reAdj)}) by ${fmtN(py.reAdj)} – shown as ${Math.abs(py.reAdj) <= 10 ? 'a rounding difference' : 'a difference'} in changes in equity`, 'warn');
     if (cy.reAdj) add(false, `Retained earnings at the end of FY${Y0} (${fmtN(cy.reClose)}) differ from FY${P0} closing + profit − dividend − transfer (${fmtN(cy.reClose - cy.reAdj)}) by ${fmtN(cy.reAdj)}`, 'warn');
     if (cy.reOpenDiff) add(false, `Retained earnings at the start of FY${Y0} (${fmtN(cy.reOpen)}) differ from the FY${P0} closing balance (${fmtN(py.reClose)}) by ${fmtN(cy.reOpenDiff)} – if the FY${Y0} ledger shows the closing balance, choose “Closing balances” for the FY${Y0} retained earnings and legal reserve lines`, 'warn');
-    if (cy.lrOpenDiff) add(false, `Legal reserve at the start of FY${Y0} (${fmtN(cy.lrOpen)}) differs from the FY${P0} closing balance (${fmtN(py.lrClose)}) by ${fmtN(cy.lrOpenDiff)}`, 'warn');
-    if (!firstPy && EQ.firstMode === 'auto' && EQ.estYear === null && EQ.hasPy && py.reOpen < 0) add(false, `Retained earnings at the start of FY${P0} work back to ${fmtN(py.reOpen)} – if FY${P0} was the company’s first year, answer “Yes” to “Was FY${P0} the company’s first year?” (click any equity amount in the statements) or enter the date established in the company profile`, 'warn');
+    K = 'lr'; if (cy.lrOpenDiff) add(false, `Legal reserve at the start of FY${Y0} (${fmtN(cy.lrOpen)}) differs from the FY${P0} closing balance (${fmtN(py.lrClose)}) by ${fmtN(cy.lrOpenDiff)}`, 'warn');
+    K = 'soce'; if (!firstPy && EQ.firstMode === 'auto' && EQ.estYear === null && EQ.hasPy && py.reOpen < 0) add(false, `Retained earnings at the start of FY${P0} work back to ${fmtN(py.reOpen)} – if FY${P0} was the company’s first year, answer “Yes” to “Was FY${P0} the company’s first year?” (click any equity amount in the statements) or enter the date established in the company profile`, 'warn');
   }
-  if (eng.tb.length) add(docsCount === eng.tb.length, `${docsCount} of ${eng.tb.length} ledger lines have supporting documents`, 'info');
-  return {cy, py, dr, cr, unmapped, docsCount, ppe, ppeT, cf, cfp, checks};
+  K = 'docs'; if (eng.tb.length) add(docsCount === eng.tb.length, `${docsCount} of ${eng.tb.length} ledger lines have supporting documents`, 'info');
+  return {cy, py, dr, cr, crT: cr - eqTbAdj, eqTbAdj, unmapped, docsCount, ppe, ppeT, ppeLines, depLines, cf, cfp, checks};
 }
 
 function fmtN(v){ v = Math.round(v || 0); if (v === 0) return '-'; const s = Math.abs(v).toLocaleString('en-US'); return v < 0 ? `(${s})` : s; }
@@ -703,7 +712,8 @@ const SECTION_DEFS = [
   {id: 'soce', title: 'Statement of changes in equity'},
   {id: 'socf', title: 'Statement of cash flows'},
   {id: 'pol', title: 'Material accounting policies'},
-  {id: 'notes', title: 'Notes to the financial statements'}
+  {id: 'notes', title: 'Notes to the financial statements'},
+  {id: 'ratios', title: 'Ratio analysis'}
 ];
 const PAGE_SIZES = {A4: [595.28, 841.89], Letter: [612, 792], Legal: [612, 1008]};
 // all distances in millimetres
@@ -1147,26 +1157,11 @@ function buildReport(client, eng, prevEng){
   const hasCA = nz(cy.caClose, py.caClose) || nz(py.caOpen, 0) || anyIt('ca'), hasLR = nz(cy.lrClose, py.lrClose) || nz(py.lrOpen, 0) || anyIt('lr') || nz(cy.lrOpenDiff, 0), hasOR = nz(cy.xeq, py.xeq) || anyIt('oth');
   const eqCols = ['Share\ncapital'].concat(hasLR ? ['Legal\nreserve'] : [], ['Retained\nearnings'], hasCA ? ['Current\naccount'] : [], hasOR ? ['Other\nreserves'] : [], ['Total']);
   const eqRow = (label, cap, lr, re, ca, style, oth) => { const vals = [cap].concat(hasLR ? [lr] : [], [re], hasCA ? [ca] : [], hasOR ? [oth || 0] : []); return {cells: [label].concat(vals, [vals.reduce((a, b) => a + b, 0)]), style: style || ''}; };
-  const itRows = yr => eqItems.filter(x => x.yr === yr && ['cap', 'lr', 're', 'ca', 'oth'].some(col => R(x[col]))).map(x => eqRow(x.label || 'Other movement', R(x.cap), R(x.lr), R(x.re), R(x.ca), '', R(x.oth)));
+  const moveRows = yr => soceMoves(eng, r, yr, {report: true, hasCA, hasOR}).map(m => eqRow(m.label, m.vals.cap || 0, m.vals.lr || 0, m.vals.re || 0, m.vals.ca || 0, '', m.vals.oth || 0));
   const EQM = cy.eqModes || {}, estInPy = EQM.firstPy && EQM.estYear === PY && p.estDate;
   const soceRows = [eqRow(estInPy ? `At ${p.estDate} (date of establishment)` : `At ${openText}`, py.capOpen, py.lrOpen, py.reOpen, py.caOpen, 'bold', py.othOpen),
-    eqRow('Total comprehensive income for the year', 0, 0, py.pat, 0)];
-  if (py.div) soceRows.push(eqRow('Dividend paid', 0, 0, -py.div, 0));
-  if (py.lrTransfer) soceRows.push(eqRow('Transfer to legal reserve', 0, py.lrTransfer, -py.lrTransfer, 0));
-  soceRows.push(...itRows('py'));
-  if (py.capIntro) soceRows.push(eqRow(py.capIntro > 0 ? 'Share capital introduced' : 'Movement in share capital', py.capIntro, 0, 0, 0));
-  if (hasCA && !(py.caItems && py.caMove === py.caItems)) soceRows.push(eqRow('Net movement in current account', 0, 0, 0, py.caMove - py.caItems));
-  if (hasOR && py.othMove) soceRows.push(eqRow('Movement in other reserves', 0, 0, 0, 0, '', py.othMove));
-  if (py.reAdj) soceRows.push(eqRow(eqDiffLabel(py.reAdj), 0, 0, py.reAdj, 0));
-  soceRows.push(eqRow(`At ${yeText}, ${PY}`, py.cap, py.lrClose, py.reClose, py.caClose, 'tot', py.xeq), {cells: [], style: 'gap'},
-    eqRow('Total comprehensive income for the year', 0, 0, cy.pat, 0));
-  if (cy.div) soceRows.push(eqRow('Dividend paid', 0, 0, -cy.div, 0));
-  if (cy.lrTransfer) soceRows.push(eqRow('Transfer to legal reserve', 0, cy.lrTransfer, -cy.lrTransfer, 0));
-  soceRows.push(...itRows('cy'));
-  if (hasCA && !(cy.caItems && cy.caMove === cy.caItems)) soceRows.push(eqRow('Net movement in current account', 0, 0, 0, cy.caMove - cy.caItems));
-  if (cy.capIntro) soceRows.push(eqRow(cy.capIntro > 0 ? 'Share capital introduced' : 'Movement in share capital', cy.capIntro, 0, 0, 0));
-  if (hasOR && cy.othMove) soceRows.push(eqRow('Movement in other reserves', 0, 0, 0, 0, '', cy.othMove));
-  if (cy.reAdj + cy.reOpenDiff || cy.lrOpenDiff) soceRows.push(eqRow(eqDiffLabel(Math.abs(cy.reAdj + cy.reOpenDiff) + Math.abs(cy.lrOpenDiff)), 0, cy.lrOpenDiff, cy.reAdj + cy.reOpenDiff, 0));
+    ...moveRows('py')];
+  soceRows.push(eqRow(`At ${yeText}, ${PY}`, py.cap, py.lrClose, py.reClose, py.caClose, 'tot', py.xeq), {cells: [], style: 'gap'}, ...moveRows('cy'));
   soceRows.push(eqRow(`At ${yeText}, ${Y}`, cy.cap, cy.lrClose, cy.reClose, cy.caClose, 'grand', cy.xeq));
   sections.push({id: 'soce', kind: 'statement', head: statementHead('STATEMENT OF CHANGES IN SHAREHOLDERS’ EQUITY', period), items: [
     {k: 'grid', drill: 'soce', plain: true, header: [''].concat(eqCols), sub: [''].concat(eqCols.map(() => 'AED')), rows: soceRows, firstWidth: '*', numWidth: eqCols.length >= 6 ? 52 : 57, small: true},
@@ -1324,6 +1319,14 @@ function buildReport(client, eng, prevEng){
   });
   items.push({k: 'marker', id: 'notes-end'});
   sections.push({id: 'notes', kind: 'notes', head: statementHead('NOTES TO THE FINANCIAL STATEMENTS', period), items, years: [Y, PY]});
+  { // ratio analysis – management information after the notes
+    const rrows = [], rl = ratioList(r);
+    RATIO_GROUPS.forEach(([g, gl]) => { const list = rl.filter(x => x.d.g === g); if (!list.length) return; if (rrows.length) rrows.push({cells: [], style: 'gap'}); rrows.push({cells: [gl], style: 'grp'});
+      list.forEach(x => rrows.push({cells: [x.d.name, x.d.how, ratioFmt(x.d, x.a.v), ratioFmt(x.d, x.b.v)], drill: 'ratio:' + x.d.id})); });
+    sections.push({id: 'ratios', kind: 'statement', head: statementHead('RATIO ANALYSIS', period), items: [
+      {k: 'grid', plain: true, leftCols: [0, 1], header: ['', 'Calculation', String(Y), String(PY)], rows: rrows, widths: ['*', 190, 66, 66], small: true},
+      {k: 'small', text: `Ratios are worked out from the year-end balances in these financial statements.${isAudit ? ' This page is management information and does not form part of the audited financial statements.' : ''}`}]});
+  }
   if (isAudit){ const ar = sections.find(s => s.id === 'ar'); ar.items.push({k: 'marker', id: 'ar-end'}); }
   // ---------- apply the report layout: order, sections left out, index entries ----------
   const byId = Object.fromEntries(sections.map(s => [s.id, s]));
@@ -1422,7 +1425,8 @@ function pdfGrid(item, opt){
   const widths = item.widths || [item.firstWidth || '*'].concat(Array(ncols - 1).fill(item.numWidth || 70));
   const body = [];
   const boxed = !!item.boxed;
-  body.push(item.header.map((h, i) => ({text: h, bold: true, alignment: i === 0 || (boxed && i === 1) ? 'left' : 'right', fillColor: boxed ? '#D9D9D9' : undefined, border: boxed ? [true, true, true, true] : [false, false, false, i ? true : false]})));
+  const leftCol = i => (item.leftCols || []).includes(i);
+  body.push(item.header.map((h, i) => ({text: h, bold: true, alignment: i === 0 || (boxed && i === 1) || leftCol(i) ? 'left' : 'right', fillColor: boxed ? '#D9D9D9' : undefined, border: boxed ? [true, true, true, true] : [false, false, false, i ? true : false]})));
   if (item.sub) body.push(item.sub.map((h, i) => ({text: h, alignment: i ? 'right' : 'left', fontSize: 9})));
   if (!body[body.length - 1].length) body.pop();
   item.rows.forEach(r => {
@@ -1434,7 +1438,7 @@ function pdfGrid(item, opt){
     for (let i = 0; i < ncols; i++){
       const v = r.cells[i];
       const isNum = typeof v === 'number';
-      cells.push({text: isNum ? nf(v) : (v === undefined ? '' : String(v)), alignment: i === 0 || (boxed && !isNum && i === 1) ? 'left' : 'right', bold,
+      cells.push({text: isNum ? nf(v) : (v === undefined ? '' : String(v)), alignment: i === 0 || (boxed && !isNum && i === 1) || leftCol(i) ? 'left' : 'right', bold,
         border: boxed ? [true, true, true, true] : (i > 0 ? b : undefined)});
     }
     body.push(cells);
@@ -1786,13 +1790,15 @@ function htmlFs(it, o){
   return h + '</tbody></table>';
 }
 function htmlGrid(it, o){
-  let h = `<table class="rgrid ${it.boxed ? 'boxed' : 'plain'}"><thead><tr>${it.header.map((x, i) => `<th class="${i ? 'r' : ''}">${esc(x).replace(/\n/g, '<br>')}</th>`).join('')}</tr>`;
+  const lc = i => !i || (it.leftCols || []).includes(i);
+  let h = `<table class="rgrid ${it.boxed ? 'boxed' : 'plain'}${it.leftCols ? ' ratio' : ''}"><thead><tr>${it.header.map((x, i) => `<th class="${lc(i) ? '' : 'r'}">${esc(x).replace(/\n/g, '<br>')}</th>`).join('')}</tr>`;
   if (it.sub) h += `<tr>${it.sub.map((x, i) => `<td class="${i ? 'r aed' : ''}">${esc(x)}</td>`).join('')}</tr>`;
   h += '</thead><tbody>';
   it.rows.forEach(r => {
     if (r.style === 'gap'){ h += `<tr class="gap"><td colspan="${it.header.length}"></td></tr>`; return; }
     if (r.style === 'grp'){ h += `<tr class="grp"><td colspan="${it.header.length}">${esc(r.cells[0])}</td></tr>`; return; }
-    h += `<tr class="${r.style || ''}">${it.header.map((_, i) => { const v = r.cells[i]; return `<td class="${typeof v === 'number' ? 'r a' : ''}">${typeof v === 'number' ? (o && o.interactive && it.drill ? `<button class="amt-btn" data-drill="${esc(it.drill)}" title="Click to see and change">${nf(v)}</button>` : nf(v)) : esc(v ?? '')}</td>`; }).join('')}</tr>`;
+    const dr = r.drill || it.drill, act = o && o.interactive && dr;
+    h += `<tr class="${r.style || ''}">${it.header.map((_, i) => { const v = r.cells[i], isN = typeof v === 'number', rt = isN || (it.leftCols && !lc(i)); return `<td class="${rt ? 'r a' : ''}">${isN ? (act ? `<button class="amt-btn" data-drill="${esc(dr)}" title="Click to see and change">${nf(v)}</button>` : nf(v)) : rt && act && v !== undefined && v !== '' ? `<button class="amt-btn" data-drill="${esc(dr)}" title="Click to see how it is worked out">${esc(v)}</button>` : esc(v ?? '')}</td>`; }).join('')}</tr>`;
   });
   return h + '</tbody></table>';
 }
@@ -1901,7 +1907,7 @@ function excelFile(M){
     });
     const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{wch: 55}, {wch: 8}, {wch: 16}, {wch: 16}, {wch: 16}, {wch: 16}]; XLSX.utils.book_append_sheet(wb, ws, name);
   };
-  fsSheet('sofp', 'Financial Position'); fsSheet('soci', 'Profit or Loss'); fsSheet('soce', 'Equity'); fsSheet('socf', 'Cash Flows');
+  fsSheet('sofp', 'Financial Position'); fsSheet('soci', 'Profit or Loss'); fsSheet('soce', 'Equity'); fsSheet('socf', 'Cash Flows'); fsSheet('ratios', 'Ratios');
   const notes = M.sections.find(x => x.id === 'notes'); const aoa = [[client.name], ['NOTES TO THE FINANCIAL STATEMENTS'], []];
   const walk = (it) => {
     if (it.k === 'group') return it.items.forEach(walk);
@@ -2782,12 +2788,14 @@ function vAdjust(){
 function vStatements(){
   const c = client(), en = eng();
   const M = buildReport(c, en, prev());
-  const tabs = [['sofp', 'Financial position'], ['soci', 'Profit or loss'], ['soce', 'Changes in equity'], ['socf', 'Cash flows'], ['notes', 'Notes']];
-  const checks = M.r.checks.map(x => `<li class="ck ${x.level}"><span class="dot"></span>${e_(x.text)}</li>`).join('');
+  const tabs = [['sofp', 'Financial position'], ['soci', 'Profit or loss'], ['soce', 'Changes in equity'], ['socf', 'Cash flows'], ['notes', 'Notes'], ['ratios', 'Ratios']];
+  const checks = checksList(M.r);
+  const ratiosOff = UI.stTab === 'ratios' && M.layout.hide.ratios;
   return `<section class="panel"><div class="head"><div><h1>Financial statements FY${en.year}</h1><p class="sub">Built live from the trial balance with FY${en.year - 1} comparatives. Click any amount to see where it comes from and change it right there.</p></div>
     <div class="row">${UI.stTab === 'soce' ? `<button class="btn" data-act="soce-open">✎ Items in changes in equity</button>` : ''}${UI.stTab === 'socf' ? `<button class="btn" data-act="edit-cfpy">Edit cash flow lines &amp; FY${en.year - 1}</button>` : ''}<button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div><ul class="checks">${checks}</ul></section>
   <section class="panel"><div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${UI.stTab === k}" data-sttab="${k}">${l}</button>`).join('')}</div>
-    <div class="paper-wrap"><div class="paper">${reportHtml(M, {only: [UI.stTab], interactive: true})}</div></div></section>`;
+    ${ratiosOff ? `<p class="small muted">Ratio analysis is left out of the report – switch it on under <button class="linkish" data-nav="layout">Report layout</button>.</p>` : ''}
+    <div class="paper-wrap"><div class="paper">${reportHtml(ratiosOff ? Object.assign({}, M, {sections: M.allSections}) : M, {only: [UI.stTab], interactive: true})}</div></div></section>`;
 }
 
 const TEXT_SECTIONS = [
@@ -2820,7 +2828,7 @@ function vExport(){
   const bad = M.r.checks.filter(x => x.level === 'bad');
   const warn = M.r.checks.filter(x => x.level === 'warn');
   return `<section class="panel"><div class="head"><div><h1>Download reports</h1><p class="sub">${e_(c.name)} · FY${en.year} · ${e_(en.type)}</p></div></div>
-    ${bad.length ? `<div class="banner bad">${bad.length} check(s) need attention before the report is final:<ul>${bad.map(x => `<li>${e_(x.text)}</li>`).join('')}</ul></div>` : `<div class="banner ok">All key checks pass. ${warn.length ? warn.map(x => e_(x.text)).join(' · ') : ''}</div>`}
+    ${bad.length ? `<div class="banner bad">${bad.length} check(s) need attention before the report is final – click one to see why:<ul>${bad.map(x => `<li>${x.key ? `<button class="linkish" data-act="check-why" data-key="${x.key}">${e_(x.text)}</button>` : e_(x.text)}</li>`).join('')}</ul></div>` : `<div class="banner ok">All key checks pass. ${warn.length ? warn.map(x => e_(x.text)).join(' · ') : ''}</div>`}
     <div class="dl-grid">
       <button class="dl" data-act="dl-pdf">${IC.down}<b>PDF report</b><span>Full report, house format, numbered pages</span></button>
       <button class="dl" data-act="print-pdf">${IC.print}<b>Print</b><span>Send the report to your printer · <u data-nav="layout">margins &amp; page numbers</u></span></button>
@@ -3286,28 +3294,240 @@ function soceBody(){
   const hasOR = schedulesInOrder(en).some(x => x.custom && x.sec === 'eq') || items.some(x => R(x.oth));
   const cols = [['cap', 'Share capital'], ['lr', 'Legal reserve'], ['re', 'Retained earnings'], ['ca', 'Current account']].concat(hasOR ? [['oth', 'Other reserves']] : []);
   const auto = (label, vals, cls) => `<tr class="q-auto ${cls || ''}"><th scope="row">${label}</th>${cols.map(([c]) => `<td class="r">${fmtN(vals[c] || 0)}</td>`).join('')}<td class="r b">${fmtN(cols.reduce((a, [c]) => a + (vals[c] || 0), 0))}</td><td></td></tr>`;
-  const custom = yr => items.filter(x => x.yr === yr).map(x => `<tr><th scope="row"><input id="q-soce-label-${x.id}" data-soce="${x.id}" data-f="label" value="${e_(x.label || '')}" placeholder="e.g. Share capital introduced" aria-label="Item"></th>${cols.map(([c, l]) => `<td><input class="numi" id="q-soce-${c}-${x.id}" data-soce="${x.id}" data-f="${c}" value="${fmtSigned(x[c])}" inputmode="decimal" aria-label="${l}"></td>`).join('')}<td class="r b">${fmtN(cols.reduce((a, [c]) => a + R(x[c]), 0))}</td><td><button class="icon-btn" data-act="soce-del" data-id="${x.id}" title="Delete item">${IC.trash}</button></td></tr>`).join('');
-  const addBtn = yr => `<tr class="q-add"><td colspan="${cols.length + 3}"><button class="btn small" data-act="soce-add" data-yr="${yr}">${IC.plus}Add item for FY${yr === 'py' ? PY : Y}</button></td></tr>`;
-  const head = `<thead><tr><th></th>${cols.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th><th></th></tr></thead>`;
-  const E = r.cy.eqModes || {}, capL = v => v > 0 ? 'Share capital introduced' : 'Movement in share capital';
-  const cyDiff = r.cy.reAdj + r.cy.reOpenDiff;
+  const mv = (yr, k, i, n) => `<button class="icon-btn q-mv" data-act="soce-move" data-yr="${yr}" data-key="${k}" data-dir="-1" title="Move up" aria-label="Move up"${i === 0 ? ' disabled' : ''}>▲</button><button class="icon-btn q-mv" data-act="soce-move" data-yr="${yr}" data-key="${k}" data-dir="1" title="Move down" aria-label="Move down"${i === n - 1 ? ' disabled' : ''}>▼</button>`;
+  const customRow = (x, mvs) => `<tr><th scope="row"><input id="q-soce-label-${x.id}" data-soce="${x.id}" data-f="label" value="${e_(x.label || '')}" placeholder="e.g. Share capital introduced" aria-label="Item"></th>${cols.map(([c, l]) => `<td><input class="numi" id="q-soce-${c}-${x.id}" data-soce="${x.id}" data-f="${c}" value="${fmtSigned(x[c])}" inputmode="decimal" aria-label="${l}"></td>`).join('')}<td class="r b">${fmtN(cols.reduce((a, [c]) => a + R(x[c]), 0))}</td><td class="q-acts">${mvs}<button class="icon-btn" data-act="soce-del" data-id="${x.id}" title="Delete item">${IC.trash}</button></td></tr>`;
+  const autoMv = (label, vals, cls, mvs) => auto(label, vals, cls).replace(/<td><\/td><\/tr>$/, `<td class="q-acts">${mvs}</td></tr>`);
+  const moves = yr => { const list = soceMoves(en, r, yr, {hasOR}); return list.map((m, i) => m.item ? customRow(m.item, mv(yr, m.key, i, list.length)) : autoMv(m.label, m.vals, m.hl ? 'q-hlr' : '', mv(yr, m.key, i, list.length))).join(''); };
+  const addBtn = yr => `<tr class="q-add"><td colspan="${cols.length + 3}"><button class="btn small" data-act="soce-add" data-yr="${yr}">${IC.plus}Add item for FY${yr === 'py' ? PY : Y}</button>${(en.soceOrder || {})[yr] ? ` <button class="linkish" data-act="soce-order-reset" data-yr="${yr}">Standard order</button>` : ''}</td></tr>`;
+  const head = `<thead><tr><th></th>${cols.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th><th class="q-acts-h">Order</th></tr></thead>`;
+  const E = r.cy.eqModes || {};
   const body = auto(`At the beginning of FY${PY} <span class="muted small">(${E.firstPy ? 'first year – nothing brought forward' : 'worked back'})</span>`, {cap: r.py.capOpen, lr: r.py.lrOpen, re: r.py.reOpen, ca: r.py.caOpen, oth: r.py.othOpen}, 'bold')
-    + auto('Total comprehensive income', {re: r.py.pat}) + (r.py.div ? auto('Dividend paid', {re: -r.py.div}) : '') + (r.py.lrTransfer ? auto('Transfer to legal reserve', {lr: r.py.lrTransfer, re: -r.py.lrTransfer}) : '')
-    + custom('py') + addBtn('py') + (r.py.capIntro ? auto(capL(r.py.capIntro), {cap: r.py.capIntro}) : '') + (r.py.caMove - r.py.caItems ? auto('Net movement in current account', {ca: r.py.caMove - r.py.caItems}) : '')
-    + (hasOR && r.py.othMove ? auto('Movement in other reserves', {oth: r.py.othMove}) : '') + (r.py.reAdj ? auto(eqDiffLabel(r.py.reAdj), {re: r.py.reAdj}, 'q-hlr') : '')
+    + moves('py') + addBtn('py')
     + auto(`At the end of FY${PY}`, {cap: r.py.cap, lr: r.py.lrClose, re: r.py.reClose, ca: r.py.caClose, oth: r.py.xeq}, 'tot')
-    + auto('Total comprehensive income', {re: r.cy.pat}) + (r.cy.div ? auto('Dividend paid', {re: -r.cy.div}) : '') + (r.cy.lrTransfer ? auto('Transfer to legal reserve', {lr: r.cy.lrTransfer, re: -r.cy.lrTransfer}) : '')
-    + custom('cy') + addBtn('cy') + (r.cy.caMove - r.cy.caItems ? auto('Net movement in current account', {ca: r.cy.caMove - r.cy.caItems}) : '') + (r.cy.capIntro ? auto(capL(r.cy.capIntro), {cap: r.cy.capIntro}) : '')
-    + (hasOR && r.cy.othMove ? auto('Movement in other reserves', {oth: r.cy.othMove}) : '') + (cyDiff || r.cy.lrOpenDiff ? auto(eqDiffLabel(Math.abs(cyDiff) + Math.abs(r.cy.lrOpenDiff)), {lr: r.cy.lrOpenDiff, re: cyDiff}, 'q-hlr') : '')
+    + moves('cy') + addBtn('cy')
     + auto(`At the end of FY${Y}`, {cap: r.cy.cap, lr: r.cy.lrClose, re: r.cy.reClose, ca: r.cy.caClose, oth: r.cy.xeq}, 'grand');
   modal(`<div class="qd"><h2>Items in the statement of changes in equity</h2>
-    <p class="sub">Grey rows come from the schedules. <b>Add an item</b> for any other movement. Increases are <b>+</b>, decreases <b>−</b>. ${E.firstPy ? `FY${PY} is the company’s first year: every FY${PY} balance starts from nothing and share capital, the legal reserve transfer and the current account are worked out from the FY${PY} closing balances.` : `The FY${PY} opening balances are worked back from the FY${PY} closing balances less the FY${PY} movements – if the company started in FY${PY}, choose “Yes” below.`}</p>
+    <p class="sub">Grey rows come from the schedules. <b>Add an item</b> for any other movement and use ▲ ▼ to set the order of the rows. Increases are <b>+</b>, decreases <b>−</b>. ${E.firstPy ? `FY${PY} is the company’s first year: every FY${PY} balance starts from nothing and share capital, the legal reserve transfer and the current account are worked out from the FY${PY} closing balances.` : `The FY${PY} opening balances are worked back from the FY${PY} closing balances less the FY${PY} movements – if the company started in FY${PY}, choose “Yes” below.`}</p>
     <div class="form-grid">${eqModeFields(en, r, 'q-soce')}</div>
     <div class="table-wrap"><table class="ui compact q-tab q-soce">${head}<tbody>${body}</tbody></table></div>
     <div class="form-grid three">${E.firstPy ? `<div class="field"><label>Transfer to legal reserve FY${PY}</label><div class="static">${fmtN(r.py.lrTransfer)} <span class="muted small">(first year)</span></div></div>` : field('q-soce-lr-py', `Transfer to legal reserve FY${PY}`, en.pyInfo.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}${E.lr === 'close' ? `<div class="field"><label>Transfer to legal reserve FY${Y}</label><div class="static">${fmtN(r.cy.lrTransfer)} <span class="muted small">(closing − opening)</span></div></div>` : field('q-soce-lr-cy', `Transfer to legal reserve FY${Y}`, en.settings.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true})}${E.firstPy ? '' : field('q-soce-ca', `Current account at start of FY${PY}`, en.pyInfo.caOpen, {bind: 'eng.pyInfo.caOpen', num: true})}</div>
     <p class="small muted">Items for FY${Y} in share capital, current account or other reserves only split the movement (closing balances come from the schedules). Items in legal reserve or retained earnings change the FY${Y} closing balance.</p>
     <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
   const m = document.querySelector('.modal'); if (m) m.classList.add('xwide');
+}
+
+/* ---------- checks: click one to see what causes it ---------- */
+function checksList(r){
+  return r.checks.map(x => `<li class="ck ${x.level}">${x.key ? `<button class="ck-btn" data-act="check-why" data-key="${x.key}" title="Click to see what causes this"><span class="dot"></span><span class="ck-t">${e_(x.text)}</span><span class="ck-why">${x.ok ? 'details' : 'why?'}</span></button>` : `<span class="dot"></span>${e_(x.text)}`}</li>`).join('');
+}
+const CHECK_WINDOWS = {'ppe-pydiff': () => drillModal('ppe', 'py'), lr: () => drillModal('lr'), re: () => drillModal('re'), soce: () => soceModal()};
+function checkModal(key){ if (CHECK_WINDOWS[key]) return CHECK_WINDOWS[key](); liveModal(() => checkBody(key)); }
+/* the same engagement with one thing changed – how a difference would move */
+function checkWhatIf(en, r, mut){
+  try { const c = JSON.parse(JSON.stringify(en)); c.pyInfo = c.pyInfo || {}; if (!c.pyInfo.firstYear || c.pyInfo.firstYear === 'auto') c.pyInfo.firstYear = r.cy.eqModes && r.cy.eqModes.firstPy ? 'yes' : 'no'; mut(c); return compute(c, prev()); } catch (e) { return null; }
+}
+function checkBody(key){
+  const en = eng(); if (!en) return;
+  const r = compute(en, prev()), Y = en.year, PY = Y - 1, sm = SM(en), T = r.ppeT, S = en.settings, E = r.cy.eqModes || {};
+  const status = r.checks.filter(x => x.key === key).map(x => `<li class="ck ${x.level}"><span class="dot"></span>${e_(x.text)}</li>`).join('');
+  const cell = v => typeof v === 'number' ? fmtN(v) : (v ?? '');
+  const tr = (label, vals, cls) => `<tr class="${cls || ''}"><th scope="row">${label}</th>${vals.map(v => `<td class="r">${cell(v)}</td>`).join('')}</tr>`;
+  const tbl = (heads, rows) => `<div class="table-wrap"><table class="ui compact q-fig q-why"><thead><tr><th></th>${heads.map(h => `<th class="r">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  const openBtn = (k, label, yr) => `<button class="btn small" data-drill="${k}"${yr ? ` data-yr="${yr}"` : ''}>${label}</button>`;
+  const whyBtn = (k, label) => `<button class="btn small" data-act="check-why" data-key="${k}">${label}</button>`;
+  const muted = t => ` <span class="muted small">${t}</span>`;
+  const causes = (d, list) => {
+    if (!R(d)) return '';
+    list = list.filter(c => c && R(c.amt) !== 0);
+    list.forEach(c => { c.full = Math.abs(R(c.amt)) === Math.abs(R(d)); }); list.sort((a, b) => b.full - a.full);
+    const tried = list.filter(c => c.pattern && !c.full); list = list.filter(c => !c.pattern || c.full);
+    const triedTxt = tried.length ? `<p class="small muted">${list.length ? 'Also checked' : 'None of the usual reasons matches the difference exactly'}: ${tried.map(c => `${c.short || c.label} (${fmtN(c.amt)})`).join(' · ')}.</p>` : '';
+    if (!list.length) return `<h3 class="h3">Likely causes</h3>${triedTxt || `<p class="small muted">Nothing on its own matches the difference – go through the figures above; the amount that differs is ${fmtN(d)}.</p>`}`;
+    return `<h3 class="h3">Likely causes</h3>${''}<ul class="why-list">${list.map(c => `<li class="${c.full ? 'full' : ''}"><div class="why-txt"><b>${c.label}</b>${c.full ? ' <span class="chip ok">matches the difference</span>' : ''}<div class="small muted">${c.how}</div>${c.btn ? `<div class="why-acts">${c.btn}</div>` : ''}</div><div class="why-amt">${fmtN(c.amt)}</div></li>`).join('')}</ul>${triedTxt}`;
+  };
+  const unm = en.tb.filter(l => !sm[l.fs]), unmSum = unm.reduce((a, l) => a + R(l.amt), 0), unmSumPy = unm.reduce((a, l) => a + R(l.py), 0);
+  const ppeC = r.ppe.length && r.ppeLines.n ? r.ppeLines.cy - T.nbv : 0;
+  let title = 'Check', body = '';
+  if (key === 'tb'){
+    const d = r.dr - r.crT;
+    title = d ? 'Why the trial balance does not agree' : 'Trial balance';
+    body = tbl([`FY${Y}`], tr('Debit balances' + muted(`(assets, expenses, dividends${unm.length ? ', lines not in a schedule' : ''})`), [r.dr])
+      + (r.ppe.length && !r.ppeLines.n ? tr(muted('of which net book value from the PPE schedule'), [T.nbv]) : '')
+      + (r.ppe.length && !r.depLines.n ? tr(muted('of which depreciation from the PPE schedule'), [T.charge]) : '')
+      + tr('Credit balances' + muted('(equity, liabilities, income)'), [r.cr])
+      + (r.eqTbAdj ? tr(`Less: FY${Y} movement inside the closing retained earnings / legal reserve lines`, [-r.eqTbAdj]) : '')
+      + tr('Difference', [d], 'tot'));
+    let altOpen = null;
+    if (!r.eqTbAdj && E.hasPy){ const alt = (r.cy.re - r.py.reClose) + (r.cy.lr - r.py.lrClose); if (alt) altOpen = alt; }
+    body += causes(d, [
+      ppeC ? {label: 'PPE ledger lines differ from the PPE schedule', amt: ppeC, how: `The trial balance adds the PPE ledger lines (${fmtN(r.ppeLines.cy)}); the statements use the PPE schedule (${fmtN(T.nbv)}).`, btn: whyBtn('ppe-cy', 'See the PPE difference') + openBtn('ppe', 'Open PPE')} : null,
+      r.ppe.length && r.depLines.n ? {label: 'Depreciation ledger lines differ from the PPE schedule', amt: r.depLines.cy - T.charge, how: `Ledger ${fmtN(r.depLines.cy)} against the schedule charge ${fmtN(T.charge)}.`, btn: whyBtn('dep-cy', 'See the depreciation difference')} : null,
+      unm.length ? {label: `${unm.length} ledger line(s) not in any schedule`, amt: unmSum, how: 'They count as debits in the trial balance but are left out of the statements.', btn: whyBtn('unmapped', 'Put them in schedules')} : null,
+      r.eqTbAdj ? {label: 'Retained earnings / legal reserve lines are read as closing balances', amt: r.eqTbAdj, how: 'If these lines are really opening balances, choose “Opening balances” in the retained earnings window.', btn: openBtn('re', 'Open retained earnings')} : null,
+      altOpen ? {label: 'Retained earnings / legal reserve lines may be closing balances', amt: -altOpen, how: `They differ from the FY${PY} closing balances. If they already include this year’s profit, choose “Closing balances”.`, btn: openBtn('re', 'Open retained earnings')} : null
+    ]);
+    const rowsBy = schedulesInOrder(en).map(x => { const ls = en.tb.filter(l => l.fs === x.key); if (!ls.length) return ''; const t = ls.reduce((a, l) => a + R(l.amt), 0); return `<tr><th scope="row"><button class="linkish" data-drill="${x.key}">${e_(x.label)}</button>${muted(ls.length + ' line' + (ls.length > 1 ? 's' : ''))}</th><td class="r">${x.dr ? fmtN(t) : ''}</td><td class="r">${x.dr ? '' : fmtN(t)}</td></tr>`; }).join('')
+      + (r.ppe.length && !r.ppeLines.n ? tr('PPE schedule – net book value', [T.nbv, '']) : '') + (r.ppe.length && !r.depLines.n ? tr('PPE schedule – depreciation', [T.charge, '']) : '')
+      + (unm.length ? `<tr><th scope="row"><button class="linkish" data-act="check-why" data-key="unmapped">Not in a schedule</button></th><td class="r">${fmtN(unmSum)}</td><td></td></tr>` : '')
+      + tr('Total', [r.dr, r.cr], 'tot');
+    body += `<details class="why-det"><summary>Trial balance by schedule</summary><div class="table-wrap"><table class="ui compact q-fig"><thead><tr><th></th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>${rowsBy}</tbody></table></div></details>`;
+  } else if (key === 'unmapped'){
+    title = 'Ledger lines not in any schedule';
+    body = unm.length ? `<p class="sub">These lines are left out of the statements. Choose a schedule for each one – the statements update straight away.</p><div class="table-wrap"><table class="ui compact q-tab"><thead><tr><th>Ledger</th><th>Schedule</th><th class="r">FY${Y}</th><th class="r">FY${PY}</th></tr></thead><tbody>${unm.map(l => `<tr><td>${e_(l.ledger || '(no name)')}${l.fs ? muted(`(was “${e_(l.fs)}”)`) : ''}</td><td><select id="q-ufs-${l.id}" data-line="${l.id}" data-field="fs" aria-label="Schedule for ${e_(l.ledger)}">${schedOptions(en, '')}</select></td><td class="r">${fmtN(l.amt)}</td><td class="r">${fmtN(l.py)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td></td><td class="r">${fmtN(unmSum)}</td><td class="r">${fmtN(unmSumPy)}</td></tr></tfoot></table></div>` : '<p>Every ledger line is in a schedule.</p>';
+  } else if (key === 'sofp-cy' || key === 'sofp-py'){
+    const yr = key === 'sofp-cy' ? 'cy' : 'py', b = r[yr], FY = yr === 'cy' ? Y : PY, d = b.ta - b.tel;
+    title = `Statement of financial position FY${FY}`;
+    body = tbl([`FY${FY}`], tr('Property, plant and equipment', [b.ppe]) + (b.xnca ? tr('Other non-current assets', [b.xnca]) : '') + tr('Current assets', [b.caTot]) + tr('Total assets', [b.ta], 'tot')
+      + tr('Equity', [b.eq]) + tr('Non-current liabilities', [b.ncl]) + tr('Current liabilities' + muted('(including corporate tax)'), [b.cl]) + tr('Total equity and liabilities', [b.tel], 'tot') + tr('Difference', [d], 'tot'));
+    const list = [];
+    if (yr === 'cy'){
+      const dTb = r.dr - r.crT - ppeC;
+      list.push(dTb ? {label: 'The trial balance does not balance', amt: dTb, how: 'The statements are built from the ledger lines, so a trial balance difference shows here too.', btn: whyBtn('tb', 'See the trial balance difference')} : null);
+      if (E.hasPy){ const w = checkWhatIf(en, r, c => { c.settings.eqTb = E.re === 'close' ? 'open' : 'close'; }); if (w) list.push({label: `Retained earnings / legal reserve lines read as ${E.re === 'close' ? 'closing' : 'opening'} balances`, amt: d - (w.cy.ta - w.cy.tel), how: `Reading them as ${E.re === 'close' ? 'opening' : 'closing'} balances would leave a difference of ${fmtN(w.cy.ta - w.cy.tel)}.`, btn: openBtn('re', 'Open retained earnings')}); }
+    } else {
+      list.push({label: `FY${PY} retained earnings line may be the opening balance`, amt: -(r.py.pat - r.py.div - r.py.lrTransfer + r.py.reItems), how: `The FY${PY} column needs the closing balance (after FY${PY} profit, dividend and transfer).`, btn: openBtn('re', 'Open retained earnings', 'py')});
+      if (r.ppe.length && r.ppeLines.n) list.push({label: `FY${PY} PPE ledger lines differ from the PPE schedule`, amt: r.ppeLines.py - T.nbvPy, how: `The statement uses the schedule (${fmtN(T.nbvPy)}), not the ledger lines (${fmtN(r.ppeLines.py)}).`, btn: whyBtn('ppe-py', 'See the PPE difference')});
+    }
+    list.push(b.ct ? {label: `Corporate tax FY${FY} is added to payables`, amt: -b.ct, how: `If the payables ledger already holds the corporate tax provision (${fmtN(b.ct)}), it is counted twice.`, btn: openBtn('pay', 'Open payables', yr) + '<button class="btn small" data-drill="ct">Corporate tax</button>'} : null);
+    const us = yr === 'cy' ? unmSum : unmSumPy;
+    list.push(us ? {label: 'Ledger lines not in any schedule', amt: us, how: 'They are left out of the statement.', btn: whyBtn('unmapped', 'Put them in schedules')} : null);
+    body += causes(d, list);
+  } else if (key === 'ppe-cy' || key === 'ppe-py' || key === 'dep-cy' || key === 'dep-py'){
+    const yr = key.endsWith('py') ? 'py' : 'cy', f = yr === 'cy' ? 'amt' : 'py', FY = yr === 'cy' ? Y : PY, isDep = key.startsWith('dep');
+    const fs = isDep ? 'dep' : 'ppe', ls = en.tb.filter(l => l.fs === fs), led = ls.reduce((a, l) => a + R(l[f]), 0);
+    const add = yr === 'cy' ? T.add : T.pyAdd, disp = yr === 'cy' ? T.dispWdv : T.pyDispWdv, charge = yr === 'cy' ? T.charge : T.pyCharge;
+    const open = yr === 'cy' ? T.nbvPy : T.nbvPyOpen, close = yr === 'cy' ? T.nbv : T.nbvPy, sch = isDep ? charge : close, d = led - sch;
+    title = isDep ? `Depreciation FY${FY}: ledger lines and PPE schedule` : `PPE FY${FY}: ledger lines and PPE schedule`;
+    body = `<p class="sub">The statements use the PPE schedule. If the schedule is right, make the ledger lines agree – the trial balance then agrees too. If the ledger is right, correct additions, disposals or depreciation in the schedule.</p>`
+      + `<div class="q-2col">${tbl([`FY${FY}`], ls.map(l => tr(e_(l.ledger || '(no name)'), [R(l[f])])).join('') + tr(isDep ? 'Depreciation ledger lines' : 'PPE ledger lines', [led], 'tot'))}`
+      + tbl([`FY${FY}`], isDep ? (yr === 'cy' ? r.ppe.map(p => tr(e_(p.name || 'Asset class'), [p.charge])).join('') : '') + tr('PPE schedule – depreciation charge', [charge], 'tot')
+        : tr('Opening net book value', [open]) + tr('Additions', [add]) + tr('Disposals at written down value', [-disp]) + tr('Depreciation charge', [-charge]) + tr('PPE schedule – closing net book value', [close], 'tot')) + `</div>`
+      + tbl([`FY${FY}`], tr('Difference (ledger − schedule)', [d], 'tot'));
+    const fix = ls.length && d ? `<button class="btn small" data-act="fix-ppe-lines" data-fs="${fs}" data-yr="${yr}">Make the ledger lines agree with the schedule</button>` : '';
+    const pat = (label, short, amt, how) => ({label, short, amt, how, pattern: true});
+    body += causes(d, isDep ? [
+      pat('Depreciation charged in the ledger for a different period', 'last year’s charge', (yr === 'cy' ? T.pyCharge : 0) - charge, 'The ledger lines look like the other year’s charge.')
+    ] : [
+      pat(`FY${FY} depreciation is not in the ledger lines`, 'depreciation', charge, 'The ledger lines look like the balance before this year’s depreciation.'),
+      pat(`FY${FY} additions are not in the ledger lines`, 'additions', -add, 'The schedule has additions that the ledger lines do not show.'),
+      pat('Disposals are still in the ledger lines', 'disposals', disp, 'Assets sold or written off are removed in the schedule but not in the ledger.'),
+      pat('The ledger lines hold cost, not net book value', 'accumulated depreciation', yr === 'cy' ? T.depClose : T.depOpen, 'Accumulated depreciation is missing from the ledger lines.'),
+      pat(`The ledger lines still hold the FY${yr === 'cy' ? PY : PY - 1} value`, 'last year’s value', open - close, 'The ledger lines were not updated for the year.')
+    ]);
+    body += !R(d) ? `<p class="small">Ledger lines and schedule agree.</p>` : `<div class="row">${fix}${openBtn('ppe', 'Open PPE schedule', yr)}</div>`;
+  } else if (key === 'cf-cy' || key === 'cf-py'){
+    const yr = key === 'cf-cy' ? 'cy' : 'py', bk = yr === 'cy' ? r.cf : r.cfp, b = r[yr], FY = yr === 'cy' ? Y : PY, d = bk.diff;
+    title = `Cash flow FY${FY}`;
+    const lines = cfLines(en).filter(x => !x.hidden), val = (o, x) => x.kind === 'std' ? R(o[x.key]) : R((o.custom || {})[x.key]);
+    let rows = '';
+    CF_SECS.forEach(([sec, head, totKey, totLabel]) => { rows += `<tr class="grp"><th scope="row" colspan="2">${e_(head)}</th></tr>` + lines.filter(x => x.sec === sec).map(x => tr(`<button class="linkish" data-drill="cf:${x.key}" data-yr="${yr}">${e_(x.label)}</button>`, [val(bk, x)])).join('') + tr(e_(totLabel), [bk[totKey]], 'tot'); });
+    rows += tr('Net increase / (decrease) in cash', [bk.net], 'tot') + tr('Cash at the beginning of the year', [bk.open]) + tr('Cash at the end of the year per the cash flow', [bk.close], 'tot') + tr('Cash and cash equivalents in the statement of financial position', [b.cash]) + tr('Difference', [d], 'tot');
+    body = tbl([`FY${FY}`], rows);
+    const list = [];
+    if (yr === 'cy'){
+      const dS = r.cy.ta - r.cy.tel, dP = r.py.ta - r.py.tel;
+      list.push(dS ? {label: `Statement of financial position FY${Y} does not agree`, amt: dS, how: 'Movements in the cash flow come from the balance sheet, so its difference carries through.', btn: whyBtn('sofp-cy', 'See why')} : null);
+      list.push(dP ? {label: `Statement of financial position FY${PY} does not agree`, amt: dP, how: `The FY${PY} balances are the starting point of the FY${Y} movements.`, btn: whyBtn('sofp-py', 'See why')} : null);
+      if (T.dispWdv && !R(S.disposalProceeds)) list.push({label: 'Disposal proceeds are missing', amt: -(T.dispWdv + r.cy.gain), how: `Disposals at written down value ${fmtN(T.dispWdv)} plus gain ${fmtN(r.cy.gain)} – enter the cash received.`, btn: '<button class="btn small" data-nav="adjust">Tax, reserve &amp; prior year</button>'});
+      const userCy = lines.filter(x => x.kind === 'user').reduce((a, x) => a + val(r.cf, x), 0);
+      list.push(userCy ? {label: 'Lines you added with typed FY' + Y + ' figures', amt: userCy, how: 'These are not checked against the balance sheet.', btn: '<button class="btn small" data-act="edit-cfpy">Review cash flow lines</button>'} : null);
+      list.push(unmSum ? {label: 'Ledger lines not in any schedule', amt: unmSum, how: 'Balance sheet movements in these lines are not in the cash flow.', btn: whyBtn('unmapped', 'Put them in schedules')} : null);
+    } else {
+      const A = r.cfp.auto || r.cfp, ov = en.cfPy || {}, typed = k => ov[k] !== undefined && ov[k] !== null && ov[k] !== '';
+      lines.filter(x => typed(x.key) && x.kind !== 'user' && val(A, x) !== val(r.cfp, x)).forEach(x => list.push({label: `“${e_(x.label)}”: your figure ${fmtN(val(r.cfp, x))}, automatic ${fmtN(val(A, x))}`, amt: val(r.cfp, x) - val(A, x), how: `Typed FY${PY} figure differs from the one worked out from the balances.`, btn: `<button class="btn small" data-drill="cf:${x.key}" data-yr="py">Change</button>`, pattern: !prev() && !['pat', 'dep', 'additions', 'ca', 'div', 'shareCap'].includes(x.key), short: `“${e_(x.label)}”`}));
+      if (typed('open') && R(A.open) !== R(r.cfp.open)) list.push({label: `Opening cash: your figure ${fmtN(r.cfp.open)}, automatic ${fmtN(A.open)}`, amt: R(r.cfp.open) - R(A.open), how: 'Typed opening cash differs.', btn: '<button class="btn small" data-act="edit-cfpy">Review</button>', pattern: !prev(), short: 'opening cash'});
+      if (!E.firstPy){ const w = checkWhatIf(en, r, c => { c.pyInfo.firstYear = 'yes'; }); if (w && w.cfp.diff !== d) list.push({label: `If FY${PY} was the company’s first year`, amt: d - w.cfp.diff, how: `Share capital, current account and opening cash would start from nothing; the difference would be ${fmtN(w.cfp.diff)}.`, btn: '<button class="btn small" data-act="soce-open">Set first year</button>'}); }
+      const dP = r.py.ta - r.py.tel; list.push(dP ? {label: `Statement of financial position FY${PY} does not agree`, amt: dP, how: 'The cash flow is built from those balances.', btn: whyBtn('sofp-py', 'See why')} : null);
+      const need = b.cash - bk.net;
+      body += `<p class="small">${d ? `For FY${PY} to reconcile, cash at the beginning of FY${PY} would need to be <b>${fmtN(need)}</b> (now ${fmtN(bk.open)}).${E.firstPy ? ` FY${PY} is the first year, so it should be nil – a movement line is missing or wrong.` : ''}` : ''}${!prev() ? ` Without FY${PY - 1} balances the automatic FY${PY} working capital movements cannot be worked out – copy the FY${PY} cash flow from last year’s report.` : ''}</p>`;
+    }
+    body += causes(d, list) + `<div class="row"><button class="btn small" data-act="edit-cfpy">All cash flow lines</button></div>`;
+  } else if (key === 'docs'){
+    title = 'Supporting documents';
+    const rows = schedulesInOrder(en).map(x => { const ls = en.tb.filter(l => l.fs === x.key), miss = ls.filter(l => !(l.docs && l.docs.length)); return miss.length ? tr(`<button class="linkish" data-drill="${x.key}">${e_(x.label)}</button>` + muted(miss.slice(0, 3).map(l => e_(l.ledger)).join(', ') + (miss.length > 3 ? ' …' : '')), [`${miss.length} of ${ls.length}`]) : ''; }).join('');
+    body = rows ? `<p class="sub">Open a schedule and use <b>Attach</b> on each line.</p>` + tbl(['Lines without documents'], rows) : '<p>Every line has a supporting document.</p>';
+  }
+  modal(`<div class="qd"><h2>${title}</h2><ul class="checks one">${status}</ul>${body}<div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
+}
+
+/* ---------- movements in changes in equity, in the order the user set ---------- */
+function soceMoves(en, r, yr, o){
+  o = o || {};
+  const b = r[yr], rows = [], cols = ['cap', 'lr', 're', 'ca', 'oth'];
+  const add = (key, label, vals, show, extra) => { if (show) rows.push(Object.assign({key, label, vals}, extra || {})); };
+  add('tci', 'Total comprehensive income for the year', {re: b.pat}, true);
+  add('div', 'Dividend paid', {re: -b.div}, !!b.div);
+  add('lrT', 'Transfer to legal reserve', {lr: b.lrTransfer, re: -b.lrTransfer}, !!b.lrTransfer);
+  (en.soceItems || []).filter(x => x.yr === yr).forEach(x => add('i:' + x.id, x.label || 'Other movement', {cap: R(x.cap), lr: R(x.lr), re: R(x.re), ca: R(x.ca), oth: R(x.oth)}, o.report ? cols.some(c => R(x[c])) : true, {item: x}));
+  const capRow = () => add('cap', b.capIntro > 0 ? 'Share capital introduced' : 'Movement in share capital', {cap: b.capIntro}, !!b.capIntro);
+  const caV = b.caMove - b.caItems, caRow = () => add('ca', 'Net movement in current account', {ca: caV}, o.report ? !!(o.hasCA && !(b.caItems && b.caMove === b.caItems)) : !!caV);
+  if (yr === 'py'){ capRow(); caRow(); } else { caRow(); capRow(); }
+  add('oth', 'Movement in other reserves', {oth: b.othMove}, !!(o.hasOR && b.othMove));
+  if (yr === 'py') add('diff', eqDiffLabel(b.reAdj), {re: b.reAdj}, !!b.reAdj, {hl: true});
+  else { const dv = b.reAdj + b.reOpenDiff; add('diff', eqDiffLabel(Math.abs(dv) + Math.abs(b.lrOpenDiff)), {lr: b.lrOpenDiff, re: dv}, !!(dv || b.lrOpenDiff), {hl: true}); }
+  const saved = ((en.soceOrder || {})[yr]) || [];
+  if (!saved.length) return rows;
+  const order = mergeOrder(saved, rows.map(x => x.key));
+  return order.map(k => rows.find(x => x.key === k));
+}
+
+/* ---------- ratio analysis ---------- */
+const RATIO_GROUPS = [['prof', 'Profitability'], ['liq', 'Liquidity'], ['eff', 'Efficiency'], ['solv', 'Gearing and solvency']];
+function ratioDefs(){
+  const C = (label, f, drill) => ({label, f, drill});
+  const rev = C('Revenue', b => b.rev, 'rev'), gp = C('Gross profit', b => b.gp), pat = C('Profit for the year', b => b.pat), ta = C('Total assets', b => b.ta), eq = C('Total equity', b => b.eq);
+  const cl = C('Current liabilities', b => b.cl), caT = C('Current assets', b => b.caTot), cost = C('Cost of revenue', b => b.cor + b.xdc, 'cor'), pbt = C('Profit before tax', b => b.pbt), fin = C('Finance costs', b => b.fin, 'fin');
+  return [
+    {id: 'gpm', g: 'prof', name: 'Gross profit margin', how: 'Gross profit ÷ revenue', kind: 'pct', num: [gp], den: [rev], means: 'How much of each dirham of sales is left after direct costs.'},
+    {id: 'ebitda', g: 'prof', name: 'EBITDA margin', how: '(Profit before tax + finance costs + depreciation) ÷ revenue', kind: 'pct', num: [pbt, fin, C('Depreciation', b => b.dep, 'dep')], den: [rev], means: 'Operating profit before financing costs and depreciation.'},
+    {id: 'npm', g: 'prof', name: 'Net profit margin', how: 'Profit for the year ÷ revenue', kind: 'pct', num: [pat], den: [rev], means: 'Share of sales kept as profit after all costs and tax.'},
+    {id: 'roa', g: 'prof', name: 'Return on assets', how: 'Profit for the year ÷ total assets', kind: 'pct', num: [pat], den: [ta], means: 'Profit earned on the assets the company uses.'},
+    {id: 'roe', g: 'prof', name: 'Return on equity', how: 'Profit for the year ÷ total equity', kind: 'pct', num: [pat], den: [eq], means: 'Profit earned on the shareholders’ funds.'},
+    {id: 'cur', g: 'liq', name: 'Current ratio', how: 'Current assets ÷ current liabilities', kind: 'ratio', num: [caT], den: [cl], means: 'Ability to pay debts due within a year – above 1 : 1 means current assets cover them.'},
+    {id: 'quick', g: 'liq', name: 'Quick ratio', how: '(Current assets − inventory) ÷ current liabilities', kind: 'ratio', num: [caT, C('Less: inventory', b => -b.inv, 'inv')], den: [cl], means: 'The same test without relying on selling inventory.'},
+    {id: 'cash', g: 'liq', name: 'Cash ratio', how: 'Cash and cash equivalents ÷ current liabilities', kind: 'ratio', num: [C('Cash and cash equivalents', b => b.cash, 'cash')], den: [cl], means: 'Share of short-term debts that cash on hand could pay today.'},
+    {id: 'wc', g: 'liq', name: 'Working capital (AED)', how: 'Current assets − current liabilities', kind: 'aed', num: [caT, C('Less: current liabilities', b => -b.cl)], den: [], means: 'Net short-term funds available to run the business.'},
+    {id: 'recd', g: 'eff', name: 'Receivable days', how: 'Accounts and other receivables ÷ revenue × 365', kind: 'days', num: [C('Accounts and other receivables', b => b.rec, 'rec')], den: [rev], means: 'Average days customers take to pay.'},
+    {id: 'payd', g: 'eff', name: 'Payable days', how: 'Accounts and other payables ÷ cost of revenue × 365', kind: 'days', num: [C('Accounts and other payables', b => b.pay, 'pay')], den: [cost], means: 'Average days taken to pay suppliers.'},
+    {id: 'invd', g: 'eff', name: 'Inventory days', how: 'Inventory ÷ cost of revenue × 365', kind: 'days', num: [C('Inventory', b => b.inv, 'inv')], den: [cost], means: 'Average days inventory is held before it is sold.'},
+    {id: 'at', g: 'eff', name: 'Asset turnover', how: 'Revenue ÷ total assets', kind: 'times', num: [rev], den: [ta], means: 'Sales generated by each dirham of assets.'},
+    {id: 'de', g: 'solv', name: 'Debt to equity', how: 'Borrowings ÷ total equity', kind: 'times', num: [C('Long term loans', b => b.ltl, 'ltl'), C('Short term borrowings', b => b.stb, 'stb')], den: [eq], means: 'Borrowings for each dirham of equity.'},
+    {id: 'tlta', g: 'solv', name: 'Liabilities to total assets', how: 'Total liabilities ÷ total assets', kind: 'pct', num: [C('Total liabilities', b => b.tl)], den: [ta], means: 'Share of the assets financed by liabilities.'},
+    {id: 'eqr', g: 'solv', name: 'Equity ratio', how: 'Total equity ÷ total assets', kind: 'pct', num: [eq], den: [ta], means: 'Share of the assets financed by the shareholders.'},
+    {id: 'icov', g: 'solv', name: 'Interest cover', how: '(Profit before tax + finance costs) ÷ finance costs', kind: 'times', num: [pbt, fin], den: [fin], means: 'How many times profit covers the finance costs.'}
+  ];
+}
+function ratioVal(d, b){
+  const n = d.num.reduce((a, c) => a + R(c.f(b)), 0), dn = d.den.reduce((a, c) => a + R(c.f(b)), 0);
+  if (d.kind === 'aed') return {v: n, n, dn};
+  if (!(dn > 0)) return {v: null, n, dn};
+  const q = n / dn; return {v: d.kind === 'pct' ? q * 100 : d.kind === 'days' ? q * 365 : q, n, dn};
+}
+function ratioFmt(d, v){
+  if (v === null || !isFinite(v)) return 'n/a';
+  if (d.kind === 'pct') return (Math.round(v * 10) / 10).toFixed(1) + '%';
+  if (d.kind === 'days') return Math.round(v) + ' days';
+  if (d.kind === 'ratio') return v.toFixed(2) + ' : 1';
+  if (d.kind === 'times') return v.toFixed(2) + ' times';
+  return v;
+}
+function ratioList(r){
+  return ratioDefs().map(d => ({d, a: ratioVal(d, r.cy), b: ratioVal(d, r.py)})).filter(x => !(x.a.v === null && x.b.v === null) && !(x.d.kind === 'days' && !x.a.n && !x.b.n));
+}
+function ratioModal(id){ liveModal(() => ratioBody(id)); }
+function ratioBody(id){
+  const en = eng(); if (!en) return;
+  const r = compute(en, prev()), Y = en.year, PY = Y - 1, d = ratioDefs().find(x => x.id === id); if (!d) return;
+  const a = ratioVal(d, r.cy), b = ratioVal(d, r.py);
+  const comp = c => `<tr><th scope="row">${c.drill ? `<button class="linkish" data-drill="${c.drill}">${e_(c.label)}</button>` : e_(c.label)}</th><td class="r">${fmtN(c.f(r.cy))}</td><td class="r">${fmtN(c.f(r.py))}</td></tr>`;
+  const rows = d.num.map(comp).join('') + (d.den.length ? `<tr class="tot"><th scope="row">${d.kind === 'aed' ? '' : 'Top of the calculation'}</th><td class="r">${fmtN(a.n)}</td><td class="r">${fmtN(b.n)}</td></tr><tr><th scope="row" colspan="3" class="muted small">divided by</th></tr>` + d.den.map(comp).join('') + `<tr class="tot"><th scope="row">Bottom of the calculation</th><td class="r">${fmtN(a.dn)}</td><td class="r">${fmtN(b.dn)}</td></tr>` : '')
+    + `<tr class="grand"><th scope="row">${e_(d.name)}</th><td class="r b">${typeof ratioFmt(d, a.v) === 'number' ? fmtN(a.v) : ratioFmt(d, a.v)}</td><td class="r b">${typeof ratioFmt(d, b.v) === 'number' ? fmtN(b.v) : ratioFmt(d, b.v)}</td></tr>`;
+  const ch = a.v !== null && b.v !== null && d.kind !== 'aed' ? a.v - b.v : null;
+  modal(`<div class="qd"><h2>${e_(d.name)}</h2><p class="sub">${e_(d.how)}${d.kind === 'days' ? '' : ''}. ${e_(d.means)}</p>
+    <div class="table-wrap"><table class="ui compact q-fig"><colgroup><col><col style="width:150px"><col style="width:150px"></colgroup><thead><tr><th></th><th class="r">FY${Y}</th><th class="r">FY${PY}</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${ch !== null && Math.abs(ch) > 0.004 ? `<p class="small">Change from FY${PY}: <b>${ch > 0 ? '+' : '−'}${d.kind === 'pct' ? Math.abs(ch).toFixed(1) + ' percentage points' : d.kind === 'days' ? Math.round(Math.abs(ch)) + ' days' : Math.abs(ch).toFixed(2)}</b></p>` : ''}
+    <p class="small muted">Click a figure’s name to open its schedule and change it. Ratios use year-end balances; “n/a” means the bottom of the calculation is nil or negative.</p>
+    <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
 }
 
 function schedModal(key){
@@ -4579,7 +4799,7 @@ document.addEventListener('click', async ev => {
   if (t.dataset.nav){ UI.view = t.dataset.nav; closeModal(); save(); render(); window.scrollTo(0, 0); return; }
   if (t.dataset.open){ const c = DB.clients.find(x => x.id === t.dataset.open); UI.clientId = c.id; UI.engId = c.engagements.slice().sort((a, b) => b.year - a.year)[0].id; UI.view = 'tb'; save(); render(); window.scrollTo(0, 0); return; }
   if (t.dataset.docs){ const [type, id] = t.dataset.docs.split(':'); docsModal(type, id); return; }
-  if (t.dataset.drill){ const d = t.dataset.drill, yr = t.dataset.yr || 'cy'; if (d.startsWith('cf:')) cfLineModal(d.slice(3), yr); else if (d === 'soce') soceModal(); else if (d === 'ct') taxModal(); else drillModal(d, yr); return; }
+  if (t.dataset.drill){ const d = t.dataset.drill, yr = t.dataset.yr || 'cy'; if (d.startsWith('cf:')) cfLineModal(d.slice(3), yr); else if (d.startsWith('ratio:')) ratioModal(d.slice(6)); else if (d === 'soce') soceModal(); else if (d === 'ct') taxModal(); else drillModal(d, yr); return; }
   if (t.dataset.sttab){ UI.stTab = t.dataset.sttab; save(); render(); return; }
   if (t.dataset.textopen){ UI.textOpen = UI.textOpen === t.dataset.textopen ? '' : t.dataset.textopen; render(); return; }
   const a = t.dataset.act, c = client(), en = eng();
@@ -4637,6 +4857,18 @@ document.addEventListener('click', async ev => {
       case 'q-add-line': { const l = {id: uid(), ledger: '', fs: t.dataset.key, caption: '', amt: 0, py: 0, docs: []}; en.tb.push(l); save(); render(); const el = document.getElementById('q-led-' + l.id); if (el) el.focus(); break; }
       case 'q-add-ppe': { const p = {id: uid(), name: '', life: '', costOpen: 0, add: 0, disp: 0, depOpen: 0, charge: 0, depDisp: 0, docs: []}; en.ppe.push(p); save(); render(); const el = document.getElementById('q-pm-name-' + p.id); if (el) el.focus(); break; }
       case 'soce-open': soceModal(); break;
+      case 'check-why': checkModal(t.dataset.key); break;
+      case 'fix-ppe-lines': { const r0 = compute(en, prev()), yr = t.dataset.yr, f = yr === 'py' ? 'py' : 'amt', fs = t.dataset.fs || 'ppe';
+        const target = fs === 'ppe' ? (yr === 'py' ? r0.ppeT.nbvPy : r0.ppeT.nbv) : (yr === 'py' ? r0.ppeT.pyCharge : r0.ppeT.charge);
+        const ls = en.tb.filter(l => l.fs === fs); if (!ls.length) break;
+        const d = target - ls.reduce((s2, l) => s2 + R(l[f]), 0); if (!d) break;
+        if (!confirm(`Change “${ls[0].ledger || 'the first ledger line'}” FY${yr === 'py' ? en.year - 1 : en.year} by ${fmtN(d)} so the ledger lines agree with the PPE schedule?`)) break;
+        ls[0][f] = R(ls[0][f]) + d; if (en.fx) delete en.fx['L:' + ls[0].id + ':' + f]; save(); render(); toast('Ledger lines now agree with the PPE schedule'); break; }
+      case 'soce-move': { const r0 = compute(en, prev()), yr = t.dataset.yr, hasOR = schedulesInOrder(en).some(x => x.custom && x.sec === 'eq') || (en.soceItems || []).some(x => R(x.oth));
+        const keys = soceMoves(en, r0, yr, {hasOR}).map(m => m.key), i = keys.indexOf(t.dataset.key), j = i + (+t.dataset.dir);
+        if (i < 0 || j < 0 || j >= keys.length) break;
+        [keys[i], keys[j]] = [keys[j], keys[i]]; en.soceOrder = Object.assign({}, en.soceOrder || {}, {[yr]: keys}); save(); render(); break; }
+      case 'soce-order-reset': { if (en.soceOrder) delete en.soceOrder[t.dataset.yr]; save(); render(); break; }
       case 'soce-add': { const x = {id: uid(), yr: t.dataset.yr, label: '', cap: 0, lr: 0, re: 0, ca: 0, oth: 0}; (en.soceItems = en.soceItems || []).push(x); save(); render(); const el = document.getElementById('q-soce-label-' + x.id); if (el) el.focus(); break; }
       case 'soce-del': { const x = (en.soceItems || []).find(i => i.id === t.dataset.id); if (x && (!['cap', 'lr', 're', 'ca', 'oth'].some(c => R(x[c])) || confirm(`Delete “${x.label || 'this item'}”?`))){ en.soceItems = en.soceItems.filter(i => i !== x); save(); render(); } break; }
       case 'add-year': UI.ayFile = null; addYearModal(); break;
