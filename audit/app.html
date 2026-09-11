@@ -303,6 +303,36 @@ table.ui.compact .sg-sh{min-width:90px}table.ui.compact .sg-sh[data-f=name]{min-
 .lh-head{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
 .lh-box .row .field{min-width:220px;margin:0}
 @media (max-width:980px){.form-grid.four{grid-template-columns:repeat(2,1fr)}}
+
+/* formulas, links between years, Google Sheet */
+.numi.fx,input.numi-f.fx{background:#EEF6F1;box-shadow:inset 3px 0 0 var(--ok)}
+.numi.fx-err,input.numi-f.fx-err{background:var(--bad-soft);box-shadow:inset 3px 0 0 var(--bad)}
+.numi.ov{box-shadow:inset 3px 0 0 var(--accent)}.numi.ov.fx{box-shadow:inset 3px 0 0 var(--ok)}
+body.fx-picking [data-ref]:not(:focus){cursor:copy}
+body.fx-picking [data-ref]:not(:focus):hover{outline:2px dashed var(--ok);outline-offset:1px}
+#fx-help{position:fixed;z-index:90;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);font-size:13px;display:flex;flex-direction:column;max-height:340px;max-width:calc(100vw - 16px)}
+#fx-help .fh-head{padding:8px 10px;border-bottom:1px solid var(--line);line-height:1.35}
+#fx-help .fh-res{padding:6px 10px;font-weight:700;color:var(--ok);font-variant-numeric:tabular-nums}
+#fx-help .fh-res.fh-err{color:var(--bad);font-weight:600}
+#fx-help .fh-list{overflow:auto;flex:1;min-height:60px}
+#fx-help .fh-grp{padding:7px 10px 2px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);font-weight:700}
+#fx-help .fh-it{all:unset;box-sizing:border-box;display:flex;justify-content:space-between;gap:10px;width:100%;padding:4px 10px;cursor:pointer}
+#fx-help .fh-it:hover,#fx-help .fh-it:focus-visible{background:var(--hover)}
+#fx-help .fh-it b{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+#fx-help .fh-foot{padding:6px 10px;border-top:1px solid var(--line)}
+.gs-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding:8px 12px;border:1px dashed var(--line);border-radius:8px;background:var(--surface-2)}
+.gs-bar.on{border-style:solid;border-color:#BFE0CC;background:#F1F8F4}
+.gs-bar .gs-ic{font-size:17px;color:var(--ok);font-weight:700}
+.gs-bar .gs-txt{flex:1;min-width:220px}
+.gs-bar label.linkish{display:inline}
+table.cfpy td input.numi{width:100%;min-width:0}
+table.cfpy th[scope=row]{font-weight:400}
+.fsi-table{max-height:260px;overflow:auto;margin:10px 0}
+.radio-row.off{opacity:.55}
+.ay-file{margin:-2px 0 8px 26px}
+.gs-list{margin:4px 0 8px;padding-left:18px;font-size:13px;max-height:180px;overflow:auto}
+.nn-btn{border:1px dashed var(--line);background:var(--surface);border-radius:6px;cursor:pointer;padding:1px 4px;text-align:center}
+.nn-btn:hover{border-color:var(--accent)}
 </style>
 <style id="report-css"></style>
 </head>
@@ -521,6 +551,7 @@ function compute(eng, prevEng){
     cfp.loans = R(mm.loans); cfp.ca = py.caMove; cfp.div = -py.div; cfp.otherFin = R(mm.otherFin); cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin;
     cfp.net = cfp.op + cfp.invTot + cfp.finTot; cfp.open = R(mm.openCash); cfp.close = cfp.open + cfp.net; cfp.diff = cfp.close - py.cash;
   }
+  cfp = applyCfPyOverrides(eng, cfp, py, scheds);
   const checks = [];
   const add = (ok, text, level) => checks.push({ok, text, level: ok ? 'ok' : (level || 'bad')});
   add(dr === cr, dr === cr ? 'Trial balance balances' : `Trial balance is out by ${fmtN(dr - cr)}`);
@@ -956,7 +987,8 @@ function buildReport(client, eng, prevEng){
   want('ct', true); want('fi', true); want('risk', true); want('capital', true); want('contingent', true); want('commitments', true);
   (eng.customNotes || []).forEach(c => want('cn:' + c.id, !!(c.title || c.text)));
   want('approval', true);
-  const numericNotes = mergeOrder(LAY.noteOrder, allNotes).filter(k => wanted[k]);
+  const allNoteOrder = mergeOrder(LAY.noteOrder, allNotes);
+  const numericNotes = allNoteOrder.filter(k => wanted[k]);
   numericNotes.forEach((k, i) => { noteNo[k] = i + 5; });
   if (noteNo.ppe) noteNo.dep = noteNo.ppe;
 
@@ -1215,7 +1247,7 @@ function buildReport(client, eng, prevEng){
   byId.index.rows = body.filter(s => !LAY.noIndex[s.id]).map(s => ({id: s.id, title: (SECTION_DEFS.find(d => d.id === s.id) || {}).title || s.id}));
   const ordered = [].concat(LAY.hide.cover ? [] : [byId.cover], LAY.hide.index ? [] : [byId.index], body);
   const noteList = numericNotes.map(k => { const g = items.find(it => it.k === 'group' && it.items[0] && it.items[0].k === 'noteHead' && it.items[0].num === noteNo[k] + '.'); return {key: k, num: noteNo[k], title: g ? g.items[0].title : k}; });
-  return {sections: ordered, allSections: sections, r, v, noteNo, noteList, layout: LAY, draft: !!eng.settings.draft, client, eng};
+  return {sections: ordered, allSections: sections, r, v, noteNo, noteList, allNoteKeys: allNoteOrder, layout: LAY, draft: !!eng.settings.draft, client, eng};
 }
 /* ============================================================
    OUTPUTS – PDF (pdfmake), Word (HTML .doc), Excel (SheetJS)
@@ -2144,6 +2176,9 @@ function load(){
 }
 let saveTimer = null;
 function save(){
+  FX_CATC.clear();
+  try { const c0 = client(); if (c0) fxRecalc(c0); } catch (e) { console.warn('formulas', e); }
+  FX_CATC.clear();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
@@ -2221,7 +2256,7 @@ function renderNav(){
   if (c && en){
     h += `<div class="side-label">Current client</div><div class="side-client">${e_(c.name)}</div>
       <div class="side-year"><select id="year-select" aria-label="Financial year">${c.engagements.slice().sort((a, b) => b.year - a.year).map(x => `<option value="${x.id}"${x.id === en.id ? ' selected' : ''}>FY${x.year} · ${e_(x.type)}</option>`).join('')}</select>
-      <button class="linkish" data-act="roll" title="Start the next year using this year's closing balances as prior year">+ Start FY${Math.max(...c.engagements.map(x => x.year)) + 1}</button></div>`;
+      <button class="linkish" data-act="add-year" title="Next year, an earlier year, or last year’s statements from Excel">+ Add financial year</button></div>`;
     [['profile', 'Company profile', IC.id], ['tb', 'Schedules', IC.grid], ['adjust', 'Tax, reserve & prior year', IC.sliders], ['statements', 'Financial statements', IC.chart], ['texts', 'Policies & report text', IC.doc], ['layout', 'Report layout & print', IC.print], ['export', 'Download reports', IC.down]]
       .forEach(([k, l, i]) => { h += `<button class="nav-btn" data-nav="${k}" aria-current="${UI.view === k}">${i}${l}</button>`; });
   }
@@ -2229,6 +2264,8 @@ function renderNav(){
   document.getElementById('drive-chip').innerHTML = (EMBEDDED ? `<button class="chip warn chip-btn" data-act="embed-help" title="Downloads and printing are blocked in this preview window">Preview window – open in Chrome/Edge to download &amp; print</button> ` : '') + (Drive.connected() ? `<span class="chip ok">Google Drive connected</span>` : `<button class="chip warn chip-btn" data-act="drive-connect">Connect Google Drive</button>`);
 }
 function render(){
+  fxHelpHide(); FX_CATC.clear();
+  try { const c0 = client(); if (c0 && c0.engagements.some(e => !FXERR.has(e))) fxRecalc(c0); } catch (e) { console.warn('formulas', e); }
   const active = document.activeElement; const aid = active && active.id; const sel = active && active.selectionStart !== undefined ? [active.selectionStart, active.selectionEnd] : null;
   const scrollY = window.scrollY;
   if (!client() && !['clients', 'settings'].includes(UI.view)) UI.view = 'clients';
@@ -2251,7 +2288,7 @@ function vClients(){
       <td class="r"><button class="icon-btn" data-act="del-client" data-id="${c.id}" title="Delete client">${IC.trash}</button></td></tr>`;
   }).join('');
   return `<section class="panel"><div class="head"><div><h1>Clients</h1><p class="sub">Open a client to prepare its financial statements, or create a new one.</p></div>
-    <div class="row"><label class="btn" for="import-saved" title="Excel downloaded from this software, or a backup file">${IC.upload}Import saved statements</label><input id="import-saved" type="file" accept=".xlsx,.json" hidden><button class="btn primary" data-act="new-client">${IC.plus}New client</button></div></div></section>
+    <div class="row"><label class="btn" for="import-saved" title="Excel downloaded from this software, or a backup file">${IC.upload}Import saved statements</label><input id="import-saved" type="file" accept=".xlsx,.json" hidden><label class="btn" for="fs-in-client" title="The Fair Tax financial statements workbook (Bs, P&amp;L, Equity, Cf and notes)">${IC.upload}Import financial statements (Excel)</label><input id="fs-in-client" type="file" accept=".xlsx,.xls" hidden><button class="btn primary" data-act="new-client">${IC.plus}New client</button></div></div></section>
     <section class="panel steps-panel"><div class="steps">
       <div class="step"><div class="step-n">1</div><div><b>Create client</b><span>Enter company details once. A Google Drive folder is created for the client.</span></div></div>
       <div class="step"><div class="step-n">2</div><div><b>Enter trial balance</b><span>Type, paste from Excel or import. Attach proof to any amount.</span></div></div>
@@ -2261,8 +2298,11 @@ function vClients(){
     <section class="panel flush"><div class="table-wrap"><table class="ui"><thead><tr><th>Client</th><th>Latest year</th><th>Google Drive</th><th>Status</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No clients yet — click New client.</td></tr>'}</tbody></table></div></section>`;
 }
 
+const FX_BIND_REF = {'settings.lrTransfer': ['lrTransfer', 'cy'], 'settings.ctAmount': ['ct', 'cy'], 'pyInfo.lrTransfer': ['lrTransfer', 'py'], 'pyInfo.caOpen': ['caOpen', 'py'], 'pyInfo.ctAmount': ['ct', 'py']};
 function field(id, label, value, opts = {}){
-  const attrs = `id="${id}" data-bind="${opts.bind}" ${opts.num ? 'data-num="1" inputmode="decimal"' : ''}`;
+  const fen = opts.num && /^eng\./.test(opts.bind || '') ? eng() : null, fk = fen ? 'B:' + opts.bind.slice(4) : '', fref = fen && FX_BIND_REF[opts.bind.slice(4)];
+  const fxa = fen ? fxAttrs(fen, fk, fref ? `{${fen.year}:C:${fref[0]}:${fref[1]}}` : '') + (fxCls(fen, fk) ? ` class="numi-f${fxCls(fen, fk)}"` : '') : '';
+  const attrs = `id="${id}" data-bind="${opts.bind}" ${opts.num ? 'data-num="1" inputmode="decimal"' : ''}${fxa}`;
   const input = opts.area ? `<textarea ${attrs} rows="${opts.rows || 2}">${e_(value)}</textarea>`
     : opts.select ? `<select ${attrs}>${opts.select.map(o => `<option value="${e_(o[0])}"${String(value) === String(o[0]) ? ' selected' : ''}>${e_(o[1])}</option>`).join('')}</select>`
     : `<input ${attrs} value="${e_(opts.num ? fmtIn(value) : value)}"${opts.ph ? ` placeholder="${e_(opts.ph)}"` : ''}>`;
@@ -2439,8 +2479,8 @@ function lineRow(en, l, withSchedule){
     <td><input class="w-ledger" id="l-led-${l.id}" data-line="${l.id}" data-field="ledger" value="${e_(l.ledger)}" placeholder="Ledger name" aria-label="Ledger"></td>
     ${withSchedule ? `<td><select class="w-fs" id="l-fs-${l.id}" data-line="${l.id}" data-field="fs" aria-label="Schedule">${schedOptions(en, l.fs)}</select></td>` : ''}
     <td><input class="w-cap" id="l-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td>
-    <td><input class="numi${R(l.amt) < 0 ? ' neg' : ''}" id="l-amt-${l.id}" data-line="${l.id}" data-field="amt" value="${fmtSigned(l.amt)}" inputmode="decimal" aria-label="Amount"></td>
-    <td><input class="numi${R(l.py) < 0 ? ' neg' : ''}" id="l-py-${l.id}" data-line="${l.id}" data-field="py" value="${fmtSigned(l.py)}" inputmode="decimal" aria-label="Prior year"></td>
+    <td><input class="numi${R(l.amt) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':amt')}" id="l-amt-${l.id}" data-line="${l.id}" data-field="amt"${fxAttrs(en, 'L:' + l.id + ':amt', `{${en.year}:L:${l.id}:amt}`)} value="${fmtSigned(l.amt)}" inputmode="decimal" aria-label="Amount"></td>
+    <td><input class="numi${R(l.py) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':py')}" id="l-py-${l.id}" data-line="${l.id}" data-field="py"${fxAttrs(en, 'L:' + l.id + ':py', `{${en.year}:L:${l.id}:py}`)} value="${fmtSigned(l.py)}" inputmode="decimal" aria-label="Prior year"></td>
     <td>${docCell('line', l)}</td>
     <td class="acts">${withSchedule ? '' : `<button class="icon-btn move" data-act="move-line" data-id="${l.id}" title="Move to another schedule">${IC.move}</button>`}<button class="icon-btn" data-act="del-line" data-id="${l.id}" title="Delete line">${IC.trash}</button></td></tr>`;
 }
@@ -2450,10 +2490,10 @@ function ppeMatrix(en, r){
   const isDec = /december\s*31/i.test(yeText);
   const d = (yr, open) => isDec ? (open ? `01-01-${yr}` : `31-12-${yr}`) : (open ? `start of ${yr}` : `end of ${yr}`);
   if (!cls.length) return `<div class="empty-block">No asset classes yet. Add one column per asset class (e.g. Motor vehicles, Furniture and fixtures) – the note is built in the same layout as the Excel schedule.</div>`;
-  const inp = (x, f) => `<td><input class="numi" id="pm-${f}-${x.id}" data-ppe="${x.id}" data-field="${f}" value="${fmtIn(x[f])}" inputmode="decimal" aria-label="${e_(x.name)} ${f}"></td>`;
-  const tot = f => `<td class="r calc b">${fmtN(T[f])}</td>`;
+  const inp = (x, f) => `<td><input class="numi${fxCls(en, `P:${x.id}:${f}`)}" id="pm-${f}-${x.id}" data-ppe="${x.id}" data-field="${f}"${fxAttrs(en, `P:${x.id}:${f}`, `{${Y}:P:${x.id}:${f}}`)} value="${fmtIn(x[f])}" inputmode="decimal" aria-label="${e_(x.name)} ${f}"></td>`;
+  const tot = f => `<td class="r calc b"${fxRefAttr(`{${Y}:P:*:${f}}`)}>${fmtN(T[f])}</td>`;
   const inRow = (label, f) => `<tr><th scope="row">${label}</th>${cls.map(x => inp(x, f)).join('')}${tot(f)}</tr>`;
-  const calcRow = (label, f, cl) => `<tr class="${cl || ''}"><th scope="row">${label}</th>${cls.map(x => `<td class="r calc">${fmtN(x[f])}</td>`).join('')}${tot(f)}</tr>`;
+  const calcRow = (label, f, cl) => `<tr class="${cl || ''}"><th scope="row">${label}</th>${cls.map(x => `<td class="r calc"${fxRefAttr(`{${Y}:P:${x.id}:${f}}`)}>${fmtN(x[f])}</td>`).join('')}${tot(f)}</tr>`;
   const sub = label => `<tr class="msub"><th colspan="${cls.length + 2}">${label}</th></tr>`;
   const band = label => `<tr class="mband"><th colspan="${cls.length + 2}">${label}</th></tr>`;
   const orig = id => en.ppe.find(p => p.id === id);
@@ -2476,7 +2516,7 @@ function ppeMatrix(en, r){
 }
 function ppeComparative(en, r, d){
   const Y = en.year, PY = Y - 1, T = r.ppeT, P = en.ppePy || {};
-  const pin = (f, label) => `<td><input class="numi" id="ppy-${f}" data-bind="eng.ppePy.${f}" data-num="1" inputmode="decimal" value="${fmtIn(P[f] || 0)}" aria-label="${label} ${PY}"></td>`;
+  const pin = (f, label) => `<td><input class="numi${fxCls(en, 'B:ppePy.' + f)}" id="ppy-${f}" data-bind="eng.ppePy.${f}" data-num="1" inputmode="decimal"${fxAttrs(en, 'B:ppePy.' + f, '')} value="${fmtIn(P[f] || 0)}" aria-label="${label} ${PY}"></td>`;
   const row = (label, cy, py, cl) => `<tr class="${cl || ''}"><th scope="row">${label}</th><td class="r calc">${cy}</td>${py}</tr>`;
   const calc = v => `<td class="r calc b">${fmtN(v)}</td>`;
   const neg = v => v ? `(${fmtN(v)})` : '-';
@@ -2500,9 +2540,9 @@ function vTB(){
   const bal = r.dr === r.cr;
   const tbDocs = (en.tbDocs || []).map(d => `<a class="doc-link" href="${e_(d.url)}" target="_blank" rel="noopener">${IC.file}<span>${e_(d.name)}</span></a>`).join(' ');
   const head = `<section class="panel"><div class="head"><div><h1>Schedules FY${en.year}</h1><p class="sub">Each schedule is one line in the statements and one note. Enter amounts as <b>+</b> when they follow the schedule’s nature and <b>−</b> when they go against it (e.g. accumulated depreciation, closing stock). FY${en.year - 1} = last year’s figure, same sign rule.</p></div>
-    <div class="row"><button class="btn" data-act="paste-tb">${IC.grid}Paste from Excel</button><label class="btn" for="xlsx-in">${IC.upload}Import Excel</label><input id="xlsx-in" type="file" accept=".xlsx,.xls,.csv" hidden>
+    <div class="row"><button class="btn" data-act="paste-tb">${IC.grid}Paste from Excel</button><label class="btn" for="xlsx-in" title="Trial balance: ledger names with amounts">${IC.upload}Import trial balance</label><input id="xlsx-in" type="file" accept=".xlsx,.xls,.csv" hidden><label class="btn" for="fs-in" title="Last year’s or this year’s financial statements in the Fair Tax Excel format – fills the schedules">${IC.upload}Import financial statements</label><input id="fs-in" type="file" accept=".xlsx,.xls" hidden>
     <button class="btn" data-act="tb-file">${IC.clip}Attach TB file</button><button class="btn" data-act="retrieve">${IC.down}Retrieve previous statements</button><button class="btn primary" data-act="new-sched">${IC.plus}New schedule</button></div></div>
-    ${tbDocs ? `<div class="row" style="margin-top:10px"><span class="muted small">Trial balance files:</span>${tbDocs}</div>` : ''}</section>
+    ${tbDocs ? `<div class="row" style="margin-top:10px"><span class="muted small">Trial balance files:</span>${tbDocs}</div>` : ''}${yearLinkBar(c, en)}${gsPanel(c, en)}</section>
   <div class="kpis">
     <div class="kpi"><small>Assets, expenses &amp; dividends</small><b>${fmtN(r.dr)}</b></div><div class="kpi"><small>Liabilities, equity &amp; income</small><b>${fmtN(r.cr)}</b></div>
     <div class="kpi"><small>Difference</small><b class="${bal ? 'ok-t' : 'bad-t'}">${bal ? 'Balanced' : fmtN(r.dr - r.cr)}</b></div>
@@ -2547,17 +2587,17 @@ function vTB(){
       return `<section class="panel flush sched${col ? ' collapsed' : ''}" id="sch-${x.key}">
         <div class="sched-head">
           <div class="sched-name"><button class="sched-toggle" data-act="toggle-sched" data-key="${x.key}" aria-expanded="${!col}" title="${col ? 'Expand' : 'Collapse'}">${col ? '▸' : '▾'}</button>
-          <div class="sched-title" data-act="toggle-sched" data-key="${x.key}" title="Click to expand or collapse"><b>${e_(x.label)}</b>${noteNo[x.key] ? `<span class="chip neutral">Note ${noteNo[x.key]}</span>` : ''}${x.custom ? '<span class="chip accent">Custom</span>' : ''}
+          <div class="sched-title" data-act="toggle-sched" data-key="${x.key}" title="Click to expand or collapse"><b>${e_(x.label)}</b>${noteNo[x.key] ? `<button class="chip neutral chip-btn" data-act="note-num" data-key="${x.key}" title="Change or swap this note number">Note ${noteNo[x.key]} ✎</button>` : ''}${x.custom ? '<span class="chip accent">Custom</span>' : ''}
             <div class="muted small">${e_(sec.label)}${x.hint ? ' · ' + e_(x.hint) : ''}</div></div></div>
-          <div class="sched-tot" title="FY${en.year}"><b>${fmtN(r.cy[x.key])}</b></div>
-          <div class="sched-tot" title="FY${en.year - 1}"><b>${fmtN(r.py[x.key])}</b></div>
+          <div class="sched-tot" title="FY${en.year}"${fxRefAttr(`{${en.year}:S:${x.key}:cy}`)}><b>${fmtN(r.cy[x.key])}</b></div>
+          <div class="sched-tot" title="FY${en.year - 1}"${fxRefAttr(`{${en.year}:S:${x.key}:py}`)}><b>${fmtN(r.py[x.key])}</b></div>
           <div class="sched-proof" title="Lines with proof"><b class="${docTotal && docs === docTotal ? 'ok-t' : ''}">${docs}/${docTotal}</b></div>
           <button class="icon-btn gear" data-act="sched-props" data-key="${x.key}" title="Schedule settings">${IC.gear}</button>
         </div>
         ${col ? '' : (isPPE ? ppeMatrix(en, r) + (lines.length ? `<div class="sub-head">Ledger lines (optional – checked against the schedule above)</div><div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${shown.map(l => lineRow(en, l, false)).join('')}</tbody><tfoot><tr><td colspan="2">Total</td><td class="r">${fmtN(amtT)}</td><td class="r">${fmtN(pyT)}</td><td colspan="2"></td></tr></tfoot></table></div>` : '')
             + noteTextBox(en, x, noteNo) + `<div class="sched-foot"><button class="btn small" data-act="add-ppe">${IC.plus}Add asset class</button><button class="linkish" data-act="add-line-to" data-key="ppe">Add ledger line instead</button>${noteTextBtn(x)}</div>`
           : `<div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${shown.map(l => lineRow(en, l, false)).join('') || `<tr><td colspan="6" class="empty">No lines yet.</td></tr>`}</tbody>
-          ${lines.length ? `<tfoot><tr><td colspan="2">Total</td><td class="r">${fmtN(amtT)}</td><td class="r">${fmtN(pyT)}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>
+          ${lines.length ? `<tfoot><tr><td colspan="2">Total</td><td class="r"${fxRefAttr(`{${en.year}:S:${x.key}:cy}`)}>${fmtN(amtT)}</td><td class="r"${fxRefAttr(`{${en.year}:S:${x.key}:py}`)}>${fmtN(pyT)}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>
         ${noteTextBox(en, x, noteNo)}
         <div class="sched-foot"><button class="btn small" data-act="add-line-to" data-key="${x.key}">${IC.plus}Add line</button><button class="linkish" data-act="paste-tb" data-key="${x.key}">Paste lines into this schedule</button>${noteTextBtn(x)}</div>`)}
       </section>`;
@@ -2595,16 +2635,12 @@ function docCell(type, obj){
 
 function vAdjust(){
   const en = eng(), r = compute(en, prev()), S = en.settings, P = en.pyInfo, pe = prev();
-  const pyCfFields = pe ? `<p class="note">Prior year cash flow is taken automatically from FY${pe.year} in this software.</p>` : `<div class="form-grid three">
-      ${[['inv', '(Increase)/decrease in inventory'], ['rec', '(Increase)/decrease in receivables'], ['rprec', '(Increase)/decrease due from related parties'], ['pay', 'Increase/(decrease) in payables'], ['rppay', 'Increase/(decrease) due to related parties'], ['eosb', 'End of service benefits (net)'], ['otherOp', 'Other working capital movements'], ['additions', 'Additions to PPE (negative)'], ['proceeds', 'Disposal proceeds'], ['otherInv', 'Other investing movements'], ['loans', 'Net movement in loans'], ['otherFin', 'Other financing movements'], ['openCash', `Cash at beginning of FY${en.year - 1}`]]
-        .filter(([k]) => !(k === 'additions' && r.ppe.length)).map(([k, l]) => field('pycf-' + k, l, P.cf[k], {bind: 'eng.pyInfo.cf.' + k, num: true})).join('')}</div>
-      ${r.ppe.length ? '<p class="small muted">Prior year PPE additions come from the comparative PPE schedule.</p>' : ''}
-      <p class="small ${r.cfp.diff === 0 ? 'ok-t' : 'bad-t'}">${r.cfp.diff === 0 ? `FY${en.year - 1} cash flow reconciles to cash of ${fmtN(r.py.cash)}` : `FY${en.year - 1} cash flow ends at ${fmtN(r.cfp.close)} but cash was ${fmtN(r.py.cash)} – difference ${fmtN(r.cfp.diff)}`}</p>`;
+  const pyCfFields = pyCfTable(en, r);
   return `<section class="panel"><div class="head"><div><h1>Tax, reserve &amp; prior year</h1><p class="sub">Items the schedules alone cannot give. Copy prior year details from last year’s audited report. The PPE movement schedule is on the Schedules screen.</p></div></div></section>
   <section class="panel"><h2>Current year FY${en.year}</h2><div class="form-grid three">
     ${field('ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
     ${S.ctMode === 'manual' ? field('ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}
-    <div class="field"><label>Corporate tax for the year</label><div class="static">${fmtN(r.cy.ct)}</div></div>
+    <div class="field"><label>Corporate tax for the year</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:cy}`)}>${fmtN(r.cy.ct)}</div></div>
     ${field('lr-tr', 'Transfer to legal reserve', S.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true, hint: `Suggested: ${fmtN(r.cy.lrSuggest)} (5% of profit until reserve = 50% of capital) <button class="linkish" data-act="lr-suggest">Use</button>`})}
     ${field('disp-pr', 'Proceeds from disposal of PPE', S.disposalProceeds, {bind: 'eng.settings.disposalProceeds', num: true})}
     ${r.ppe.length ? '' : field('ppe-add', 'Additions to PPE (no PPE schedule)', S.ppeAdditions, {bind: 'eng.settings.ppeAdditions', num: true})}
@@ -2614,12 +2650,12 @@ function vAdjust(){
   <section class="panel"><h2>Prior year FY${en.year - 1} details</h2><div class="form-grid three">
     ${field('py-ct-mode', `Corporate tax FY${en.year - 1}`, P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
     ${P.ctMode === 'manual' ? field('py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}
-    <div class="field"><label>Corporate tax FY${en.year - 1}</label><div class="static">${fmtN(r.py.ct)}</div></div>
+    <div class="field"><label>Corporate tax FY${en.year - 1}</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:py}`)}>${fmtN(r.py.ct)}</div></div>
     ${field('py-lr', `Transfer to legal reserve in FY${en.year - 1}`, P.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}
     ${field('py-ca', `Shareholder current account at start of FY${en.year - 1}`, P.caOpen, {bind: 'eng.pyInfo.caOpen', num: true})}
-    <div class="field"><label>Retained earnings at start of FY${en.year - 1} (calculated)</label><div class="static">${fmtN(r.py.reOpen)}</div></div>
+    <div class="field"><label>Retained earnings at start of FY${en.year - 1} (calculated)</label><div class="static"${fxRefAttr(`{${en.year}:C:reOpen:py}`)}>${fmtN(r.py.reOpen)}</div></div>
   </div>
-  <h3 class="h3">Prior year cash flow (from last year’s audited report)</h3>${pyCfFields}</section>`;
+  ${pyCfFields}</section>`;
 }
 
 function vStatements(){
@@ -2628,7 +2664,7 @@ function vStatements(){
   const tabs = [['sofp', 'Financial position'], ['soci', 'Profit or loss'], ['soce', 'Changes in equity'], ['socf', 'Cash flows'], ['notes', 'Notes']];
   const checks = M.r.checks.map(x => `<li class="ck ${x.level}"><span class="dot"></span>${e_(x.text)}</li>`).join('');
   return `<section class="panel"><div class="head"><div><h1>Financial statements FY${en.year}</h1><p class="sub">Built live from the trial balance with FY${en.year - 1} comparatives. Click a current-year amount to see its ledgers and proof.</p></div>
-    <button class="btn primary" data-nav="export">${IC.down}Download reports</button></div><ul class="checks">${checks}</ul></section>
+    <div class="row">${UI.stTab === 'socf' ? `<button class="btn" data-act="edit-cfpy">Edit FY${en.year - 1} cash flow</button>` : ''}<button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div><ul class="checks">${checks}</ul></section>
   <section class="panel"><div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${UI.stTab === k}" data-sttab="${k}">${l}</button>`).join('')}</div>
     <div class="paper-wrap"><div class="paper">${reportHtml(M, {only: [UI.stTab], interactive: true})}</div></div></section>`;
 }
@@ -2690,7 +2726,8 @@ function vSettings(){
       <li>APIs &amp; Services → OAuth consent screen → External → app name “Fair Tax Audit Desk” → add your email as a <b>test user</b>.</li>
       <li>Credentials → Create credentials → <b>OAuth client ID</b> → Web application.</li>
       <li>Under <b>Authorised JavaScript origins</b> add: <code>${e_(origin)}</code></li>
-      <li>Copy the Client ID into the box above and click <b>Connect Google Drive</b>.</li></ol></details></section>
+      <li>Copy the Client ID into the box above and click <b>Connect Google Drive</b>.</li></ol></details>
+    <p class="small muted">Google Sheets (<b>Create Google Sheet</b> on the Schedules screen) uses the same Google sign-in. If it says the Sheets API is off, <button class="linkish" data-act="gs-help">see how to switch it on</button>.</p></section>
   <section class="panel"><h2>AI – read trade licence &amp; MOA</h2>
     <p class="sub">Claude reads uploaded licences and MOAs (Arabic or English, PDF or photo) and fills the company profile. The key stays in this browser and is not saved in backups.</p>
     <div class="form-grid"><div class="field"><label for="set-aikey">Claude API key</label><input id="set-aikey" type="password" autocomplete="off" placeholder="sk-ant-…" value="${e_(AI.key())}"></div>
@@ -2719,7 +2756,7 @@ function vLayout(){
       ${updown('sec', id, i, order.length)}</li>`).join('');
   const notes = M.noteList;
   const noteRows = notes.map((n, i) => `<li class="lay-row" draggable="true" data-drag="note" data-id="${e_(n.key)}">
-      <span class="grip" title="Drag up or down">${IC.handle}</span><span class="lay-num">${n.num}.</span><span class="lay-title">${e_(n.title)}</span>${updown('note', n.key, i, notes.length)}</li>`).join('');
+      <span class="grip" title="Drag up or down">${IC.handle}</span><button class="lay-num nn-btn" data-act="note-num" data-key="${e_(n.key)}" title="Change or swap this note number">${n.num}.</button><span class="lay-title">${e_(n.title)}</span>${updown('note', n.key, i, notes.length)}</li>`).join('');
   const printList = M.sections.map(s => `<label class="check-lbl"><input type="checkbox" class="print-sec" value="${s.id}" checked> ${e_(s.kind === 'cover' ? 'Cover page' : s.kind === 'index' ? 'Index' : (defs[s.id] || {}).title || s.id)}</label>`).join('');
   return `<section class="panel"><div class="head"><div><h1>Report layout &amp; print</h1><p class="sub">Page margins, page numbers, the order of sections and notes, and what appears in the index. Settings are kept for this client and carried to next year.</p></div>
     <div class="row"><button class="btn" data-act="pdf-preview">${IC.eye}Preview PDF</button><button class="btn primary" data-act="print-pdf">${IC.print}Print report</button></div></div></section>
@@ -2883,6 +2920,7 @@ function doRetrieve(){
   const o = {figures: document.getElementById('rt-fig').checked, clear: document.getElementById('rt-clear').checked, texts: document.getElementById('rt-texts').checked, layout: document.getElementById('rt-layout').checked};
   if (src.year !== en.year - 1 && !confirm(`The saved statements are for FY${src.year}, but the comparative year here is FY${en.year - 1}. Continue?`)) return;
   if (o.figures && en.tb.some(l => R(l.py)) && !confirm(`Replace the FY${en.year - 1} figures already entered with those from ${label}?`)) return;
+  if (o.figures) fxClearPyLinks(en);
   const res = retrieveFromSaved(en, src, o);
   let filled = 0;
   if (profile && document.getElementById('rt-profile').checked){
@@ -2908,7 +2946,7 @@ async function importSavedFile(file){
   });
   if (firstC){ UI.clientId = firstC.id; UI.engId = firstE.id; UI.view = 'tb'; }
   save(); render();
-  toast(added ? `${added} saved year(s) imported${skipped ? ` · ${skipped} already existed` : ''}. Use “Start FY…” to carry them into the next year.` : 'These years already exist in the software', !added);
+  toast(added ? `${added} saved year(s) imported${skipped ? ` · ${skipped} already existed` : ''}. Use “+ Add financial year” to carry them into the next year.` : 'These years already exist in the software', !added);
 }
 
 /* ---------- page margins & letterhead (Report layout screen and Download screen) ---------- */
@@ -3102,6 +3140,1127 @@ function parseRows(aoa, en, target, mode){
   return out;
 }
 
+/* ============================================================
+   FORMULAS & LIVE LINKS
+   Any amount can be a formula: type = then click another amount or total (or pick from the list).
+   Stored reference {YEAR:TYPE:ID:FIELD} – stays correct when note numbers or wording change:
+     L line (amt|py) · S schedule total (cy|py) · P PPE class or * total (field) · C calculated item (cy|py) · F cash flow line (cy|py)
+   Formula targets (eng.fx keys): L:lineId:amt|py · P:ppeId:field · B:path.in.engagement · CFP:cashFlowKey
+   ============================================================ */
+const FX_FIELDS_PPE = {costOpen: 'cost opening', add: 'additions', disp: 'disposals', costClose: 'cost closing', depOpen: 'depreciation opening', charge: 'depreciation charge', depDisp: 'depreciation on disposals', depClose: 'depreciation closing', nbv: 'net book value', nbvPy: 'net book value PY', dispWdv: 'disposals at WDV'};
+const FX_CALC = [['pbt', 'Profit before tax'], ['ct', 'Corporate tax'], ['pat', 'Profit after tax'], ['gp', 'Gross profit'], ['reOpen', 'Retained earnings opening'], ['reClose', 'Retained earnings closing'],
+  ['lrOpen', 'Legal reserve opening'], ['lrTransfer', 'Legal reserve transfer'], ['lrClose', 'Legal reserve closing'], ['caOpen', 'Current account opening'], ['caMove', 'Current account movement'], ['caClose', 'Current account closing'],
+  ['payTot', 'Payables incl. corporate tax'], ['nca', 'Total non-current assets'], ['caTot', 'Total current assets'], ['ta', 'Total assets'], ['eq', 'Total equity'], ['ncl', 'Total non-current liabilities'], ['cl', 'Total current liabilities'], ['tl', 'Total liabilities']];
+const FX_CF = [['pat', 'Profit for the year'], ['dep', 'Depreciation'], ['gain', 'Gain on disposal'], ['eosb', 'End of service benefits'], ['opBefore', 'Operating profit before working capital changes'],
+  ['inv', 'Change in inventory'], ['rec', 'Change in receivables'], ['rprec', 'Change due from related parties'], ['pay', 'Change in payables'], ['rppay', 'Change due to related parties'], ['otherOp', 'Other working capital movements'], ['op', 'Net cash from operating activities'],
+  ['additions', 'Additions to PPE'], ['proceeds', 'Disposal proceeds'], ['otherInv', 'Other investing movements'], ['invTot', 'Net cash from investing activities'],
+  ['loans', 'Net movement in loans'], ['ca', 'Movement in current account'], ['div', 'Dividend paid'], ['otherFin', 'Other financing movements'], ['finTot', 'Net cash from financing activities'],
+  ['net', 'Net increase / (decrease) in cash'], ['open', 'Cash at the beginning of the year'], ['close', 'Cash at the end of the year']];
+const FXERR = new WeakMap();
+const fxErr = msg => Object.assign(new Error(msg), {fx: true});
+const fxMap = en => (en.fx = en.fx || {});
+const fxErrOf = (en, key) => (FXERR.get(en) || {})[key] || '';
+
+/* ---- parser: numbers (1,250.50 · 5%), + − × ÷, brackets, SUM ROUND ABS MIN MAX, {references}; sheet mode also reads A1 cells and ranges ---- */
+const FX_AST = new Map();
+function fxParse(src, sheetMode){
+  const ck = (sheetMode ? 's|' : '') + src;
+  if (FX_AST.has(ck)) return FX_AST.get(ck);
+  const s = String(src).replace(/^\s*=/, '').replace(/[−–]/g, '-').replace(/×/g, '*').replace(/÷/g, '/');
+  let i = 0;
+  const ws = () => { while (i < s.length && /\s/.test(s[i])) i++; };
+  function primary(){
+    ws(); const ch = s[i], rest = s.slice(i);
+    if (ch === '(') { i++; const v = expr(); ws(); if (s[i] !== ')') throw fxErr('a closing bracket ) is missing'); i++; return v; }
+    if (ch === '{') { const j = s.indexOf('}', i); if (j < 0) throw fxErr('broken reference'); const tok = s.slice(i, j + 1); i = j + 1; return {r: tok}; }
+    if (ch === '-') { i++; return {neg: primary()}; }
+    if (ch === '+') { i++; return primary(); }
+    let m;
+    if (sheetMode && (m = /^(?:'([^']+)'!|([A-Za-z][\w ]*)!)?\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?/.exec(rest)) && !/^[A-Z]{1,3}\d+\s*\(/.test(rest)){
+      i += m[0].length; return {cell: {sheet: m[1] || m[2] || '', c1: m[3], r1: +m[4], c2: m[5] || m[3], r2: +(m[6] || m[4])}};
+    }
+    if ((m = /^(\d+(?:,\d{3}(?!\d))*(?:\.\d+)?|\.\d+)/.exec(rest))) { i += m[0].length; let v = parseFloat(m[0].replace(/,/g, '')); ws(); if (s[i] === '%') { i++; v /= 100; } return {n: v}; }
+    if ((m = /^([A-Za-z]+)\s*\(/.exec(rest))) {
+      const fn = m[1].toUpperCase(); i += m[0].length; const args = []; ws();
+      if (s[i] !== ')') { for (;;) { args.push(expr()); ws(); if (s[i] === ',' || s[i] === ';') { i++; continue; } break; } }
+      ws(); if (s[i] !== ')') throw fxErr('a closing bracket ) is missing'); i++;
+      if (!['SUM', 'ROUND', 'ABS', 'MIN', 'MAX'].includes(fn)) throw fxErr(`${fn}() is not available – use SUM, ROUND, ABS, MIN or MAX`);
+      return {fn, args};
+    }
+    if (ch === '[') throw fxErr('unknown reference ' + (rest.match(/^\[[^\]]*\]?/) || [''])[0]);
+    throw fxErr(ch === undefined ? 'the formula ends too early' : `unexpected “${ch}”`);
+  }
+  function term(){ let v = primary(); for (;;) { ws(); const c = s[i]; if (c === '*' || c === '/') { i++; v = {op: c, a: v, b: primary()}; } else return v; } }
+  function expr(){ let v = term(); for (;;) { ws(); const c = s[i]; if (c === '+' || c === '-') { i++; v = {op: c, a: v, b: term()}; } else return v; } }
+  if (!s.trim()) throw fxErr('empty formula');
+  const node = expr(); ws();
+  if (i < s.length) throw fxErr(`unexpected “${s[i]}”`);
+  if (FX_AST.size > 3000) FX_AST.clear();
+  FX_AST.set(ck, node);
+  return node;
+}
+function fxRun(node, getRef){
+  const run = n => {
+    if (n.n !== undefined) return n.n;
+    if (n.r) return getRef(n.r);
+    if (n.cell) return getRef(n.cell);
+    if (n.neg) return -run(n.neg);
+    if (n.op){ const a = run(n.a), b = run(n.b); if (n.op === '/' && !b) throw fxErr('division by zero'); return n.op === '+' ? a + b : n.op === '-' ? a - b : n.op === '*' ? a * b : a / b; }
+    const flat = n.args.map(a => run(a)).flat(), v = flat.map(Number);
+    switch (n.fn){
+      case 'SUM': return v.reduce((x, y) => x + y, 0);
+      case 'ROUND': { const d = Math.pow(10, v[1] || 0); return Math.round((v[0] || 0) * d) / d; }
+      case 'ABS': return Math.abs(v[0] || 0);
+      case 'MIN': return v.length ? Math.min(...v) : 0;
+      case 'MAX': return v.length ? Math.max(...v) : 0;
+    }
+    return 0;
+  };
+  const out = run(node);
+  if (Array.isArray(out)) return out.reduce((x, y) => x + y, 0);
+  if (!isFinite(out)) throw fxErr('the result is not a number');
+  return out;
+}
+function fxTok(tok){ const m = /^\{(\d{4}):([LSPCF]):([^:}]+):([^}]+)\}$/.exec(tok); if (!m) throw fxErr('broken reference'); return {year: +m[1], t: m[2], id: m[3], f: m[4]}; }
+const fxEngOf = (c, year) => ((c && c.engagements) || []).find(e => e.year === +year) || null;
+function fxCompute(c, en, memo){ if (!memo.has(en)) memo.set(en, compute(en, prevOf(c, en))); return memo.get(en); }
+function fxRefValue(c, ref, memo){
+  const en = fxEngOf(c, ref.year); if (!en) throw fxErr(`FY${ref.year} is not in this client`);
+  if (ref.t === 'L'){ const l = en.tb.find(x => x.id === ref.id); if (!l) throw fxErr('a referenced line was deleted'); return R(ref.f === 'py' ? l.py : l.amt); }
+  const r = fxCompute(c, en, memo);
+  if (ref.t === 'S'){ const b = ref.f === 'py' ? r.py : r.cy; if (!(ref.id in b)) throw fxErr('a referenced schedule was deleted'); return R(b[ref.id]); }
+  if (ref.t === 'P'){ if (ref.id === '*') return R(r.ppeT[ref.f]); const p = r.ppe.find(x => x.id === ref.id); if (!p) throw fxErr('a referenced asset class was deleted'); return R(p[ref.f]); }
+  if (ref.t === 'C'){ const b = ref.f === 'py' ? r.py : r.cy; if (!(ref.id in b)) throw fxErr('unknown calculated item'); return R(b[ref.id]); }
+  if (ref.t === 'F'){ const b = ref.f === 'py' ? r.cfp : r.cf; const v = b[ref.id] !== undefined ? b[ref.id] : (b.custom || {})[ref.id]; return R(v); }
+  throw fxErr('broken reference');
+}
+/* targets */
+function fxGet(en, key){
+  const k = key.split(':');
+  if (k[0] === 'L'){ const l = en.tb.find(x => x.id === k[1]); return l ? R(l[k[2]]) : undefined; }
+  if (k[0] === 'P'){ const p = (en.ppe || []).find(x => x.id === k[1]); return p ? R(p[k[2]]) : undefined; }
+  if (k[0] === 'CFP'){ return R((en.cfPy || {})[k[1]]); }
+  if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o && o[parts[i]]; } return o ? R(o[parts[parts.length - 1]]) : undefined; }
+}
+function fxSet(en, key, v){
+  const k = key.split(':');
+  if (k[0] === 'L'){ const l = en.tb.find(x => x.id === k[1]); if (l) l[k[2]] = v; return; }
+  if (k[0] === 'P'){ const p = (en.ppe || []).find(x => x.id === k[1]); if (p) p[k[2]] = v; return; }
+  if (k[0] === 'CFP'){ (en.cfPy = en.cfPy || {})[k[1]] = v; return; }
+  if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o[parts[i]] = o[parts[i]] || {}; } o[parts[parts.length - 1]] = v; }
+}
+function fxTargetExists(en, key){
+  const k = key.split(':');
+  if (k[0] === 'L') return en.tb.some(x => x.id === k[1]);
+  if (k[0] === 'P') return (en.ppe || []).some(x => x.id === k[1]);
+  return true;
+}
+/* recalculate every formula of a client (all years) until nothing changes */
+function fxRecalc(c){
+  if (!c || !c.engagements) return;
+  const items = [];
+  c.engagements.forEach(en => {
+    FXERR.set(en, {});
+    Object.keys(en.fx || {}).forEach(key => { if (!fxTargetExists(en, key)) delete en.fx[key]; else items.push({en, key, f: en.fx[key]}); });
+  });
+  if (!items.length) return;
+  let moving = new Set();
+  for (let pass = 0; pass < 14; pass++){
+    const memo = new Map(); moving = new Set();
+    for (const it of items){
+      let v;
+      try { v = Math.round(fxRun(fxParse(it.f), tok => fxRefValue(c, fxTok(tok), memo))); }
+      catch (e) { FXERR.get(it.en)[it.key] = e.message; continue; }
+      delete FXERR.get(it.en)[it.key];
+      if (fxGet(it.en, it.key) !== v){ fxSet(it.en, it.key, v); moving.add(it); memo.clear(); }
+    }
+    if (!moving.size) return;
+  }
+  moving.forEach(it => { FXERR.get(it.en)[it.key] = 'circular reference – this formula depends on itself'; });
+}
+/* ---- readable form: [Accounts receivable (Receivables)] + 5,000 ---- */
+const FX_CATC = new Map();
+function fxCatalog(c, en){
+  if (FX_CATC.has(en)) return FX_CATC.get(en);
+  const out = fxCatalogBuild(c, en); FX_CATC.set(en, out); return out;
+}
+function fxCatalogBuild(c, en){
+  const out = [];
+  const eng2 = (c.engagements || []).slice().sort((a, b) => (a === en ? -1 : b === en ? 1 : b.year - a.year));
+  eng2.forEach(e => {
+    const yr = e === en ? '' : ` · FY${e.year}`, grpY = e === en ? `FY${e.year} (this year)` : `FY${e.year}`;
+    const memo = new Map(), r = fxCompute(c, e, memo), sm = SM(e);
+    const push = (group, label, ref, value) => out.push({group: grpY + ' – ' + group, label: String(label).replace(/[\[\]]/g, '') , ref, value});
+    schedulesInOrder(e).forEach(s => {
+      if (!R(r.cy[s.key]) && !R(r.py[s.key]) && !e.tb.some(l => l.fs === s.key)) return;
+      push('schedule totals', `${s.label} total${yr}`, `{${e.year}:S:${s.key}:cy}`, r.cy[s.key]);
+      push('schedule totals', `${s.label} total PY${yr}`, `{${e.year}:S:${s.key}:py}`, r.py[s.key]);
+    });
+    const seen = {};
+    e.tb.forEach(l => {
+      let base = `${(l.ledger || l.caption || 'Line').trim()} (${sm[l.fs] ? sm[l.fs].label : 'no schedule'})`;
+      seen[base] = (seen[base] || 0) + 1; if (seen[base] > 1) base += ' #' + seen[base];
+      push('lines', base + yr, `{${e.year}:L:${l.id}:amt}`, l.amt);
+      push('lines', base + ' PY' + yr, `{${e.year}:L:${l.id}:py}`, l.py);
+    });
+    r.ppe.forEach(p => Object.entries(FX_FIELDS_PPE).forEach(([f, lbl]) => push('property, plant & equipment', `PPE ${p.name || 'class'}: ${lbl}${yr}`, `{${e.year}:P:${p.id}:${f}}`, p[f])));
+    if (r.ppe.length) Object.entries(FX_FIELDS_PPE).forEach(([f, lbl]) => push('property, plant & equipment', `PPE total: ${lbl}${yr}`, `{${e.year}:P:*:${f}}`, r.ppeT[f]));
+    FX_CALC.forEach(([k, lbl]) => { push('calculated', lbl + yr, `{${e.year}:C:${k}:cy}`, r.cy[k]); push('calculated', lbl + ' PY' + yr, `{${e.year}:C:${k}:py}`, r.py[k]); });
+    FX_CF.forEach(([k, lbl]) => { push('cash flow', `Cash flow: ${lbl}${yr}`, `{${e.year}:F:${k}:cy}`, r.cf[k]); push('cash flow', `Cash flow: ${lbl} PY${yr}`, `{${e.year}:F:${k}:py}`, r.cfp[k]); });
+  });
+  return out;
+}
+function fxLabelOf(c, en, ref, cat){
+  const hit = (cat || fxCatalog(c, en)).find(x => x.ref === ref);
+  return hit ? hit.label : 'deleted item';
+}
+function fxToReadable(c, en, formula){
+  const cat = fxCatalog(c, en);
+  return String(formula || '').replace(/\{\d{4}:[LSPCF]:[^:}]+:[^}]+\}/g, tok => '[' + fxLabelOf(c, en, tok, cat) + ']');
+}
+function fxFromReadable(c, en, text){
+  const cat = fxCatalog(c, en), byLabel = {};
+  cat.forEach(x => { byLabel[x.label.toLowerCase()] = x.ref; });
+  const stored = '=' + String(text).replace(/^\s*=/, '').replace(/\[([^\]]*)\]/g, (m, lbl) => {
+    const ref = byLabel[lbl.trim().toLowerCase()];
+    if (!ref) throw fxErr(`unknown reference [${lbl}] – click the amount or pick it from the list`);
+    return ref;
+  });
+  fxParse(stored);
+  return stored;
+}
+function fxPreview(c, en, text){
+  try { const st = fxFromReadable(c, en, text); const memo = new Map(); return {ok: true, v: Math.round(fxRun(fxParse(st), tok => fxRefValue(c, fxTok(tok), memo)))}; }
+  catch (e) { return {ok: false, err: e.message}; }
+}
+/* an input changed: formula or plain number */
+function fxInput(c, en, key, text, setNum){
+  const t = String(text || '').trim();
+  if (/^=/.test(t) && t.length > 1){
+    const stored = fxFromReadable(c, en, t);
+    fxMap(en)[key] = stored; fxRecalc(c);
+    const err = fxErrOf(en, key); if (err) toast('Formula: ' + err, true);
+    return true;
+  }
+  if (en.fx) delete en.fx[key];
+  setNum(num(t));
+  return false;
+}
+/* attributes for an amount input / a clickable figure */
+function fxAttrs(en, key, ref){
+  const f = en.fx && en.fx[key], err = f ? fxErrOf(en, key) : '';
+  let title = '';
+  if (f){ try { title = fxToReadable(client(), en, f); } catch (e) { title = f; } }
+  return ` data-fx-key="${e_(key)}"${ref ? ` data-ref="${e_(ref)}"` : ''}${f ? ` data-fx="1" title="${e_((err ? '⚠ ' + err + ' · ' : 'ƒ ') + title)}"` : ''}`;
+}
+const fxCls = (en, key) => (en.fx && en.fx[key] ? (fxErrOf(en, key) ? ' fx fx-err' : ' fx') : '');
+const fxRefAttr = ref => ` data-ref="${e_(ref)}"`;
+
+/* ---- formula helper: shows while typing = in an amount ---- */
+const FXH = {el: null, groups: {}};
+function fxHelpEl(){ let h = document.getElementById('fx-help'); if (!h){ h = document.createElement('div'); h.id = 'fx-help'; h.setAttribute('role', 'dialog'); h.setAttribute('aria-label', 'Formula helper'); document.body.appendChild(h); } return h; }
+function fxHelpHide(){ const h = document.getElementById('fx-help'); if (h) h.remove(); document.body.classList.remove('fx-picking'); FXH.el = null; }
+function fxHelpShow(el){
+  const c = client(), en = eng(); if (!c || !en) return;
+  FXH.el = el; document.body.classList.add('fx-picking');
+  const h = fxHelpEl();
+  const val = el.value, caret = el.selectionStart == null ? val.length : el.selectionStart;
+  const before = val.slice(0, caret), open = before.lastIndexOf('['), partial = open > before.lastIndexOf(']') && open >= 0 ? before.slice(open + 1).toLowerCase() : '';
+  const cat = fxCatalog(c, en);
+  const words = partial.split(/\s+/).filter(Boolean);
+  const list = (partial ? cat.filter(x => words.every(w => x.label.toLowerCase().includes(w))) : cat).slice(0, partial ? 60 : 400);
+  const pv = fxPreview(c, en, val);
+  let groups = '', last = '';
+  list.forEach((x, i) => {
+    if (x.group !== last){ last = x.group; groups += `<div class="fh-grp">${e_(x.group)}</div>`; }
+    groups += `<button type="button" class="fh-it" data-fx-pick="${e_(x.ref)}"><span>${e_(x.label)}</span><b>${fmtN(x.value)}</b></button>`;
+  });
+  h.innerHTML = `<div class="fh-head"><b>ƒ Formula</b> <span class="muted">– click any amount or total on the page to add it, or pick below. Type <b>[</b> to search.</span></div>
+    <div class="fh-res ${pv.ok ? '' : 'fh-err'}">${pv.ok ? '= ' + fmtN(pv.v) + ' AED' : e_(val.trim() === '=' ? 'Start the formula, e.g. [Receivables total] + 5,000' : pv.err)}</div>
+    <div class="fh-list">${groups || '<div class="muted fh-grp">No match</div>'}</div>
+    <div class="fh-foot"><span class="muted small">+ − * / ( ) · SUM · ROUND · Enter to finish · Esc to cancel</span></div>`;
+  const rc = el.getBoundingClientRect(), W = Math.min(380, window.innerWidth - 16);
+  h.style.width = W + 'px';
+  h.style.left = Math.max(8, Math.min(window.innerWidth - W - 8, rc.left)) + 'px';
+  const below = window.innerHeight - rc.bottom > 300;
+  h.style.top = (below ? rc.bottom + 6 : Math.max(8, rc.top - Math.min(340, h.offsetHeight || 340) - 6)) + 'px';
+}
+function fxInsert(el, ref){
+  const c = client(), en = eng();
+  const label = fxLabelOf(c, en, ref);
+  const val = el.value, s0 = el.selectionStart == null ? val.length : el.selectionStart, s1 = el.selectionEnd == null ? s0 : el.selectionEnd;
+  let start = s0; const before = val.slice(0, s0), open = before.lastIndexOf('[');
+  if (open >= 0 && open > before.lastIndexOf(']')) start = open;
+  const token = '[' + label + ']';
+  el.value = val.slice(0, start) + token + val.slice(s1);
+  const pos = start + token.length;
+  try { el.setSelectionRange(pos, pos); } catch (e) {}
+  el.focus(); fxHelpShow(el);
+}
+document.addEventListener('focusin', ev => {
+  const el = ev.target;
+  if (!el.dataset || !el.dataset.fxKey) return;
+  const en = eng(); if (!en) return;
+  const f = en.fx && en.fx[el.dataset.fxKey];
+  if (f && !el.dataset.fxShown){ const t = fxToReadable(client(), en, f); el.value = t; el.dataset.fxShown = t; try { el.setSelectionRange(t.length, t.length); } catch (e) {} }
+  if (/^\s*=/.test(el.value)) fxHelpShow(el);
+});
+document.addEventListener('focusout', ev => {
+  const el = ev.target;
+  if (!el.dataset || !el.dataset.fxKey) return;
+  setTimeout(() => { const a = document.activeElement; if (a === el) return; if (a && a.dataset && a.dataset.fxKey && /^\s*=/.test(a.value)) fxHelpShow(a); else fxHelpHide(); }, 0);
+  if (el.dataset.fxShown !== undefined && el.value === el.dataset.fxShown){ const en = eng(); delete el.dataset.fxShown; const v = en ? fxGet(en, el.dataset.fxKey) : 0; el.value = fmtSigned(v); }
+});
+document.addEventListener('input', ev => {
+  const el = ev.target;
+  if (!el.dataset || !el.dataset.fxKey) return;
+  if (/^\s*=/.test(el.value)) fxHelpShow(el); else fxHelpHide();
+});
+document.addEventListener('keyup', ev => { if (FXH.el && ev.target === FXH.el && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) fxHelpShow(FXH.el); });
+document.addEventListener('keydown', ev => {
+  const el = ev.target;
+  if (!el.dataset || !el.dataset.fxKey) return;
+  if (ev.key === 'Escape' && el.dataset.fxShown !== undefined){ el.value = el.dataset.fxShown; fxHelpHide(); el.blur(); }
+  if (ev.key === 'Enter' && !el.closest('td')){ ev.preventDefault(); el.blur(); }
+}, true);
+let FX_SWALLOW = false;
+document.addEventListener('mousedown', ev => {
+  const a = document.activeElement;
+  if (!a || !a.dataset || !a.dataset.fxKey || !/^\s*=/.test(a.value)) return;
+  if (ev.target.closest('#fx-help')){ ev.preventDefault(); return; }
+  const refEl = ev.target.closest('[data-ref]');
+  if (!refEl || refEl === a) return;
+  ev.preventDefault(); ev.stopPropagation(); FX_SWALLOW = true;
+  fxInsert(a, refEl.dataset.ref);
+}, true);
+document.addEventListener('click', ev => {
+  if (FX_SWALLOW){ FX_SWALLOW = false; ev.preventDefault(); ev.stopPropagation(); return; }
+  const pick = ev.target.closest('[data-fx-pick]');
+  if (pick && FXH.el){ ev.preventDefault(); ev.stopPropagation(); fxInsert(FXH.el, pick.dataset.fxPick); }
+}, true);
+
+/* a trial balance brought in with its own retained earnings / legal reserve: drop the linked opening balance lines' amounts */
+function fxTbImported(en, rows){
+  let n = 0;
+  ['re', 'lr'].forEach(k => {
+    if (!rows.some(x => x.fs === k)) return;
+    en.tb.forEach(l => { if (l.fs === k && !rows.includes(l) && en.fx && en.fx['L:' + l.id + ':amt']){ delete en.fx['L:' + l.id + ':amt']; l.amt = 0; n++; } });
+  });
+  return n;
+}
+/* ---- live links between years: this year's opening = last year's closing ---- */
+function fxLinkToPrev(c, en){
+  const pe = prevOf(c, en); if (!pe) return null;
+  const fx = fxMap(en), P = pe.year; let n = 0, added = 0;
+  const key = l => (l.fs || '') + '|' + String(l.ledger || l.caption || '').trim().toLowerCase();
+  const mine = {}; en.tb.forEach(l => { (mine[key(l)] = mine[key(l)] || []).push(l); });
+  const seen = {};
+  pe.tb.forEach(pl => {
+    if (pl.fs === 're' || pl.fs === 'lr') return;
+    const k = key(pl), i = seen[k] || 0; seen[k] = i + 1;
+    let l = (mine[k] || [])[i];
+    if (!l){ l = {id: uid(), ledger: pl.ledger, fs: pl.fs, caption: pl.caption || '', amt: 0, py: 0, docs: []}; en.tb.push(l); added++; }
+    fx['L:' + l.id + ':py'] = `={${P}:L:${pl.id}:amt}`; n++;
+  });
+  ['re', 'lr'].forEach(k => {
+    let lines = en.tb.filter(l => l.fs === k);
+    if (!lines.length && !pe.tb.some(l => l.fs === k)) return;
+    if (!lines.length){ const l = {id: uid(), ledger: k === 're' ? 'Retained earnings' : 'Legal reserve', fs: k, caption: '', amt: 0, py: 0, docs: []}; en.tb.push(l); lines = [l]; added++; }
+    lines.forEach((l, i) => { const src = i === 0 ? `={${P}:C:${k}Close:cy}` : '=0'; fx['L:' + l.id + ':amt'] = src; fx['L:' + l.id + ':py'] = src; n += 2; });
+  });
+  (pe.ppe || []).forEach(pp => {
+    let p = en.ppe.find(x => String(x.name || '').trim().toLowerCase() === String(pp.name || '').trim().toLowerCase());
+    if (!p){ p = {id: uid(), name: pp.name, life: pp.life, costOpen: 0, add: 0, disp: 0, depOpen: 0, charge: 0, depDisp: 0, docs: []}; en.ppe.push(p); }
+    fx['P:' + p.id + ':costOpen'] = `={${P}:P:${pp.id}:costClose}`; fx['P:' + p.id + ':depOpen'] = `={${P}:P:${pp.id}:depClose}`; n += 2;
+  });
+  if ((pe.ppe || []).length){ fx['B:ppePy.add'] = `={${P}:P:*:add}`; fx['B:ppePy.disp'] = `={${P}:P:*:dispWdv}`; fx['B:ppePy.charge'] = `={${P}:P:*:charge}`; }
+  fx['B:pyInfo.caOpen'] = `={${P}:C:caOpen:cy}`; fx['B:pyInfo.lrTransfer'] = `={${P}:C:lrTransfer:cy}`;
+  en.pyInfo.ctMode = 'manual'; fx['B:pyInfo.ctAmount'] = `={${P}:C:ct:cy}`;
+  en.linkedTo = P;
+  fxRecalc(c);
+  return {n, added};
+}
+function fxUnlinkYears(c, en){
+  let n = 0;
+  Object.keys(en.fx || {}).forEach(k => { if (/\{\d{4}:/.test(en.fx[k]) && [...en.fx[k].matchAll(/\{(\d{4}):/g)].some(m => +m[1] !== en.year)){ delete en.fx[k]; n++; } });
+  delete en.linkedTo;
+  return n;
+}
+/* before other prior-year figures are brought in, drop the live links that would overwrite them */
+function fxClearPyLinks(en){
+  Object.keys(en.fx || {}).forEach(k => { if (/:py$/.test(k) || /^B:(pyInfo|ppePy)/.test(k) || k.startsWith('CFP:') || /:(costOpen|depOpen)$/.test(k) || (/^L:/.test(k) && /\{\d{4}:C:(re|lr)Close/.test(en.fx[k]))) delete en.fx[k]; });
+  delete en.linkedTo;
+}
+function yearLinkBar(c, en){
+  const pe = prevOf(c, en), n = fxLinkedCount(en), PY = en.year - 1;
+  if (!pe) return `<div class="gs-bar"><span class="gs-ic" aria-hidden="true">⇄</span><div class="gs-txt"><b>FY${PY} comparatives</b> <span class="muted small">– FY${PY} is not in the software. Type the figures, <button class="linkish" data-act="retrieve">retrieve saved statements</button>, <label class="linkish" for="fs-in">import last year’s Excel statements</label> or <button class="linkish" data-act="add-year">add FY${PY}</button>.</span></div></div>`;
+  if (n) return `<div class="gs-bar on"><span class="gs-ic" aria-hidden="true">⇄</span><div class="gs-txt"><b>Linked live to FY${pe.year}</b> <span class="muted small">– ${n} figures (FY${PY} column, PPE opening balances, reserves, tax) follow FY${pe.year}. Change FY${pe.year} and this year updates.</span></div><button class="btn small" data-act="fx-link-prev">Relink</button><button class="linkish" data-act="fx-unlink">Unlink</button></div>`;
+  return `<div class="gs-bar"><span class="gs-ic" aria-hidden="true">⇄</span><div class="gs-txt"><b>FY${pe.year} is in the software</b> <span class="muted small">– link the FY${PY} column and opening balances to it, so any change in FY${pe.year} flows here.</span></div><button class="btn small" data-act="fx-link-prev">Link to FY${pe.year}</button></div>`;
+}
+const fxLinkedCount = en => Object.values(en.fx || {}).filter(f => [...String(f).matchAll(/\{(\d{4}):/g)].some(m => +m[1] !== en.year)).length;
+
+/* ============================================================
+   PRIOR YEAR CASH FLOW – every line can be typed (blank = automatic)
+   ============================================================ */
+const CFPY_KEYS = ['pat', 'dep', 'gain', 'eosb', 'inv', 'rec', 'rprec', 'pay', 'rppay', 'otherOp', 'additions', 'proceeds', 'otherInv', 'loans', 'ca', 'div', 'otherFin', 'open'];
+function applyCfPyOverrides(eng, cfp, py, scheds){
+  const ov = eng.cfPy || {};
+  const keys = Object.keys(ov).filter(k => ov[k] !== null && ov[k] !== undefined && ov[k] !== '');
+  if (!keys.length) return cfp;
+  cfp.custom = Object.assign({}, cfp.custom || {});
+  keys.forEach(k => { if (CFPY_KEYS.includes(k)) cfp[k] = R(ov[k]); else if (k.startsWith('x')) cfp.custom[k] = R(ov[k]); });
+  CFPY_KEYS.forEach(k => { cfp[k] = R(cfp[k]); });
+  const cS = secs => scheds.filter(s => s.custom && secs.includes(s.sec)).reduce((a, s) => a + R(cfp.custom[s.key]), 0);
+  cfp.opBefore = cfp.pat + cfp.dep + cfp.gain + cfp.eosb;
+  cfp.op = cfp.opBefore + cfp.inv + cfp.rec + cfp.rprec + cfp.pay + cfp.rppay + cfp.otherOp + cS(['ca', 'cl']);
+  cfp.invTot = cfp.additions + cfp.proceeds + cfp.otherInv + cS(['nca']);
+  cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin + cS(['ncl', 'eq']);
+  cfp.net = cfp.op + cfp.invTot + cfp.finTot; cfp.close = cfp.open + cfp.net; cfp.diff = cfp.close - py.cash;
+  return cfp;
+}
+function pyCfTable(en, r){
+  const cf = r.cf, cfp = r.cfp, ov = en.cfPy || {}, Y = en.year, PY = Y - 1, pe = prev();
+  const custom = secs => schedulesInOrder(en).filter(s => s.custom && secs.includes(s.sec)).map(s => [s.key, `${s.sec === 'ca' || s.sec === 'nca' ? '(Increase) / decrease in' : 'Increase / (decrease) in'} ${s.label.toLowerCase()}`, true]);
+  const rows = [['g', 'Cash flows from operating activities'], ['pat', 'Profit for the year'], ['dep', 'Depreciation'], ['gain', 'Gain on disposal of PPE (as a minus)'], ['eosb', 'End of service benefits (net)'],
+    ['t', 'opBefore', 'Operating profit before working capital changes'], ['inv', '(Increase) / decrease in inventory'], ['rec', '(Increase) / decrease in accounts and other receivables'], ['rprec', '(Increase) / decrease due from related parties'],
+    ['pay', 'Increase / (decrease) in accounts and other payables'], ['rppay', 'Increase / (decrease) due to related parties']].concat(custom(['ca', 'cl']), [['otherOp', 'Other working capital movements'],
+    ['t', 'op', 'Net cash from operating activities (A)'], ['g', 'Cash flows from investing activities'], ['additions', 'Additions to property, plant and equipment'], ['proceeds', 'Proceeds from disposal of PPE']], custom(['nca']), [['otherInv', 'Other investing movements'],
+    ['t', 'invTot', 'Net cash from investing activities (B)'], ['g', 'Cash flows from financing activities'], ['loans', 'Net movement in loans and borrowings'], ['ca', 'Net movement in shareholder’s current account'], ['div', 'Dividend paid']], custom(['ncl', 'eq']), [['otherFin', 'Other financing movements'],
+    ['t', 'finTot', 'Net cash from financing activities (C)'], ['t', 'net', 'Net increase / (decrease) in cash (A+B+C)'], ['open', `Cash and cash equivalents at the beginning of FY${PY}`], ['t', 'close', `Cash and cash equivalents at the end of FY${PY}`]]);
+  const val = (b, k, isCustom) => isCustom ? R((b.custom || {})[k]) : R(b[k]);
+  const body = rows.map(row => {
+    if (row[0] === 'g') return `<tr class="msub"><th colspan="4">${e_(row[1])}</th></tr>`;
+    if (row[0] === 't') return `<tr class="tot"><th scope="row">${e_(row[2])}</th><td class="r calc"${fxRefAttr(`{${Y}:F:${row[1]}:cy}`)}>${fmtN(cf[row[1]])}</td><td class="r calc b"${fxRefAttr(`{${Y}:F:${row[1]}:py}`)}>${fmtN(cfp[row[1]])}</td><td></td></tr>`;
+    const [k, label, isCustom] = row, key = 'CFP:' + k, has = ov[k] !== undefined && ov[k] !== null && ov[k] !== '';
+    return `<tr><th scope="row">${e_(label)}</th><td class="r calc"${fxRefAttr(`{${Y}:F:${k}:cy}`)}>${fmtN(val(cf, k, isCustom))}</td>
+      <td><input class="numi${has ? ' ov' : ''}${fxCls(en, key)}" id="cfpy-${k}" data-cfpy="${k}"${fxAttrs(en, key, `{${Y}:F:${k}:py}`)} value="${fmtSigned(val(cfp, k, isCustom))}" inputmode="decimal" aria-label="${e_(label)} FY${PY}"></td>
+      <td>${has ? `<button class="linkish" data-act="cfpy-reset" data-k="${k}" title="Back to the automatic figure">↺ auto</button>` : ''}</td></tr>`;
+  }).join('');
+  const src = pe ? `Blank lines come automatically from FY${pe.year} in this software.` : `Blank lines come from the prior year details above (or 0).`;
+  return `<h3 class="h3" id="py-cf">Prior year cash flow FY${PY}</h3>
+    <p class="small muted">Type any FY${PY} figure exactly as in last year’s audited cash flow – it overrides the automatic figure. ${src} Formulas work here too (type =).</p>
+    <div class="table-wrap"><table class="ui matrix cfpy"><colgroup><col><col style="width:150px"><col style="width:170px"><col style="width:70px"></colgroup>
+      <thead><tr><th>Line</th><th class="r">FY${Y}</th><th class="r">FY${PY} <span class="muted">(type to change)</span></th><th></th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="row between"><p class="small ${cfp.diff === 0 ? 'ok-t' : 'bad-t'}">${cfp.diff === 0 ? `FY${PY} cash flow reconciles to cash of ${fmtN(r.py.cash)}` : `FY${PY} cash flow ends at ${fmtN(cfp.close)}, but cash at the end of FY${PY} is ${fmtN(r.py.cash)} (difference ${fmtN(cfp.diff)})`}</p>
+      ${Object.keys(ov).length ? `<button class="linkish" data-act="cfpy-reset-all">Clear all typed FY${PY} figures</button>` : ''}</div>`;
+}
+
+/* ============================================================
+   NOTE NUMBERS – move a note to a number or swap two notes
+   ============================================================ */
+function setNoteNumber(c, en, key, newNum, mode){
+  const M = buildReport(c, en, prevOf(c, en));
+  const list = M.noteList.map(n => n.key);
+  const k = key === 'dep' ? 'ppe' : key, from = list.indexOf(k), to = newNum - 5;
+  if (from < 0) throw new Error('This schedule has no note in the report yet (no figures, or its note is switched off).');
+  if (!(to >= 0 && to < list.length)) throw new Error(`Choose a note number from 5 to ${list.length + 4}`);
+  if (to === from) return false;
+  const full = (M.allNoteKeys || list).slice();
+  if (mode === 'swap'){ const other = list[to], a = full.indexOf(k), b = full.indexOf(other); full[a] = other; full[b] = k; }
+  else { const target = list[to]; full.splice(full.indexOf(k), 1); const at = full.indexOf(target); full.splice(to > from ? at + 1 : at, 0, k); }
+  layoutOf(en).noteOrder = full;
+  return true;
+}
+function noteNumModal(key){
+  const c = client(), en = eng(), M = buildReport(c, en, prev());
+  const n = M.noteList.find(x => x.key === (key === 'dep' ? 'ppe' : key));
+  if (!n){ toast('This schedule has no note yet – add figures or switch its note on in schedule settings', true); return; }
+  const opts = M.noteList.map(x => `<option value="${x.num}"${x.num === n.num ? ' selected' : ''}>${x.num}. ${e_(x.title)}</option>`).join('');
+  modal(`<h2>Note number</h2><p class="sub">${e_(n.title)} is <b>Note ${n.num}</b>. Notes 1–4 stay fixed.</p>
+    <div class="form-grid"><div class="field wide"><label for="nn-to">Change to note number</label><select id="nn-to">${opts}</select></div></div>
+    <div class="box"><label class="radio-row"><input type="radio" name="nn-mode" value="swap" checked><span><b>Swap</b> the two notes – only these two numbers change</span></label>
+      <label class="radio-row"><input type="radio" name="nn-mode" value="move"><span><b>Move</b> – notes in between shift up or down by one</span></label></div>
+    <div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-act="nn-save" data-key="${e_(n.key)}">Change number</button></div>`);
+}
+
+/* ============================================================
+   ADD A FINANCIAL YEAR – next year, an earlier year, from a file or blank
+   ============================================================ */
+function addYearModal(){
+  const c = client(), years = c.engagements.map(e => e.year), min = Math.min(...years), max = Math.max(...years);
+  modal(`<h2>Add a financial year</h2><p class="sub">${e_(c.name)} has FY${years.slice().sort().join(', FY')}.</p>
+    <div class="form-grid"><div class="field"><label for="ay-year">Financial year</label><input id="ay-year" inputmode="numeric" value="${max + 1}"></div>
+      <div class="field"><label>Quick pick</label><div class="row"><button class="btn small" data-act="ay-pick" data-y="${min - 1}">FY${min - 1} – earlier year</button><button class="btn small" data-act="ay-pick" data-y="${max + 1}">FY${max + 1} – next year</button></div></div>
+      <div class="field"><label for="ay-type">Engagement</label><select id="ay-type"><option value="Audit">Audit – with auditor’s report</option><option value="Simple FS"${(eng() || {}).type === 'Simple FS' ? ' selected' : ''}>Financial statements only</option></select></div></div>
+    <div id="ay-opts">${addYearOptions(c, max + 1)}</div>
+    <div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-act="ay-create">Create year</button></div>`, true);
+}
+function addYearOptions(c, year){
+  const exists = c.engagements.some(e => e.year === year), before = fxEngOf(c, year - 1), after = fxEngOf(c, year + 1);
+  if (!(year > 1990 && year < 2100)) return '<p class="note">Enter a year such as 2024.</p>';
+  if (exists) return `<div class="banner bad">FY${year} already exists for this client. Pick another year – or import a file into FY${year} from the Schedules screen.</div>`;
+  const first = before ? 'carry' : after ? 'back' : 'blank';
+  const opt = (v, title, text, dis) => `<label class="radio-row${dis ? ' off' : ''}"><input type="radio" name="ay-src" value="${v}" ${v === first ? 'checked' : ''} ${dis ? 'disabled' : ''}><span><b>${title}</b> – ${text}</span></label>`;
+  return `<div class="box"><h3 class="h3">How should FY${year} start?</h3>
+    ${opt('carry', `Carry forward from FY${year - 1}`, before ? `prior year column, PPE opening balances, reserves and tax are <b>linked live</b> to FY${year - 1}: change FY${year - 1} and FY${year} follows` : `needs FY${year - 1} in the software`, !before)}
+    ${opt('back', `Take figures from FY${year + 1}’s prior year column`, after ? `FY${year} gets the FY${year} column of FY${year + 1} (ledger lines, tax, reserve, PPE totals); FY${year + 1}’s prior year column is then <b>linked</b> to FY${year}` : `needs FY${year + 1} in the software`, !after)}
+    ${opt('file', 'Import last year’s financial statements (Excel)', `the Fair Tax statements workbook – notes, figures, PPE and cash flow are read into FY${year}`)}
+    <div class="row ay-file"><label class="btn small" for="ay-file-in">${IC.upload}Choose Excel file</label><input id="ay-file-in" type="file" accept=".xlsx,.xls" hidden><span class="small muted" id="ay-file-name">${UI.ayFile ? e_(UI.ayFile.name) : 'No file chosen'}</span></div>
+    ${opt('blank', 'Blank year', 'same schedules, policies, wording and report layout as the nearest year; no figures')}</div>`;
+}
+async function createYear(){
+  const c = client(), year = num(document.getElementById('ay-year').value), type = document.getElementById('ay-type').value;
+  const srcIn = document.querySelector('input[name=ay-src]:checked'); if (!srcIn){ toast('Choose how the year should start', true); return; }
+  if (c.engagements.some(e => e.year === year)){ toast(`FY${year} already exists`, true); return; }
+  const src = srcIn.value, before = fxEngOf(c, year - 1), after = fxEngOf(c, year + 1);
+  const nearest = c.engagements.slice().sort((a, b) => Math.abs(a.year - year) - Math.abs(b.year - year))[0];
+  let n, msg = '';
+  if (src === 'carry'){
+    n = rollForward(c, before); n.type = type; c.engagements.push(n);
+    const res = fxLinkToPrev(c, n); msg = `FY${year} created – ${res.n} figures linked live to FY${year - 1}`;
+  } else if (src === 'back'){
+    n = yearFromNext(c, after, year, type); c.engagements.push(n);
+    freezeCfPy(c, after); fxLinkToPrev(c, after); fxRecalc(c);
+    msg = `FY${year} created from FY${year + 1}’s prior year figures – FY${year + 1} is now linked to it`;
+  } else if (src === 'file'){
+    if (!UI.ayFile){ toast('Choose the Excel file first', true); return; }
+    const res = await readFsWorkbookFile(UI.ayFile);
+    res.eng.type = type;
+    UI.fsImp = {res, fileName: UI.ayFile.name, targetYear: year, forceMode: 'year'}; UI.ayFile = null;
+    closeModal(); fsImportModal(); return;
+  } else {
+    n = newEngagement(year, type); copyStructure(nearest, n); c.engagements.push(n); msg = `FY${year} created`;
+  }
+  c.engagements.sort((a, b) => a.year - b.year);
+  UI.engId = n.id; UI.view = 'tb'; save(); closeModal(); render(); toast(msg);
+}
+function copyStructure(from, n){
+  if (!from) return;
+  n.schedules = JSON.parse(JSON.stringify(ensureSchedules(from))); ensureSchedules(n);
+  n.texts = JSON.parse(JSON.stringify(from.texts)); n.customNotes = JSON.parse(JSON.stringify(from.customNotes || []));
+  n.layout = JSON.parse(JSON.stringify(layoutOf(from))); n.settings.deprMethod = from.settings.deprMethod;
+}
+/* keep a year's prior-year cash flow exactly as it is before it gets linked to a new earlier year */
+function freezeCfPy(c, en){
+  const r = compute(en, prevOf(c, en)), cfp = r.cfp; en.cfPy = en.cfPy || {};
+  CFPY_KEYS.forEach(k => { if (en.cfPy[k] === undefined) en.cfPy[k] = R(cfp[k]); });
+  Object.keys(cfp.custom || {}).forEach(k => { if (en.cfPy[k] === undefined) en.cfPy[k] = R(cfp.custom[k]); });
+}
+function yearFromNext(c, next, year, type){
+  const n = newEngagement(year, type); copyStructure(next, n);
+  const rn = compute(next, prevOf(c, next));
+  n.tb = next.tb.filter(l => R(l.py) || !['re', 'lr'].includes(l.fs)).map(l => ({id: uid(), ledger: l.ledger, fs: l.fs, caption: l.caption, amt: R(l.py), py: 0, docs: []}));
+  n.settings.lrTransfer = R(next.pyInfo.lrTransfer);
+  n.settings.ctMode = 'manual'; n.settings.ctAmount = R(rn.py.ct);
+  n.pyInfo.caOpen = 0;
+  const caL = n.tb.filter(l => l.fs === 'ca'); if (caL.length) caL[0].py = R(next.pyInfo.caOpen);
+  // PPE: closing = next year's opening; last year's movements go into the first class (split them by class if needed)
+  n.ppe = (next.ppe || []).map(p => ({id: uid(), name: p.name, life: p.life, costOpen: R(p.costOpen), add: 0, disp: 0, depOpen: R(p.depOpen), charge: 0, depDisp: 0, docs: []}));
+  if (n.ppe.length){ const P = next.ppePy || {}, f = n.ppe[0]; f.add = R(P.add); f.charge = R(P.charge); f.disp = R(P.disp); f.costOpen += f.disp - f.add; f.depOpen -= f.charge; }
+  // reserves are entered as opening balances: work back from the closing balance
+  const r = compute(n, null);
+  const reLines = n.tb.filter(l => l.fs === 're'), lrLines = n.tb.filter(l => l.fs === 'lr');
+  const reOpen = R(rn.py.reClose) - r.cy.pat + r.cy.div + r.cy.lrTransfer, lrOpen = R(rn.py.lrClose) - r.cy.lrTransfer;
+  reLines.forEach((l, i) => { l.amt = i ? 0 : reOpen; }); if (!reLines.length && reOpen) n.tb.push({id: uid(), ledger: 'Retained earnings', fs: 're', caption: '', amt: reOpen, py: 0, docs: []});
+  lrLines.forEach((l, i) => { l.amt = i ? 0 : lrOpen; }); if (!lrLines.length && lrOpen) n.tb.push({id: uid(), ledger: 'Legal reserve', fs: 'lr', caption: '', amt: lrOpen, py: 0, docs: []});
+  return n;
+}
+
+/* ============================================================
+   IMPORT FINANCIAL STATEMENTS – the Fair Tax Excel workbook (statements, notes, PPE, cash flow)
+   ============================================================ */
+const fsTxt = v => v === null || v === undefined ? '' : String(v).replace(/\s+/g, ' ').trim();
+const fsNum = v => typeof v === 'number' && isFinite(v) ? v : (typeof v === 'string' && /^\(?-?[\d,]+(\.\d+)?\)?$/.test(v.trim()) && /\d/.test(v) ? num(v) : null);
+const fsTitleCase = s => String(s || '').toLowerCase().replace(/(^|[\s(’'-])([a-z])/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(And|Of|The|In|On|For|To)\b/g, w => w.toLowerCase()).replace(/^./, ch => ch.toUpperCase());
+function fsRows(wb, name){ return XLSX.utils.sheet_to_json(wb.Sheets[name], {header: 1, raw: true, defval: null, blankrows: true}); }
+function fsYearCols(row){
+  const ys = [];
+  (row || []).forEach((c, j) => { const t = fsTxt(c); if (/^(19|20)\d\d$/.test(t)) ys.push({j, y: +t}); });
+  if (ys.length < 2) return null;
+  ys.sort((a, b) => b.y - a.y);
+  return ys[0].y - ys[1].y === 1 ? {cy: ys[0].j, py: ys[1].j, year: ys[0].y} : null;
+}
+function fsStatement(rows){
+  let yc = null, noteC = -1; const lines = [];
+  rows.forEach((r, i) => {
+    r = r || [];
+    const y = fsYearCols(r);
+    if (y){ yc = y; const nc = r.findIndex(c => /^notes?$/i.test(fsTxt(c))); if (nc >= 0) noteC = nc; return; }
+    if (!yc){ const nc = r.findIndex(c => /^notes?$/i.test(fsTxt(c))); if (nc >= 0) noteC = nc; return; }
+    const lim = noteC >= 0 && noteC < Math.min(yc.cy, yc.py) ? noteC : Math.min(yc.cy, yc.py);
+    let label = ''; for (let j = lim - 1; j >= 0; j--){ const t = fsTxt(r[j]); if (t && fsNum(r[j]) === null){ label = t; break; } }
+    lines.push({label, note: noteC >= 0 ? fsTxt(r[noteC]).replace(/\.$/, '') : '', cy: fsNum(r[yc.cy]), py: fsNum(r[yc.py]), i});
+  });
+  return {year: yc ? yc.year : 0, lines};
+}
+function fsNoteHeads(rows){
+  const out = [];
+  rows.forEach((r, i) => {
+    r = r || [];
+    for (let j = 0; j < Math.min(r.length, 6); j++){
+      const t = fsTxt(r[j]); if (!t) continue;
+      const m = /^(\d{1,2})\.?$/.exec(t); if (!m) break;
+      const n = +m[1]; if (n < 4 || n > 90) break;
+      let k = j + 1; while (k < r.length && !fsTxt(r[k])) k++;
+      const title = fsTxt(r[k]);
+      if (title && /[A-Z]{3}/.test(title) && title === title.toUpperCase() && fsNum(r[k]) === null) out.push({i, num: n, title, col: k});
+      break;
+    }
+  });
+  return out;
+}
+function fsFindSheets(wb){
+  const T = {bs: /STATEMENT OF FINANCIAL POSITION|BALANCE SHEET/, pl: /STATEMENT OF (PROFIT|COMPREHENSIVE INCOME|INCOME)|INCOME STATEMENT|PROFIT AND LOSS ACCOUNT/, eq: /STATEMENT OF CHANGES/, cf: /STATEMENT OF CASH ?FLOW|CASH FLOW STATEMENT/};
+  const info = wb.SheetNames.map(n => { const rows = fsRows(wb, n); const top = rows.slice(0, 12).map(r => (r || []).map(fsTxt).join(' ')).join(' ').toUpperCase(); return {n, rows, top}; });
+  const out = {};
+  Object.entries(T).forEach(([k, re]) => {
+    const cands = info.filter(x => re.test(x.top) && Object.entries(T).filter(([k2, re2]) => k2 !== k && re2.test(x.top)).length === 0);
+    out[k] = cands.find(x => k === 'eq' || fsStatement(x.rows).year) || {};
+  });
+  const best = info.map(x => ({x, count: fsNoteHeads(x.rows).length})).sort((a, b) => b.count - a.count)[0];
+  out.notes = best && best.count >= 2 ? best.x : {};
+  return out;
+}
+function fsNotes(rows){
+  const heads = fsNoteHeads(rows), notes = [];
+  heads.forEach((h, hi) => {
+    const end = hi + 1 < heads.length ? heads[hi + 1].i : rows.length;
+    let yc = null;
+    for (let i = h.i; i >= 0 && !yc; i--) yc = fsYearCols(rows[i]);
+    const body = [];
+    for (let i = h.i + 1; i < end; i++){ const r = rows[i] || [], y = fsYearCols(r); if (y){ yc = y; continue; } body.push({i, r, yc}); }
+    notes.push({num: h.num, title: h.title, col: h.col, head: rows[h.i] || [], body});
+  });
+  return notes;
+}
+function fsNoteLines(note){
+  const lines = [], totals = [];
+  note.body.forEach(({r, yc}) => {
+    if (!yc) return;
+    let cap = ''; for (let j = note.col; j < Math.min(yc.cy, yc.py); j++){ const t = fsTxt(r[j]); if (t && fsNum(r[j]) === null){ cap = t; break; } }
+    const cy = fsNum(r[yc.cy]), py = fsNum(r[yc.py]);
+    if (cy === null && py === null) return;
+    if (!cap || /^(total|balance at the end|balance as at the end|closing balance|net book value|balance at \w+ 3[01])/i.test(cap)){ totals.push({cap, cy: cy || 0, py: py || 0}); return; }
+    lines.push({cap, cy: cy || 0, py: py || 0});
+  });
+  return {lines, total: totals[totals.length - 1] || null};
+}
+function fsNoteKey(title){
+  const t = String(title || '').toUpperCase();
+  if (/FINANCIAL INSTRUMENT|RISK MANAGEMENT|CONTINGEN|COMMITMENT|APPROVAL OF|CORPORATE TAX|INCOME TAX|TAXATION|LEGAL STATUS|BASIS OF|ACCOUNTING POLIC|JUDG(E)?MENT|GOING CONCERN|SUBSEQUENT EVENT|COMPARATIVE FIGURE|RELATED PARTY TRANSACTIONS|FAIR VALUE/.test(t)) return null;
+  if (/PROPERTY,?\s*PLANT|FIXED ASSETS/.test(t)) return 'ppe';
+  if (/INVENTOR|STOCK/.test(t)) return 'inv';
+  if (/RELATED PART/.test(t)) return /PAYABLE|DUE TO/.test(t) ? 'rppay' : 'rprec';
+  if (/DUE FROM/.test(t)) return 'rprec';
+  if (/DUE TO/.test(t)) return 'rppay';
+  if (/RECEIVABLE|PREPAYMENT|DEBTORS/.test(t)) return 'rec';
+  if (/CASH|BANK BALANCE/.test(t)) return 'cash';
+  if (/SHARE CAPITAL|^CAPITAL$/.test(t)) return 'cap';
+  if (/LEGAL RESERVE|STATUTORY RESERVE/.test(t)) return 'lr';
+  if (/RETAINED EARNINGS|ACCUMULATED (PROFIT|LOSS)/.test(t)) return 're';
+  if (/CURRENT ACCOUNT/.test(t)) return 'ca';
+  if (/END OF SERVICE|GRATUITY/.test(t)) return 'eosb';
+  if (/LONG.?TERM (LOAN|BORROW)/.test(t)) return 'ltl';
+  if (/SHORT.?TERM|OVERDRAFT/.test(t)) return 'stb';
+  if (/PAYABLE|CREDITORS|ACCRUAL/.test(t)) return 'pay';
+  if (/COST OF (REVENUE|SALES|GOODS)|DIRECT COST/.test(t)) return 'cor';
+  if (/^REVENUE|^SALES|TURNOVER/.test(t)) return 'rev';
+  if (/GENERAL AND ADMIN|ADMINISTRATIVE/.test(t)) return 'ga';
+  if (/SELLING|DISTRIBUTION|MARKETING/.test(t)) return 'sell';
+  if (/FINANCE COST|INTEREST EXPENSE|BANK CHARGES/.test(t)) return 'fin';
+  if (/GAIN ON|PROFIT ON (SALE|DISPOSAL)/.test(t)) return 'gain';
+  if (/OTHER INCOME/.test(t)) return 'oi';
+  if (/DEPRECIATION/.test(t)) return 'dep';
+  return 'custom';
+}
+function fsPpe(note){
+  const cand = [note.head].concat(note.body.slice(0, 4).map(b => b.r));
+  let hdr = null;
+  for (const r of cand){
+    const tc = (r || []).findIndex((c, j) => j > note.col && /^total$/i.test(fsTxt(c)));
+    if (tc < 0) continue;
+    const cls = []; for (let j = note.col + 1; j < tc; j++){ const t = fsTxt(r[j]); if (t && fsNum(r[j]) === null && !/^aed$/i.test(t)) cls.push({j, name: t}); }
+    if (cls.length){ hdr = {tc, cls}; break; }
+  }
+  if (!hdr) return null;
+  const P = hdr.cls.map(c => ({id: uid(), name: c.name, life: '', costOpen: 0, add: 0, disp: 0, depOpen: 0, charge: 0, depDisp: 0, docs: []}));
+  let sec = 'cost';
+  for (const {r} of note.body){
+    let cap = ''; for (let j = note.col; j < hdr.cls[0].j; j++){ const t = fsTxt(r[j]); if (t && fsNum(r[j]) === null){ cap = t; break; } }
+    const hasNums = hdr.cls.some(c => fsNum(r[c.j]) !== null);
+    if (/depreciation/i.test(cap) && !hasNums){ sec = 'dep'; continue; }
+    if (/net book value|written down value|carrying amount/i.test(cap)) break;
+    if (/useful life/i.test(cap)){ hdr.cls.forEach((c, k) => { P[k].life = fsTxt(r[c.j]); }); continue; }
+    let f = null;
+    if (/closing|at the end|balance as at 3[01]/i.test(cap)) f = null;
+    else if (/opening|beginning|balance as at 0?1|brought forward/i.test(cap)) f = sec === 'cost' ? 'costOpen' : 'depOpen';
+    else if (sec === 'cost' && /addition|purchase/i.test(cap)) f = 'add';
+    else if (sec === 'cost' && /disposal|written off|sold|deletion/i.test(cap)) f = 'disp';
+    else if (sec === 'dep' && /charge|for the year/i.test(cap)) f = 'charge';
+    else if (sec === 'dep' && /disposal|relating|written off|deletion/i.test(cap)) f = 'depDisp';
+    if (!f) continue;
+    hdr.cls.forEach((c, k) => { const v = fsNum(r[c.j]); if (v !== null) P[k][f] = Math.abs(Math.round(v)); });
+  }
+  return P;
+}
+function fsCashFlow(cf){
+  const maps = {cy: {}, py: {}}; let sec = 'op';
+  cf.lines.forEach(l => {
+    const t = l.label.toLowerCase();
+    if (l.cy === null && l.py === null){ if (/operating/.test(t)) sec = 'op'; else if (/investing/.test(t)) sec = 'inv'; else if (/financing/.test(t)) sec = 'fin'; return; }
+    if (!t) return;
+    let k;
+    if (/net cash|operating profit before|before (changes in )?working capital|in cash and cash|\(a ?\+ ?b|represented by|end of the year|net (increase|decrease)/.test(t)) k = null;
+    else if (/beginning of the year|opening (cash|balance)|at (the )?beginning/.test(t)) k = 'open';
+    else if (/depreciation/.test(t)) k = 'dep';
+    else if (/gain|loss on (sale|disposal)/.test(t)) k = 'gain';
+    else if (/profit|loss\)? for the year|net income/.test(t)) k = 'pat';
+    else if (/end of service|gratuity/.test(t)) k = 'eosb';
+    else if (/inventor|stock/.test(t)) k = 'inv';
+    else if (/related part/.test(t)) k = /payable|due to/.test(t) ? 'rppay' : 'rprec';
+    else if (/receivable|prepayment|debtor|deposit/.test(t)) k = 'rec';
+    else if (/payable|accrual|creditor/.test(t)) k = 'pay';
+    else if (/addition|purchase of (property|fixed|plant)/.test(t)) k = 'additions';
+    else if (/proceeds|disposal/.test(t)) k = 'proceeds';
+    else if (/loan|borrowing|overdraft/.test(t)) k = 'loans';
+    else if (/current account/.test(t)) k = 'ca';
+    else if (/dividend|drawing/.test(t)) k = 'div';
+    else k = sec === 'op' ? 'otherOp' : sec === 'inv' ? 'otherInv' : 'otherFin';
+    if (!k) return;
+    if (l.cy !== null) maps.cy[k] = R(maps.cy[k]) + R(l.cy);
+    if (l.py !== null) maps.py[k] = R(maps.py[k]) + R(l.py);
+  });
+  return maps;
+}
+function fsImportWorkbook(wb){
+  const saved = savedStatementsFromWorkbook(wb);
+  if (saved){
+    const x = savedStatementsList(saved)[0]; if (!x) throw new Error('No saved statements in this file');
+    const e = JSON.parse(JSON.stringify(x.eng)); ensureSchedules(e); migrateLines(e); layoutOf(e); fxUnlinkYears(null, e); delete e.gsheet;
+    const r = compute(e, null), cfCy = {}; CFPY_KEYS.forEach(k => { cfCy[k] = R(r.cf[k]); });
+    return {eng: e, name: x.clientName, profile: x.profile, checks: [{ok: true, text: 'Saved from Fair Tax Audit Desk – exact figures, wording and layout'}], report: schedulesInOrder(e).filter(s => e.tb.some(l => l.fs === s.key) || (s.key === 'ppe' && e.ppe.length)).map((s, i) => ({num: '', title: s.label, key: s.key, lines: e.tb.filter(l => l.fs === s.key).length})), cfCy};
+  }
+  const S = fsFindSheets(wb);
+  if (!S.bs.rows) throw new Error('No “Statement of financial position” sheet found. Use the Fair Tax financial statements workbook (Bs, P&L, Equity, Cf and notes sheets).');
+  const bs = fsStatement(S.bs.rows), pl = S.pl.rows ? fsStatement(S.pl.rows) : {lines: [], year: 0}, cfs = S.cf.rows ? fsStatement(S.cf.rows) : {lines: [], year: 0};
+  const year = bs.year || pl.year;
+  if (!year) throw new Error('The year columns (e.g. 2025 and 2024) were not found on the statement of financial position.');
+  const en = newEngagement(year, 'Audit'); en.tb = [];
+  const name = (S.bs.rows.slice(0, 4).flat().map(fsTxt).find(t => t && /[A-Za-z]{3}/.test(t) && !/statement|as at|dirham|note/i.test(t)) || '');
+  const city = (S.bs.rows.slice(1, 5).flat().map(fsTxt).find(t => /u\.?a\.?e|emirates/i.test(t)) || '');
+  let sec = ''; const bsL = [];
+  bs.lines.forEach(l => {
+    if (l.cy === null && l.py === null){
+      const t = l.label.toLowerCase();
+      if (/non.?current assets/.test(t)) sec = 'nca'; else if (/current assets/.test(t)) sec = 'ca';
+      else if (/non.?current liabilit/.test(t)) sec = 'ncl'; else if (/current liabilit/.test(t)) sec = 'cl';
+      else if (/equity/.test(t) && !/liabilit/.test(t)) sec = 'eq';
+      return;
+    }
+    if (l.label && !/^total|^net assets/i.test(l.label)) bsL.push(Object.assign({sec}, l));
+  });
+  const stByNote = n => bsL.find(l => l.note === String(n)) || pl.lines.find(l => l.note === String(n) && (l.cy !== null || l.py !== null));
+  const bsByLabel = re => bsL.find(l => re.test(l.label));
+  const cfMaps = fsCashFlow(cfs);
+  const notes = S.notes.rows ? fsNotes(S.notes.rows) : [];
+  const addLine = (fs, ledger, cy, py) => { if (!R(cy) && !R(py)) return; en.tb.push({id: uid(), ledger: String(ledger || '').trim(), fs, caption: '', amt: R(cy), py: R(py), docs: []}); };
+  const report = [], order = [], warns = [];
+  let lrTrCy = 0, lrTrPy = 0, taxCy = null, taxPy = null;
+  notes.forEach(note => {
+    let key = fsNoteKey(note.title);
+    const rep = {num: note.num, title: note.title, key, lines: 0};
+    report.push(rep);
+    if (key === null) return;
+    const {lines, total} = fsNoteLines(note);
+    if (key === 'custom'){
+      const st = stByNote(note.num);
+      if (!st && !lines.length){ rep.key = null; return; }
+      const secC = st && st.sec ? st.sec : st ? (/cost of|direct/i.test(st.label) ? 'dc' : ((st.cy || 0) < 0 || (st.py || 0) < 0 ? 'exp' : 'inc')) : 'exp';
+      const s = {key: 'x' + uid(), label: fsTitleCase(note.title), note: note.title, sec: secC, custom: true, folder: '09 Other', showNote: true};
+      en.schedules.push(s); key = rep.key = s.key; rep.custom = true;
+    }
+    if (!order.includes(key === 'dep' ? 'ppe' : key)) order.push(key === 'dep' ? 'ppe' : key);
+    const close = (st, fb) => st ? {cy: st.cy || 0, py: st.py || 0} : fb ? {cy: fb.cy, py: fb.py} : {cy: 0, py: 0};
+    switch (key){
+      case 'ppe': { const P = fsPpe(note); if (P && P.length){ en.ppe = P; rep.lines = P.length; rep.ppe = true; } else lines.forEach(l => addLine('ppe', l.cap, l.cy, l.py)); break; }
+      case 'cap': { const c2 = close(stByNote(note.num) || bsByLabel(/share capital/i), total); addLine('cap', 'Share capital', c2.cy, c2.py); break; }
+      case 'lr': {
+        const tr = lines.find(l => /transfer/i.test(l.cap)); if (tr){ lrTrCy = Math.abs(tr.cy); lrTrPy = Math.abs(tr.py); }
+        const c2 = close(stByNote(note.num) || bsByLabel(/legal reserve|statutory reserve/i), total || lines[lines.length - 1]);
+        addLine('lr', 'Legal reserve', R(c2.cy) - lrTrCy, c2.py); break; }
+      case 're': {
+        const open = lines.find(l => /beginning|opening|brought forward|b\/f/i.test(l.cap));
+        lines.filter(l => /dividend|drawing/i.test(l.cap)).forEach(l => addLine('div', fsTitleCase(l.cap), -l.cy, -l.py));
+        const tr = lines.find(l => /transfer/i.test(l.cap)); if (tr && !lrTrCy && !lrTrPy){ lrTrCy = Math.abs(tr.cy); lrTrPy = Math.abs(tr.py); }
+        const c2 = close(stByNote(note.num) || bsByLabel(/retained|accumulated (profit|loss)/i), total);
+        addLine('re', 'Retained earnings', open ? open.cy : c2.py, c2.py); break; }
+      case 'ca': {
+        const open = lines.find(l => /beginning|opening/i.test(l.cap)); if (open) en.pyInfo.caOpen = R(open.py);
+        const c2 = close(stByNote(note.num) || bsByLabel(/current account/i), total);
+        addLine('ca', 'Shareholder’s current account', c2.cy, c2.py); break; }
+      case 'pay':
+        lines.forEach(l => { if (/provision for (corporate )?tax|corporate tax|income tax|tax payable|provision for taxation/i.test(l.cap) && !/vat|value added/i.test(l.cap)){ taxCy = (taxCy || 0) + l.cy; taxPy = (taxPy || 0) + l.py; } else addLine('pay', l.cap, l.cy, l.py); });
+        break;
+      default: lines.forEach(l => addLine(key, l.cap, l.cy, l.py));
+    }
+    if (!rep.ppe) rep.lines = en.tb.filter(l => l.fs === key).length;
+  });
+  // statement lines without a readable note (e.g. a note on another sheet)
+  bsL.concat(pl.lines.filter(l => l.label && (l.cy !== null || l.py !== null) && !/profit|loss|total|gross|comprehensive|tax/i.test(l.label))).forEach(l => {
+    const k = fsNoteKey(l.label); if (!k || k === 'custom' || k === 'dep') return;
+    if (en.tb.some(x => x.fs === k) || (k === 'ppe' && en.ppe.length)) return;
+    const sign = ['cor', 'ga', 'sell', 'fin'].includes(k) ? -1 : 1;
+    if (k === 're'){ addLine('re', 'Retained earnings', l.py, l.py); warns.push('Retained earnings taken from the statement – check the opening balance'); }
+    else addLine(k, fsTitleCase(l.label), sign * (l.cy || 0), sign * (l.py || 0));
+    report.push({num: l.note || '', title: l.label + ' (statement line)', key: k, lines: 1});
+    if (!order.includes(k)) order.push(k);
+  });
+  const taxL = pl.lines.find(l => /tax/i.test(l.label) && !/before|after|profit|net of|value added/i.test(l.label) && (l.cy !== null || l.py !== null));
+  if (taxL){ taxCy = Math.abs(taxL.cy || 0); taxPy = Math.abs(taxL.py || 0); }
+  if (taxCy !== null){ en.settings.ctMode = 'manual'; en.settings.ctAmount = R(Math.abs(taxCy)); }
+  if (taxPy !== null){ en.pyInfo.ctMode = 'manual'; en.pyInfo.ctAmount = R(Math.abs(taxPy)); }
+  en.settings.lrTransfer = R(lrTrCy); en.pyInfo.lrTransfer = R(lrTrPy);
+  if (en.ppe.length){
+    const depPl = pl.lines.find(l => /depreciation/i.test(l.label)), gainPl = pl.lines.find(l => /gain on|profit on (sale|disposal)/i.test(l.label));
+    en.ppePy = {add: Math.abs(R(cfMaps.py.additions)), charge: Math.abs(R(depPl && depPl.py !== null ? depPl.py : cfMaps.py.dep)), disp: Math.max(0, R(cfMaps.py.proceeds) - R(gainPl ? gainPl.py : 0))};
+    en.settings.disposalProceeds = R(cfMaps.cy.proceeds);
+  } else if (cfMaps.cy.additions) en.settings.ppeAdditions = Math.abs(R(cfMaps.cy.additions));
+  if (!en.ppe.length && !en.tb.some(l => l.fs === 'dep')){
+    const depPl = pl.lines.find(l => /depreciation/i.test(l.label)); if (depPl) addLine('dep', 'Depreciation', Math.abs(depPl.cy || 0), Math.abs(depPl.py || 0));
+  }
+  en.cfPy = Object.assign({}, cfMaps.py);
+  layoutOf(en).noteOrder = order;
+  ensureSchedules(en);
+  // compare with the totals printed in the file
+  const r = compute(en, null), checks = [];
+  const tol = (a, b) => Math.abs(R(a) - R(b)) <= 5;
+  const chk = (label, fileV, appV, yr) => { if (fileV === null || fileV === undefined) return; const ok = tol(fileV, appV); checks.push({ok, text: ok ? `${label} ${yr}: ${fmtN(appV)} – agrees with the file` : `${label} ${yr}: file ${fmtN(fileV)}, software ${fmtN(appV)} – difference ${fmtN(R(appV) - R(fileV))}`}); };
+  const ta = bs.lines.find(l => /^total assets/i.test(l.label)), pat = pl.lines.find(l => /profit after tax|profit for the year|total comprehensive income/i.test(l.label) && l.cy !== null);
+  if (ta){ chk('Total assets', ta.cy, r.cy.ta, year); chk('Total assets', ta.py, r.py.ta, year - 1); }
+  const tel = bs.lines.find(l => /^total equity and liabilities|^total liabilities and equity/i.test(l.label)); if (tel){ chk('Total equity and liabilities', tel.cy, r.cy.tel, year); }
+  if (pat){ chk('Profit after tax', pat.cy, r.cy.pat, year); chk('Profit after tax', pat.py, r.py.pat, year - 1); }
+  checks.push({ok: r.cf.diff === 0, text: r.cf.diff === 0 ? `Cash flow ${year} reconciles` : `Cash flow ${year} differs by ${fmtN(r.cf.diff)} – check after import`});
+  if (cfs.lines.length) checks.push({ok: r.cfp.diff === 0, text: r.cfp.diff === 0 ? `Prior year cash flow ${year - 1} taken from the file and reconciles` : `Prior year cash flow ${year - 1} differs by ${fmtN(r.cfp.diff)}`});
+  warns.forEach(w => checks.push({ok: false, text: w}));
+  return {eng: en, name, city, report, checks, cfCy: cfMaps.cy};
+}
+async function readFsWorkbookFile(file){
+  if (!window.XLSX) throw new Error('The Excel reader did not load – check the internet connection');
+  const wb = XLSX.read(await file.arrayBuffer());
+  return fsImportWorkbook(wb);
+}
+function fsCtx(I){
+  if (!I.newOnly) return {c: client(), en: eng()};
+  const c = DB.clients.find(k => k.name.trim().toLowerCase() === String(I.res.name || '').trim().toLowerCase()) || null;
+  return {c, en: c ? fxEngOf(c, I.res.eng.year + 1) : null};
+}
+function fsImportModal(){
+  const I = UI.fsImp; if (!I) return;
+  const res = I.res, {c, en} = fsCtx(I), Y = res.eng.year;
+  const checks = res.checks.map(k => `<li class="ck ${k.ok ? 'ok' : 'warn'}"><span class="dot"></span>${e_(k.text)}</li>`).join('');
+  const rows = res.report.map(n => `<tr><td>${e_(n.num)}</td><td>${e_(n.title)}</td><td>${n.key === null ? '<span class="muted">wording note – uses the software’s text</span>' : n.custom ? `<span class="chip accent">new schedule</span>` : e_(schedLabel(res.eng, n.key))}</td><td class="r">${n.ppe ? n.lines + ' asset classes' : n.lines || ''}</td></tr>`).join('');
+  const existsY = c && fxEngOf(c, Y), canPy = !!(c && en && en.year === Y + 1), next = c && fxEngOf(c, Y + 1);
+  const def = I.targetYear && I.targetYear !== Y ? '' : I.forceMode === 'year' ? 'year' : canPy ? 'py' : c ? 'year' : 'client';
+  modal(`<h2>Import financial statements</h2><p class="sub">${e_(I.fileName)} · ${e_(res.name || 'company')} · FY${Y} with FY${Y - 1} comparatives</p>
+    ${I.targetYear && I.targetYear !== Y ? `<div class="banner bad">You chose FY${I.targetYear}, but this file is the FY${Y} financial statements (with FY${Y - 1} comparatives). Choose below what to do with it – or cancel and pick the FY${I.targetYear} file.</div>` : ''}
+    <ul class="checks">${checks}</ul>
+    <div class="table-wrap fsi-table"><table class="ui compact"><thead><tr><th>Note</th><th>In the file</th><th>Goes to</th><th class="r">Lines</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="box"><h3 class="h3">What should happen?</h3>
+      ${c ? `<label class="radio-row"><input type="radio" name="fsi-mode" value="year" ${def === 'year' ? 'checked' : ''}><span><b>${existsY ? 'Replace' : 'Add'} FY${Y} for ${e_(c.name)}</b> – FY${Y} figures with FY${Y - 1} comparatives, PPE, tax, reserve and prior year cash flow${existsY ? ` <span class="chip warn">replaces the FY${Y} figures in the software</span>` : ''}</span></label>` : ''}
+      ${c && en ? `<label class="radio-row${canPy ? '' : ' off'}"><input type="radio" name="fsi-mode" value="py" ${def === 'py' ? 'checked' : ''} ${canPy ? '' : 'disabled'}><span><b>Use as the prior year of FY${en.year}</b> – fills the FY${en.year - 1} column, PPE opening balances, tax, reserve and the FY${en.year - 1} cash flow${canPy ? '' : ` <span class="muted">(open FY${Y + 1} for this)</span>`}</span></label>` : ''}
+      <label class="radio-row"><input type="radio" name="fsi-mode" value="client" ${def === 'client' ? 'checked' : ''}><span><b>New client “${e_(res.name || 'Imported company')}”</b> starting with FY${Y}</span></label>
+      ${next && !canPy ? `<label class="check-lbl"><input type="checkbox" id="fsi-link" checked> Link FY${Y + 1}’s prior year column to the imported FY${Y} (live)</label>` : ''}
+    </div>
+    <div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-act="fsi-do">Import</button></div>`, true);
+}
+function fsImportDo(){
+  const I = UI.fsImp; if (!I) return;
+  const res = I.res, mode = (document.querySelector('input[name=fsi-mode]:checked') || {}).value;
+  if (!mode){ toast('Choose what should happen with the file', true); return; }
+  let {c, en} = fsCtx(I);
+  const imp = JSON.parse(JSON.stringify(res.eng)); imp.id = uid();
+  let msg = '';
+  if (mode === 'client' || !c){
+    c = {id: uid(), name: res.name || 'Imported company', drive: {}, engagements: [imp], profile: Object.assign({emirate: '', cityLine: res.city || '', yearEndText: 'December 31', shareholders: [{name: '', nationality: '', country: '', shares: 0, value: 0}], partnerTitle: 'Managing Partner', signatory: 'Authorised Signatory', statementSignatory: '(Managing Director)'}, res.profile || {})};
+    DB.clients.unshift(c); UI.clientId = c.id; UI.engId = imp.id; msg = `${c.name} created with FY${imp.year}`;
+  } else if (mode === 'py'){
+    fxClearPyLinks(en); UI.clientId = c.id; UI.engId = en.id;
+    const out = retrieveFromSaved(en, imp, {figures: true, clear: true});
+    en.cfPy = Object.assign({}, res.cfCy || {});
+    msg = `FY${en.year - 1} filled from the file: ${out.matched} lines updated, ${out.added} added${out.ppe ? `, ${out.ppe} PPE classes` : ''}`;
+  } else {
+    const old = fxEngOf(c, imp.year);
+    const nearest = old || c.engagements.slice().sort((a, b) => Math.abs(a.year - imp.year) - Math.abs(b.year - imp.year))[0];
+    if (nearest){
+      imp.type = nearest.type; imp.texts = JSON.parse(JSON.stringify(nearest.texts)); imp.customNotes = JSON.parse(JSON.stringify(nearest.customNotes || []));
+      const L = JSON.parse(JSON.stringify(layoutOf(nearest))); L.noteOrder = (imp.layout || {}).noteOrder || L.noteOrder; imp.layout = L;
+      if (old){ imp.gsheet = old.gsheet; imp.reports = old.reports; imp.tbDocs = old.tbDocs; }
+    }
+    if (old){ c.engagements[c.engagements.indexOf(old)] = imp; }
+    else c.engagements.push(imp);
+    c.engagements.sort((a, b) => a.year - b.year);
+    const next = fxEngOf(c, imp.year + 1), link = document.getElementById('fsi-link');
+    if (next && link && link.checked){ freezeCfPy(c, next); fxUnlinkYears(c, next); fxLinkToPrev(c, next); }
+    UI.clientId = c.id; UI.engId = imp.id; msg = `FY${imp.year} ${old ? 'replaced' : 'added'} from the file`;
+  }
+  fxRecalc(c); UI.fsImp = null; UI.view = 'tb'; UI.tbMode = 'sched'; save(); closeModal(); render(); toast(msg);
+}
+
+/* ============================================================
+   GOOGLE SHEET – each financial year can have its own Google Sheet; Sync sends changes both ways
+   (Google Sheets API with the same Google sign-in as Drive)
+   ============================================================ */
+const GS_TABS = {sched: 'Schedules', ppe: 'PPE', cf: 'Prior year cash flow', st: 'Statements'};
+const gsQ = t => `'${t.replace(/'/g, "''")}'`;
+const colL = n => { let s = ''; n++; while (n){ const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+const colN = s => s.toUpperCase().split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+const GS = {
+  base: id => 'https://sheets.googleapis.com/v4/spreadsheets/' + id,
+  async api(url, opts = {}){
+    await Drive.ensure();
+    const r = await fetch(url, Object.assign({}, opts, {headers: Object.assign({Authorization: 'Bearer ' + Drive.token, 'Content-Type': 'application/json'}, opts.headers || {})}));
+    if (r.status === 401){ Drive.token = null; await Drive.ensure(); return GS.api(url, opts); }
+    const text = await r.text(); let data = {}; try { data = text ? JSON.parse(text) : {}; } catch (e) {}
+    if (!r.ok){
+      if (/has not been used|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(text)) throw Object.assign(new Error('The Google Sheets API is not switched on yet for the Fair Tax Google project.'), {gsDisabled: true});
+      if (r.status === 404) throw Object.assign(new Error('The Google Sheet was not found – it may have been deleted or moved to the bin.'), {gsMissing: true});
+      throw Object.assign(new Error('Google Sheets: ' + r.status + ' ' + ((data.error && data.error.message) || text.slice(0, 160))), {status: r.status});
+    }
+    return data;
+  }
+};
+const gsText = v => { const s = String(v == null ? '' : v); return /^[=+\-@]/.test(s) ? "'" + s : s; };
+const gsRep = (en, key) => { const f = en.fx && en.fx[key]; return f ? {f} : {v: fxGet(en, key)}; };
+const gsSame = (a, b) => !!a && !!b && ((a.f || b.f) ? a.f === b.f : R(a.v) === R(b.v));
+function gsFormula(c, en, stored, cellOf){
+  const memo = new Map(); let mapped = 0;
+  const conv = n => {
+    if (n.n !== undefined) return String(n.n);
+    if (n.r){ const cell = cellOf[n.r]; if (cell) mapped++; return cell || String(R(fxRefValue(c, fxTok(n.r), memo))); }
+    if (n.neg) return '-(' + conv(n.neg) + ')';
+    if (n.op) return '(' + conv(n.a) + n.op + conv(n.b) + ')';
+    return n.fn + '(' + n.args.map(conv).join(',') + ')';
+  };
+  try { const out = '=' + conv(fxParse(stored)); return mapped ? out : null; } catch (e) { return null; }
+}
+function gsCfRows(en){
+  const custom = schedulesInOrder(en).filter(s => s.custom && ['ca', 'cl', 'nca', 'ncl', 'eq'].includes(s.sec)).map(s => [s.key, 'Movement in ' + s.label.toLowerCase()]);
+  return FX_CF.filter(([k]) => CFPY_KEYS.includes(k)).concat(custom);
+}
+/* the sheet contents from the software, plus what was written (to spot later changes in the sheet) */
+function gsLayout(c, en){
+  const Y = en.year, r = compute(en, prevOf(c, en)), cellOf = {}, base = {lines: {}, ppe: {}, cf: {}};
+  const QS = gsQ(GS_TABS.sched), QP = gsQ(GS_TABS.ppe), QC = gsQ(GS_TABS.cf);
+  const sched = [[`${c.name} · FY${Y} schedules – synced with Fair Tax Audit Desk`], ['Change amounts, wording or formulas, or insert rows inside a schedule, then press “Sync with Google Sheet” in the software. Leave the hidden column A as it is.'], ['ID', 'Ledger', 'Wording in notes', `FY${Y}`, `FY${Y - 1}`]];
+  const plan = [];
+  schedulesInOrder(en).forEach(s => {
+    const lines = en.tb.filter(l => l.fs === s.key);
+    if (!lines.length) return;
+    sched.push(['#S:' + s.key, s.label.toUpperCase(), '', '', '']);
+    const first = sched.length + 1;
+    lines.forEach(l => { const row = sched.length + 1; cellOf[`{${Y}:L:${l.id}:amt}`] = `${QS}!D${row}`; cellOf[`{${Y}:L:${l.id}:py}`] = `${QS}!E${row}`; plan.push({l, idx: sched.length}); sched.push(null); });
+    const last = sched.length, tr = sched.length + 1;
+    if (!(s.key === 'ppe' && en.ppe.length) && !(s.key === 'dep' && en.ppe.length)){ cellOf[`{${Y}:S:${s.key}:cy}`] = `${QS}!D${tr}`; cellOf[`{${Y}:S:${s.key}:py}`] = `${QS}!E${tr}`; }
+    sched.push(['#T:' + s.key, 'Total ' + s.label.toLowerCase(), '', `=SUM(D${first}:D${last})`, `=SUM(E${first}:E${last})`], ['', '', '', '', '']);
+  });
+  const PPE_COLS = {costOpen: 'D', add: 'E', disp: 'F', costClose: 'G', depOpen: 'H', charge: 'I', depDisp: 'J', depClose: 'K', nbv: 'L'};
+  const ppe = [[`${c.name} · FY${Y} property, plant and equipment – synced with Fair Tax Audit Desk`], ['ID', 'Asset class', 'Useful life (years)', 'Cost opening', 'Additions', 'Disposals', 'Cost closing', 'Depreciation opening', 'Charge for the year', 'Depreciation on disposals', 'Depreciation closing', 'Net book value']];
+  const pplan = [];
+  en.ppe.forEach(p => { const row = ppe.length + 1; Object.entries(PPE_COLS).forEach(([f, col]) => { cellOf[`{${Y}:P:${p.id}:${f}}`] = `${QP}!${col}${row}`; }); pplan.push({p, idx: ppe.length, row}); ppe.push(null); });
+  if (en.ppe.length){ const a = 3, b = ppe.length, row = ppe.length + 1; Object.entries(PPE_COLS).forEach(([f, col]) => { cellOf[`{${Y}:P:*:${f}}`] = `${QP}!${col}${row}`; }); ppe.push(['#T:ppe', 'Total', ''].concat(Object.values(PPE_COLS).map(col => `=SUM(${col}${a}:${col}${b})`))); }
+  const cfRows = gsCfRows(en);
+  const cf = [[`${c.name} · FY${Y - 1} cash flow (comparative) – type a figure to change it; synced with Fair Tax Audit Desk`], ['Key', 'Line', `FY${Y - 1}`, 'Source']];
+  cfRows.forEach(([k]) => { cellOf[`{${Y}:F:${k}:py}`] = `${QC}!C${cf.length + 1 + cfRows.findIndex(x => x[0] === k)}`; });
+  cfRows.forEach(([k, label]) => {
+    const key = 'CFP:' + k, f = en.fx && en.fx[key], v = CFPY_KEYS.includes(k) ? R(r.cfp[k]) : R((r.cfp.custom || {})[k]);
+    const typed = (en.cfPy || {})[k] !== undefined;
+    const out = f ? gsFormula(c, en, f, cellOf) : null;
+    cf.push([k, label, out || v, typed ? 'typed' : 'automatic']);
+    base.cf[k] = {wv: v, wf: !!out, app: typed ? gsRep(en, key) : {auto: true}};
+  });
+  plan.forEach(({l, idx}) => {
+    const cell = f => { const key = `L:${l.id}:${f}`, st = en.fx && en.fx[key], out = st ? gsFormula(c, en, st, cellOf) : null; return {out: out || R(l[f]), wf: !!out, app: gsRep(en, key)}; };
+    const a = cell('amt'), p = cell('py');
+    sched[idx] = ['L:' + l.id, gsText(l.ledger || ''), gsText(l.caption || ''), a.out, p.out];
+    base.lines[l.id] = {amt: {wv: R(l.amt), wf: a.wf, app: a.app}, py: {wv: R(l.py), wf: p.wf, app: p.app}, ledger: l.ledger || '', caption: l.caption || ''};
+  });
+  pplan.forEach(({p, idx, row}) => {
+    const b = base.ppe[p.id] = {name: p.name || '', life: String(p.life || '')};
+    const vals = ['costOpen', 'add', 'disp'].map(f => { const key = `P:${p.id}:${f}`, st = en.fx && en.fx[key], out = st ? gsFormula(c, en, st, cellOf) : null; b[f] = {wv: R(p[f]), wf: !!out, app: gsRep(en, key)}; return out || R(p[f]); });
+    const vals2 = ['depOpen', 'charge', 'depDisp'].map(f => { const key = `P:${p.id}:${f}`, st = en.fx && en.fx[key], out = st ? gsFormula(c, en, st, cellOf) : null; b[f] = {wv: R(p[f]), wf: !!out, app: gsRep(en, key)}; return out || R(p[f]); });
+    ppe[idx] = ['P:' + p.id, gsText(p.name || ''), gsText(p.life || '')].concat(vals, [`=D${row}+E${row}-F${row}`], vals2, [`=H${row}+I${row}-J${row}`, `=G${row}-K${row}`]);
+  });
+  const M = buildReport(c, en, prevOf(c, en));
+  const st = [[`${c.name} · FY${Y} statements (read only – rebuilt on every sync)`]];
+  ['sofp', 'soci', 'socf'].forEach(id => {
+    const s = M.allSections.find(x => x.id === id); if (!s) return;
+    st.push([''], [s.head.title, '', `FY${Y}`, `FY${Y - 1}`]);
+    const fs = s.items.find(it => it.k === 'fs');
+    (fs ? fs.rows : []).forEach(row => { if (row.style === 'gap') st.push(['']); else st.push([gsText(row.label || ''), row.note || '', row.cy === undefined ? '' : R(row.cy), row.py === undefined ? '' : R(row.py)]); });
+  });
+  return {sched, ppe, cf, st, base};
+}
+async function gsEnsureTabs(id){
+  const meta = await GS.api(`${GS.base(id)}?fields=sheets.properties`);
+  const have = (meta.sheets || []).map(s => s.properties.title);
+  const add = Object.values(GS_TABS).filter(t => !have.includes(t)).map(title => ({addSheet: {properties: {title}}}));
+  if (add.length) await GS.api(`${GS.base(id)}:batchUpdate`, {method: 'POST', body: JSON.stringify({requests: add})});
+  return add.length;
+}
+async function gsWrite(c, en){
+  const G = en.gsheet, L = gsLayout(c, en);
+  await GS.api(`${GS.base(G.id)}/values:batchClear`, {method: 'POST', body: JSON.stringify({ranges: [GS_TABS.sched, GS_TABS.ppe, GS_TABS.cf, GS_TABS.st].map(t => gsQ(t) + '!A1:Z6000')})});
+  await GS.api(`${GS.base(G.id)}/values:batchUpdate`, {method: 'POST', body: JSON.stringify({valueInputOption: 'USER_ENTERED', data: [
+    {range: gsQ(GS_TABS.sched) + '!A1', values: L.sched}, {range: gsQ(GS_TABS.ppe) + '!A1', values: L.ppe}, {range: gsQ(GS_TABS.cf) + '!A1', values: L.cf}, {range: gsQ(GS_TABS.st) + '!A1', values: L.st}]})});
+  G.base = L.base; G.syncedAt = new Date().toISOString();
+}
+async function gsCreate(c, en){
+  const tabs = [GS_TABS.sched, GS_TABS.ppe, GS_TABS.cf, GS_TABS.st];
+  const s = await GS.api('https://sheets.googleapis.com/v4/spreadsheets', {method: 'POST', body: JSON.stringify({properties: {title: `${c.name} – FY${en.year} financial statements (Fair Tax)`}, sheets: tabs.map((title, i) => ({properties: {sheetId: i + 1, title, gridProperties: {frozenRowCount: i === 0 ? 3 : 2}}}))})});
+  en.gsheet = {id: s.spreadsheetId, url: s.spreadsheetUrl, createdAt: new Date().toISOString()};
+  const numFmt = (sheetId, a, b) => ({repeatCell: {range: {sheetId, startRowIndex: 2, startColumnIndex: a, endColumnIndex: b}, cell: {userEnteredFormat: {numberFormat: {type: 'NUMBER', pattern: '#,##0;(#,##0);"-"'}}}, fields: 'userEnteredFormat.numberFormat'}});
+  const hideA = sheetId => ({updateDimensionProperties: {range: {sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1}, properties: {hiddenByUser: true}, fields: 'hiddenByUser'}});
+  const width = (sheetId, a, b, px) => ({updateDimensionProperties: {range: {sheetId, dimension: 'COLUMNS', startIndex: a, endIndex: b}, properties: {pixelSize: px}, fields: 'pixelSize'}});
+  await GS.api(`${GS.base(s.spreadsheetId)}:batchUpdate`, {method: 'POST', body: JSON.stringify({requests: [hideA(1), hideA(2), hideA(3), width(1, 1, 3, 280), width(1, 3, 5, 130), width(2, 1, 2, 200), width(3, 1, 2, 380), width(4, 0, 1, 420),
+    numFmt(1, 3, 5), numFmt(2, 3, 12), numFmt(3, 2, 3), numFmt(4, 2, 4),
+    {repeatCell: {range: {sheetId: 1, startRowIndex: 0, endRowIndex: 1}, cell: {userEnteredFormat: {textFormat: {bold: true, fontSize: 12}}}, fields: 'userEnteredFormat.textFormat'}},
+    {repeatCell: {range: {sheetId: 1, startRowIndex: 2, endRowIndex: 3}, cell: {userEnteredFormat: {textFormat: {bold: true}, backgroundColor: {red: 0.93, green: 0.94, blue: 0.96}}}, fields: 'userEnteredFormat(textFormat,backgroundColor)'}}]})});
+  try {
+    const fy = (c.drive && c.drive['FY' + en.year] && c.drive['FY' + en.year].id) || (await Drive.clientFolders(c, en.year)).id;
+    await Drive.api(`https://www.googleapis.com/drive/v3/files/${s.spreadsheetId}?addParents=${fy}&removeParents=root&fields=id`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: '{}'});
+  } catch (e) { console.warn('Could not move the sheet into the client folder', e); }
+  await gsWrite(c, en);
+}
+async function gsRead(id){
+  const ranges = [GS_TABS.sched + '!A1:E6000', GS_TABS.ppe + '!A1:L500', GS_TABS.cf + '!A1:D300'].map(t => { const [n, rg] = t.split('!'); return gsQ(n) + '!' + rg; });
+  const qs = ranges.map(x => 'ranges=' + encodeURIComponent(x)).join('&');
+  const [F, V] = await Promise.all([GS.api(`${GS.base(id)}/values:batchGet?${qs}&valueRenderOption=FORMULA`), GS.api(`${GS.base(id)}/values:batchGet?${qs}&valueRenderOption=UNFORMATTED_VALUE`)]);
+  return {f: (F.valueRanges || []).map(v => v.values || []), v: (V.valueRanges || []).map(v => v.values || [])};
+}
+/* what the sheet now says, keyed to the software's lines */
+function gsParse(en, data){
+  const Y = en.year, cellRef = {}, SU = GS_TABS.sched.toUpperCase(), PU = GS_TABS.ppe.toUpperCase(), CU = GS_TABS.cf.toUpperCase();
+  const out = {lines: [], news: [], ppe: [], ppeNew: [], cf: [], cellRef};
+  const [S, P, C] = data.f, [SV, PV, CV] = data.v;
+  let cur = null;
+  for (let i = 3; i < S.length; i++){
+    const row = S[i] || [], vals = SV[i] || [], a = String(row[0] || ''), rn = i + 1;
+    if (a.startsWith('#S:')){ cur = a.slice(3); continue; }
+    if (a.startsWith('#T:')){ const k = a.slice(3); if (!(k === 'ppe' && en.ppe.length)){ cellRef[`${SU}!D${rn}`] = `{${Y}:S:${k}:cy}`; cellRef[`${SU}!E${rn}`] = `{${Y}:S:${k}:py}`; } cur = null; continue; }
+    const has = [1, 2, 3, 4].some(j => String(row[j] == null ? '' : row[j]).trim() !== '');
+    if (a.startsWith('L:') || (!a && cur && has)){
+      const id = a.startsWith('L:') ? a.slice(2) : uid();
+      (a ? out.lines : out.news).push({id, sched: cur, row, vals});
+      cellRef[`${SU}!D${rn}`] = `{${Y}:L:${id}:amt}`; cellRef[`${SU}!E${rn}`] = `{${Y}:L:${id}:py}`;
+    }
+  }
+  const PPE_COLS = {costOpen: 'D', add: 'E', disp: 'F', costClose: 'G', depOpen: 'H', charge: 'I', depDisp: 'J', depClose: 'K', nbv: 'L'};
+  for (let i = 2; i < (P || []).length; i++){
+    const row = P[i] || [], vals = (PV || [])[i] || [], a = String(row[0] || ''), rn = i + 1;
+    if (a === '#T:ppe'){ Object.entries(PPE_COLS).forEach(([f, col]) => { cellRef[`${PU}!${col}${rn}`] = `{${Y}:P:*:${f}}`; }); continue; }
+    if (!a.startsWith('P:') && !(String(row[1] || '').trim())) continue;
+    const id = a.startsWith('P:') ? a.slice(2) : uid();
+    (a.startsWith('P:') ? out.ppe : out.ppeNew).push({id, row, vals});
+    Object.entries(PPE_COLS).forEach(([f, col]) => { cellRef[`${PU}!${col}${rn}`] = `{${Y}:P:${id}:${f}}`; });
+  }
+  for (let i = 2; i < (C || []).length; i++){
+    const row = C[i] || [], vals = (CV || [])[i] || [], k = String(row[0] || '');
+    if (!k) continue;
+    out.cf.push({k, row, vals}); cellRef[`${CU}!C${i + 1}`] = `{${Y}:F:${k}:py}`;
+  }
+  return out;
+}
+function gsCellToApp(raw, val, sheet, cellRef){
+  if (typeof raw === 'string' && raw.startsWith('=')){
+    try {
+      let ok = true;
+      const conv = n => {
+        if (n.n !== undefined) return String(n.n);
+        if (n.cell){
+          const sh = (n.cell.sheet || sheet).toUpperCase(), refs = [], single = n.cell.r1 === n.cell.r2 && n.cell.c1 === n.cell.c2;
+          for (let rr = Math.min(n.cell.r1, n.cell.r2); rr <= Math.max(n.cell.r1, n.cell.r2); rr++) for (let cc = colN(n.cell.c1); cc <= colN(n.cell.c2); cc++){ const ref = cellRef[`${sh}!${colL(cc)}${rr}`]; if (ref) refs.push(ref); else if (single) ok = false; }
+          return refs.length === 0 ? '0' : refs.length === 1 ? refs[0] : 'SUM(' + refs.join(',') + ')';
+        }
+        if (n.r){ ok = false; return '0'; }
+        if (n.neg) return '-(' + conv(n.neg) + ')';
+        if (n.op) return '(' + conv(n.a) + n.op + conv(n.b) + ')';
+        return n.fn + '(' + n.args.map(conv).join(',') + ')';
+      };
+      const f = '=' + conv(fxParse(raw, true));
+      if (ok && /\{/.test(f)) return {f};
+    } catch (e) {}
+  }
+  if (val === '' || val === null || val === undefined) return {v: 0};
+  return {v: R(typeof val === 'number' ? val : num(val))};
+}
+async function gsSync(c, en){
+  const G = en.gsheet, rep = {fromSheet: [], added: 0, deleted: 0, conflicts: [], recreated: 0};
+  let data = null;
+  try { data = await gsRead(G.id); }
+  catch (e) { if (e.gsMissing || e.gsDisabled) throw e; if (e.status === 400){ rep.recreated = await gsEnsureTabs(G.id); data = null; } else throw e; }
+  if (data && G.base){
+    const P = gsParse(en, data), B = G.base, SU = GS_TABS.sched, apply = (key, x) => { if (x.f) fxMap(en)[key] = x.f; else { if (en.fx) delete en.fx[key]; fxSet(en, key, x.v); } };
+    const sheetChanged = (raw, val, b) => { const isF = typeof raw === 'string' && raw.startsWith('='); return R(typeof val === 'number' ? val : num(val)) !== R(b.wv) || isF !== !!b.wf; };
+    const lbl = l => `${l.ledger || l.caption || 'Line'} (${schedLabel(en, l.fs)})`;
+    // new rows first, so formulas can point at them
+    P.news.forEach(N => { if (!SM(en)[N.sched]) return; en.tb.push({id: N.id, ledger: String(N.row[1] == null ? '' : N.row[1]).trim(), fs: N.sched, caption: String(N.row[2] == null ? '' : N.row[2]).trim(), amt: 0, py: 0, docs: []}); rep.added++; });
+    P.news.forEach(N => { if (!en.tb.some(l => l.id === N.id)) return; [['amt', 3], ['py', 4]].forEach(([f, j]) => apply(`L:${N.id}:${f}`, gsCellToApp(N.row[j], N.vals[j], SU, P.cellRef))); rep.fromSheet.push('New line: ' + (N.row[1] || 'line')); });
+    P.lines.forEach(L => {
+      const l = en.tb.find(x => x.id === L.id), b = B.lines[L.id]; if (!l || !b) return;
+      [['amt', 3, `FY${en.year}`], ['py', 4, `FY${en.year - 1}`]].forEach(([f, j, yr]) => {
+        const key = `L:${l.id}:${f}`, sc = sheetChanged(L.row[j], L.vals[j], b[f]), ac = !gsSame(gsRep(en, key), b[f].app);
+        if (!sc) return;
+        const x = gsCellToApp(L.row[j], L.vals[j], SU, P.cellRef);
+        if (!ac){ apply(key, x); rep.fromSheet.push(`${lbl(l)} ${yr}`); }
+        else if (!gsSame(x, gsRep(en, key))) rep.conflicts.push({key, x, label: `${lbl(l)} ${yr}`});
+      });
+      [['ledger', 1], ['caption', 2]].forEach(([f, j]) => { const sv = String(L.row[j] == null ? '' : L.row[j]).trim(), bv = String(b[f] || '').trim(), av = String(l[f] || '').trim(); if (sv !== bv && av === bv){ l[f] = sv; rep.fromSheet.push(`Wording: ${sv || '(blank)'}`); } });
+    });
+    const inSheet = new Set(P.lines.map(x => x.id));
+    Object.keys(B.lines).forEach(id => {
+      if (inSheet.has(id)) return; const l = en.tb.find(x => x.id === id); if (!l) return; const b = B.lines[id];
+      if (gsSame(gsRep(en, `L:${id}:amt`), b.amt.app) && gsSame(gsRep(en, `L:${id}:py`), b.py.app) && (l.ledger || '') === (b.ledger || '')){ en.tb = en.tb.filter(x => x !== l); rep.deleted++; }
+    });
+    const PF = [['costOpen', 3], ['add', 4], ['disp', 5], ['depOpen', 7], ['charge', 8], ['depDisp', 9]];
+    P.ppeNew.forEach(N => { const p = {id: N.id, name: String(N.row[1] || '').trim(), life: String(N.row[2] == null ? '' : N.row[2]), costOpen: 0, add: 0, disp: 0, depOpen: 0, charge: 0, depDisp: 0, docs: []}; en.ppe.push(p); PF.forEach(([f, j]) => apply(`P:${p.id}:${f}`, gsCellToApp(N.row[j], N.vals[j], GS_TABS.ppe, P.cellRef))); rep.fromSheet.push('New asset class: ' + p.name); });
+    P.ppe.forEach(Q => {
+      const p = en.ppe.find(x => x.id === Q.id), b = B.ppe[Q.id]; if (!p || !b) return;
+      PF.forEach(([f, j]) => { const key = `P:${p.id}:${f}`; if (!sheetChanged(Q.row[j], Q.vals[j], b[f])) return; const x = gsCellToApp(Q.row[j], Q.vals[j], GS_TABS.ppe, P.cellRef); if (gsSame(gsRep(en, key), b[f].app)){ apply(key, x); rep.fromSheet.push(`PPE ${p.name}: ${FX_FIELDS_PPE[f]}`); } else if (!gsSame(x, gsRep(en, key))) rep.conflicts.push({key, x, label: `PPE ${p.name}: ${FX_FIELDS_PPE[f]}`}); });
+      const nm = String(Q.row[1] || '').trim(); if (nm && nm !== b.name && (p.name || '') === b.name){ p.name = nm; rep.fromSheet.push('Asset class name: ' + nm); }
+      const lf = String(Q.row[2] == null ? '' : Q.row[2]); if (lf !== b.life && String(p.life || '') === b.life) p.life = lf;
+    });
+    P.cf.forEach(Q => {
+      const b = B.cf[Q.k]; if (!b) return;
+      if (!sheetChanged(Q.row[2], Q.vals[2], b)) return;
+      const key = 'CFP:' + Q.k, app = (en.cfPy || {})[Q.k] !== undefined ? gsRep(en, key) : {auto: true};
+      const appSame = b.app.auto ? app.auto : gsSame(app, b.app);
+      if (appSame){ apply(key, gsCellToApp(Q.row[2], Q.vals[2], GS_TABS.cf, P.cellRef)); rep.fromSheet.push(`Prior year cash flow: ${Q.row[1]}`); }
+    });
+  }
+  fxRecalc(c);
+  await gsWrite(c, en);
+  save();
+  return rep;
+}
+function gsResultModal(rep){
+  UI.gsConflicts = rep.conflicts;
+  const list = rep.fromSheet.slice(0, 40).map(x => `<li>${e_(x)}</li>`).join('');
+  modal(`<h2>Synced with Google Sheet</h2>
+    <ul class="checks">
+      <li class="ck ok"><span class="dot"></span>${rep.fromSheet.length ? `${rep.fromSheet.length} change(s) taken from the Google Sheet` : 'No new changes in the Google Sheet'}</li>
+      ${rep.added ? `<li class="ck ok"><span class="dot"></span>${rep.added} new line(s) added from rows inserted in the sheet</li>` : ''}
+      ${rep.deleted ? `<li class="ck warn"><span class="dot"></span>${rep.deleted} line(s) deleted because their rows were deleted in the sheet</li>` : ''}
+      <li class="ck ok"><span class="dot"></span>The Google Sheet now shows everything from the software, with formulas</li>
+      ${rep.conflicts.length ? `<li class="ck warn"><span class="dot"></span>${rep.conflicts.length} amount(s) were changed in both places – the software’s figure was kept</li>` : ''}
+    </ul>
+    ${list ? `<div class="box"><h3 class="h3">From the sheet</h3><ul class="gs-list">${list}</ul></div>` : ''}
+    ${rep.conflicts.length ? `<div class="box"><h3 class="h3">Changed in both places</h3><ul class="gs-list">${rep.conflicts.map(x => `<li>${e_(x.label)}: sheet ${x.x.f ? 'formula' : fmtN(x.x.v)}</li>`).join('')}</ul><button class="btn small" data-act="gs-take-sheet">Use the Google Sheet figures instead</button></div>` : ''}
+    <div class="foot"><button class="btn primary" data-close>Done</button></div>`, true);
+}
+function gsHelpModal(){
+  modal(`<h2>Switch on Google Sheets (one time)</h2>
+    <p class="sub">The Fair Tax Google project already has Google Drive. Google Sheets needs to be switched on once:</p>
+    <ol class="setup"><li>Open <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com?project=fair-tax-audit-desk" target="_blank" rel="noopener"><b>Google Sheets API</b> in the Google Cloud console</a> (signed in as ask.asif93@gmail.com).</li>
+      <li>Click <b>Enable</b> and wait a minute.</li><li>Come back and click <b>Create Google Sheet</b> again.</li></ol>
+    <div class="foot"><button class="btn primary" data-close>OK</button></div>`);
+}
+function gsPanel(c, en){
+  const G = en.gsheet;
+  if (!G) return `<div class="gs-bar"><span class="gs-ic" aria-hidden="true">▦</span><div class="gs-txt"><b>Google Sheet</b> <span class="muted small">– prepare these schedules in Google Sheets too. Formulas and changes go both ways with Sync.</span></div><button class="btn small" data-act="gs-create">Create Google Sheet</button></div>`;
+  const when = G.syncedAt ? new Date(G.syncedAt).toLocaleString('en-GB', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : 'not yet';
+  return `<div class="gs-bar on"><span class="gs-ic" aria-hidden="true">▦</span><div class="gs-txt"><a href="${e_(G.url)}" target="_blank" rel="noopener"><b>Open the Google Sheet ↗</b></a> <span class="muted small">· last synced ${e_(when)}</span></div><button class="btn small primary" data-act="gs-sync">⟳ Sync with Google Sheet</button><button class="linkish" data-act="gs-unlink">Unlink</button></div>`;
+}
+
 /* ---------- events ---------- */
 function setPath(path, value){
   const parts = path.split('.'); let o = parts[0] === 'client' ? client() : parts[0] === 'eng' ? eng() : DB.settings;
@@ -3146,7 +4305,7 @@ document.addEventListener('click', async ev => {
       case 'automap': { const sm = SM(en); en.tb.forEach(l => { if (!sm[l.fs]) l.fs = autoMap(l.ledger, en); }); save(); render(); const left = en.tb.filter(l => !sm[l.fs]).length; toast(left ? `${left} line(s) still need a schedule` : 'All lines placed in schedules — please review'); } break;
       case 'paste-tb': pasteModal(t.dataset.key); break;
       case 'do-paste': { const text = document.getElementById('paste-box').value; const rows = parseRows(text.split(/\r?\n/).map(l => l.split('\t')), en, document.getElementById('paste-target').value, document.getElementById('paste-mode').value); if (!rows.length){ toast('No rows found — copy ledger names and amounts from Excel', true); break; }
-        if (document.querySelector('input[name=pmode]:checked').value === 'replace') en.tb = []; en.tb.push(...rows); save(); closeModal(); render(); toast(`${rows.length} lines added`); break; }
+        if (document.querySelector('input[name=pmode]:checked').value === 'replace') en.tb = []; en.tb.push(...rows); fxTbImported(en, rows); save(); closeModal(); render(); toast(`${rows.length} lines added`); break; }
       case 'tb-file': docsModal('tb', 'tb'); break;
       case 'add-ppe': en.ppe.push({id: uid(), name: '', life: '', costOpen: 0, add: 0, disp: 0, depOpen: 0, charge: 0, depDisp: 0, docs: []}); UI.collapsed = UI.collapsed || {}; UI.collapsed.ppe = false; UI.view = 'tb'; save(); render(); { const inputs = document.querySelectorAll('.m-name'); const last = inputs[inputs.length - 1]; if (last){ last.focus(); last.scrollIntoView({block: 'center'}); } } break;
       case 'del-ppe': en.ppe = en.ppe.filter(p => p.id !== t.dataset.id); save(); render(); break;
@@ -3172,6 +4331,35 @@ document.addEventListener('click', async ev => {
       }
       case 'del-doc': docTarget(t.dataset.type, t.dataset.id).docs.splice(+t.dataset.i, 1); save(); docsModal(t.dataset.type, t.dataset.id); render(); break;
       case 'go-tb-filter': UI.view = 'tb'; UI.tbMode = 'sched'; UI.collapsed = UI.collapsed || {}; UI.collapsed[t.dataset.key] = false; closeModal(); render(); { const el = document.getElementById('sch-' + t.dataset.key); if (el) el.scrollIntoView({block: 'start'}); } break;
+      case 'add-year': UI.ayFile = null; addYearModal(); break;
+      case 'ay-pick': { document.getElementById('ay-year').value = t.dataset.y; document.getElementById('ay-opts').innerHTML = addYearOptions(c, num(t.dataset.y)); break; }
+      case 'ay-create': t.disabled = true; try { await createYear(); } finally { t.disabled = false; } break;
+      case 'note-num': noteNumModal(t.dataset.key); break;
+      case 'nn-save': { const to = +document.getElementById('nn-to').value, mode = (document.querySelector('input[name=nn-mode]:checked') || {}).value || 'swap';
+        if (setNoteNumber(c, en, t.dataset.key, to, mode)){ save(); closeModal(); render(); toast(`Now note ${to}`); } else closeModal(); break; }
+      case 'cfpy-reset': if (en.cfPy) delete en.cfPy[t.dataset.k]; if (en.fx) delete en.fx['CFP:' + t.dataset.k]; save(); render(); break;
+      case 'cfpy-reset-all': if (confirm(`Clear all typed FY${en.year - 1} cash flow figures and use the automatic figures?`)){ en.cfPy = {}; Object.keys(en.fx || {}).forEach(k => { if (k.startsWith('CFP:')) delete en.fx[k]; }); save(); render(); } break;
+      case 'edit-cfpy': UI.view = 'adjust'; save(); render(); { const el = document.getElementById('py-cf'); if (el) el.scrollIntoView({block: 'start'}); } break;
+      case 'fx-link-prev': { const pe = prev(); if (!pe) break;
+        if (!fxLinkedCount(en) && en.tb.some(l => R(l.py)) && !confirm(`Link FY${en.year} to FY${pe.year}? The FY${en.year - 1} column, PPE opening balances, reserves and prior year tax will follow FY${pe.year} live (figures typed there now are replaced).`)) break;
+        const res = fxLinkToPrev(c, en); save(); render(); toast(`${res.n} figures linked live to FY${pe.year}${res.added ? ` · ${res.added} line(s) added` : ''}`); break; }
+      case 'fx-unlink': if (confirm(`Unlink FY${en.year} from FY${en.year - 1}? The figures stay as they are now but will no longer follow FY${en.year - 1}.`)){ const n = fxUnlinkYears(c, en); save(); render(); toast(`${n} links removed – figures kept`); } break;
+      case 'fsi-do': fsImportDo(); break;
+      case 'gs-help': gsHelpModal(); break;
+      case 'gs-create': { t.disabled = true; toast('Creating the Google Sheet…');
+        try { await gsCreate(c, en); save(); render(); toast('Google Sheet created – click “Open the Google Sheet”'); }
+        catch (err) { if (err.gsDisabled){ gsHelpModal(); } else throw err; } finally { t.disabled = false; } break; }
+      case 'gs-sync': { t.disabled = true; t.textContent = 'Syncing…';
+        try { const rep = await gsSync(c, en); render(); gsResultModal(rep); }
+        catch (err) {
+          if (err.gsDisabled) gsHelpModal();
+          else if (err.gsMissing){ if (confirm(err.message + `\n\nCreate a new Google Sheet for FY${en.year}?`)){ delete en.gsheet; await gsCreate(c, en); save(); render(); toast('New Google Sheet created'); } }
+          else throw err;
+        } finally { t.disabled = false; t.textContent = '⟳ Sync with Google Sheet'; } break; }
+      case 'gs-unlink': if (confirm('Unlink the Google Sheet? It stays in Google Drive but will no longer sync with the software.')){ delete en.gsheet; save(); render(); } break;
+      case 'gs-take-sheet': { (UI.gsConflicts || []).forEach(x => { if (x.x.f) fxMap(en)[x.key] = x.x.f; else { if (en.fx) delete en.fx[x.key]; fxSet(en, x.key, x.x.v); } });
+        UI.gsConflicts = []; fxRecalc(c); save(); closeModal(); render(); t.disabled = true;
+        try { if (en.gsheet) await gsWrite(c, en); save(); } catch (err) { toast(err.message, true); } toast('Google Sheet figures applied'); break; }
       case 'roll': {
         const latest = c.engagements.slice().sort((a, b) => b.year - a.year)[0];
         const n = rollForward(c, latest); if (c.engagements.some(x => x.year === n.year)){ toast(`FY${n.year} already exists`, true); break; }
@@ -3242,10 +4430,19 @@ document.addEventListener('change', async ev => {
       const sel = document.getElementById('rt-file-eng'); sel.innerHTML = rtFileOptions(UI.retrieveList, en); sel.disabled = false;
       const rb = document.querySelector('input[name=rt-src][value=file]'); if (rb) rb.checked = true; }
     catch (err) { toast(err.message, true); } el.value = ''; return; }
+  if ((el.id === 'fs-in' || el.id === 'fs-in-client') && el.files[0]){
+    const f = el.files[0]; el.value = '';
+    try { toast('Reading the financial statements…'); const res = await readFsWorkbookFile(f); UI.fsImp = {res, fileName: f.name, newOnly: el.id === 'fs-in-client'}; document.querySelectorAll('.toast').forEach(x => x.remove()); fsImportModal(); }
+    catch (err) { console.error(err); toast(err.message, true); } return; }
+  if (el.id === 'ay-file-in' && el.files[0]){ UI.ayFile = el.files[0]; const s = document.getElementById('ay-file-name'); if (s) s.textContent = el.files[0].name; const rb = document.querySelector('input[name=ay-src][value=file]'); if (rb) rb.checked = true; return; }
+  if (el.dataset.cfpy){ const k = el.dataset.cfpy;
+    if (!el.value.trim()){ if (en.cfPy) delete en.cfPy[k]; if (en.fx) delete en.fx['CFP:' + k]; }
+    else { try { fxInput(c, en, 'CFP:' + k, el.value, v => { (en.cfPy = en.cfPy || {})[k] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
+    save(); scheduleRender(); return; }
   if (el.id === 'import-saved' && el.files[0]){ try { await importSavedFile(el.files[0]); } catch (err) { toast(err.message, true); } el.value = ''; return; }
   if (el.id === 'xlsx-in' && el.files[0]){
     try { const buf = await el.files[0].arrayBuffer(); const wb = XLSX.read(buf); const ws = wb.Sheets[wb.SheetNames[0]]; const rows = parseRows(XLSX.utils.sheet_to_json(ws, {header: 1, raw: false}), en, '', 'drcr');
-      if (!rows.length) throw new Error('No ledger rows found in the first sheet'); en.tb.push(...rows); save(); render(); toast(`${rows.length} lines imported`); }
+      if (!rows.length) throw new Error('No ledger rows found in the first sheet'); en.tb.push(...rows); fxTbImported(en, rows); save(); render(); toast(`${rows.length} lines imported`); }
     catch (err) { toast(err.message, true); } el.value = ''; return;
   }
   if (el.id === 'restore-in' && el.files[0]){
@@ -3255,9 +4452,10 @@ document.addEventListener('change', async ev => {
   }
   if (el.id === 'show-empty'){ UI.showEmpty = el.checked; save(); render(); return; }
   if (el.dataset.ui){ UI[el.dataset.ui] = el.value; render(); return; }
-  if (el.dataset.line){ const l = en.tb.find(x => x.id === el.dataset.line); const f = el.dataset.field; if (f === 'fs'){ moveLine(en, l, el.value); UI.justAdded[el.value] = true; } else l[f] = ['amt', 'py'].includes(f) ? num(el.value) : el.value;
+  if (el.dataset.line){ const l = en.tb.find(x => x.id === el.dataset.line); const f = el.dataset.field; if (f === 'fs'){ moveLine(en, l, el.value); UI.justAdded[el.value] = true; } else if (['amt', 'py'].includes(f)){ try { fxInput(c, en, `L:${l.id}:${f}`, el.value, v => { l[f] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
+    else l[f] = el.value;
     if (f === 'ledger' && !l.fs){ const k = autoMap(l.ledger, en); if (k) moveLine(en, l, k); } save(); scheduleRender(); return; }
-  if (el.dataset.ppe){ const p = en.ppe.find(x => x.id === el.dataset.ppe); const f = el.dataset.field; p[f] = ['name', 'life'].includes(f) ? el.value : num(el.value); save(); scheduleRender(); return; }
+  if (el.dataset.ppe){ const p = en.ppe.find(x => x.id === el.dataset.ppe); const f = el.dataset.field; if (['name', 'life'].includes(f)) p[f] = el.value; else { try { fxInput(c, en, `P:${p.id}:${f}`, el.value, v => { p[f] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } } save(); scheduleRender(); return; }
   if (el.dataset.sh !== undefined){ const s = c.profile.shareholders[+el.dataset.sh]; const f = el.dataset.field; s[f] = ['shares', 'value'].includes(f) ? num(el.value) : el.value; save(); scheduleRender(); return; }
   if (el.dataset.pol !== undefined){ en.texts.policies[+el.dataset.pol][el.dataset.field] = el.value; save(); if (el.dataset.field !== 'text') scheduleRender(); return; }
   if (el.dataset.cn !== undefined){ en.customNotes[+el.dataset.cn][el.dataset.field] = el.value; save(); return; }
@@ -3265,6 +4463,7 @@ document.addEventListener('change', async ev => {
   if (el.dataset.bind){
     const path = el.dataset.bind;
     if (path === 'eng.settings.draftSel'){ en.settings.draft = el.value === '1'; save(); return; }
+    if (el.dataset.num && /^eng\./.test(path)){ try { fxInput(c, en, 'B:' + path.slice(4), el.value, v => setPath(path, v)); } catch (err) { toast('Formula: ' + err.message, true); return; } save(); scheduleRender(); return; }
     let val = el.dataset.num ? num(el.value) : el.value;
     if (path === 'client.name') c.name = val; else setPath(path, val);
     save(); scheduleRender();
@@ -3287,6 +4486,7 @@ document.addEventListener('drop', ev => { const li = ev.target.closest && ev.tar
 document.addEventListener('dragend', () => { DRAG = null; document.querySelectorAll('.dragging,.drop-before,.drop-after').forEach(x => x.classList.remove('dragging', 'drop-before', 'drop-after')); });
 document.addEventListener('input', ev => {
   if (ev.target.dataset && ev.target.dataset.ui === 'tbSearch'){ UI.tbSearch = ev.target.value; scheduleRender(); }
+  if (ev.target.id === 'ay-year'){ const o = document.getElementById('ay-opts'); if (o) o.innerHTML = addYearOptions(client(), num(ev.target.value)); }
 });
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape' && document.getElementById('layer').innerHTML) closeModal();
