@@ -357,7 +357,7 @@ table.cfpy th[scope=row]{font-weight:400}
 .qd .q-soce input.numi{min-width:86px}
 table.matrix.cfpy{table-layout:fixed;min-width:900px}table.matrix.cfpy thead th{white-space:normal;vertical-align:bottom}table.cfpy td.cf-auto{color:var(--muted)}table.cfpy td.cf-dif{background:#FBF0DC;color:#7a5200;font-weight:700}table.cfpy input.numi.dv{box-shadow:inset 3px 0 0 var(--warn);background:#FFF8EC}.cf-review{margin:8px 0}.cf-review .btn{margin-left:8px}tr.wdv-diff th{color:var(--bad);font-weight:600}table.matrix.cfpy thead th:first-child{min-width:0}table.matrix.cfpy td input{min-width:0}
 table.cfpy td.cf-h{white-space:nowrap;padding-left:2px;padding-right:2px}
-table.matrix.cfpy.cfman{min-width:640px}.cf-edit{margin:6px 0 18px}.tpl-save input{flex:1;min-width:220px}td.nowrap{white-space:nowrap;text-align:right}td.nowrap .btn{margin-left:4px}#templates td input{width:100%;min-width:160px}table.cfpy tr.grand th,table.cfpy tr.grand td{border-top:2px solid var(--ink)}
+table.matrix.cfpy.cfman{min-width:640px}table.cfpy tr.cf-bal th{font-weight:600}.cf-edit{margin:6px 0 18px}.tpl-save input{flex:1;min-width:220px}td.nowrap{white-space:nowrap;text-align:right}td.nowrap .btn{margin-left:4px}#templates td input{width:100%;min-width:160px}table.cfpy tr.grand th,table.cfpy tr.grand td{border-top:2px solid var(--ink)}
 table.cfpy tr.tot th[scope=row]{white-space:normal;overflow-wrap:anywhere;line-height:1.3}table.cfpy td.cf-acts{white-space:normal;text-align:right}table.cfpy td.cf-acts .linkish{margin-right:4px;white-space:nowrap}table.matrix.cfpy{min-width:1060px}
 .cf-grip{cursor:grab;color:var(--muted);padding:0 5px;user-select:none;font-weight:700;letter-spacing:-2px;vertical-align:middle}
 table.cfpy .cf-mv{width:22px;height:24px;font-size:10px}
@@ -623,7 +623,7 @@ function compute(eng, prevEng){
   cf.invTot = cf.additions + cf.proceeds + cSum(['nca']);
   cf.loans = (cy.ltl + cy.stb) - (py.ltl + py.stb); cf.ca = cy.caMove; cf.div = -cy.div; cf.shareCap = cy.cap - py.cap;
   cf.finTot = cf.loans + cf.ca + cf.div + cSum(['ncl', 'eq']);
-  cf.net = cf.op + cf.invTot + cf.finTot; cf.open = py.cash; cf.close = cf.open + cf.net; cf.diff = cf.close - cy.cash;
+  cf.net = cf.op + cf.invTot + cf.finTot; cf.open = py.cash; cf.close = cf.open + cf.net; cf.cashBal = cy.cash; cf.diff = cf.close - cy.cash;
   // cash flow – prior year
   let cfp;
   if (eng.cfManual){ cfp = {custom: {}}; }
@@ -636,7 +636,7 @@ function compute(eng, prevEng){
     cfp.op = cfp.opBefore + cfp.inv + cfp.rec + cfp.rprec + cfp.pay + cfp.rppay + cfp.otherOp;
     cfp.additions = ppe.length ? -ppeT.pyAdd : R(mm.additions); cfp.proceeds = R(mm.proceeds); cfp.otherInv = R(mm.otherInv); cfp.invTot = cfp.additions + cfp.proceeds + cfp.otherInv;
     cfp.loans = R(mm.loans); cfp.ca = py.caMove; cfp.div = -py.div; cfp.shareCap = py.cap - py.capOpen; cfp.otherFin = R(mm.otherFin); cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin;
-    cfp.net = cfp.op + cfp.invTot + cfp.finTot; cfp.open = R(mm.openCash); cfp.close = cfp.open + cfp.net; cfp.diff = cfp.close - py.cash;
+    cfp.net = cfp.op + cfp.invTot + cfp.finTot; cfp.open = R(mm.openCash); cfp.close = cfp.open + cfp.net; cfp.cashBal = py.cash; cfp.diff = cfp.close - py.cash;
   }
   cfp = applyCfLayout(eng, cf, cfp, cy, py);
   const checks = [];
@@ -658,8 +658,8 @@ function compute(eng, prevEng){
     K = 'ppe-pydiff'; if (ppeT.pyDiff) { const n0 = v => Math.round(v || 0).toLocaleString('en-US'); add(false, `PPE comparative ${eng.year - 1} does not add up: opening ${n0(ppeT.nbvPyOpen)} + additions ${n0(ppeT.pyAdd)} − disposals ${n0(ppeT.pyDispWdv)} − depreciation ${n0(ppeT.pyCharge)} = ${n0(ppeT.pyCloseCalc)}, but the ${eng.year} opening balances give ${n0(ppeT.nbvPy)} – difference ${n0(ppeT.pyDiff)}`); }
     K = 'ppe-pydiff'; if (!ppeT.pyOpenTyped && ppeT.nbvPyOpen < 0) add(false, `Comparative PPE opening written down value is negative (${fmtN(ppeT.nbvPyOpen)}) – check prior year additions and depreciation`, 'warn');
   }
-  K = 'cf-cy'; add(cf.diff === 0, cf.diff === 0 ? `Cash flow ${eng.year} ends at ${fmtN(cf.close)} = cash and cash equivalents ${fmtN(cy.cash)}` : `Cash flow ${eng.year} ends at ${fmtN(cf.close)} but cash and cash equivalents are ${fmtN(cy.cash)} – difference ${fmtN(cf.diff)}`);
-  K = 'cf-py'; add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} = cash and cash equivalents ${fmtN(py.cash)}` : `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} but cash and cash equivalents are ${fmtN(py.cash)} – difference ${fmtN(cfp.diff)}`);
+  K = 'cf-cy'; add(cf.diff === 0, cf.diff === 0 ? `Cash flow ${eng.year} ends at ${fmtN(cf.close)} = cash and cash equivalents ${fmtN(cf.cashBal)}` : `Cash flow ${eng.year} ends at ${fmtN(cf.close)} but cash and cash equivalents are ${fmtN(cf.cashBal)} – difference ${fmtN(cf.diff)}${eng.cfManual && !R((eng.cfCy || {}).cashBal) && !(eng.fx || {})['CFC:cashBal'] ? ' (enter the cash and cash equivalents balance in the cash flow table)' : ''}`);
+  K = 'cf-py'; add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} = cash and cash equivalents ${fmtN(cfp.cashBal)}` : `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} but cash and cash equivalents are ${fmtN(cfp.cashBal)} – difference ${fmtN(cfp.diff)}${eng.cfManual && !R((eng.cfPy || {}).cashBal) && !(eng.fx || {})['CFP:cashBal'] ? ' (enter the cash and cash equivalents balance in the cash flow table)' : ''}`);
   K = 'lr'; if (cy.lrClose < cy.cap * 0.5 && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below 50% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
   { const Y0 = eng.year, P0 = eng.year - 1;
     K = 're'; if (py.reAdj) add(false, `Retained earnings at the end of FY${P0} (${fmtN(py.reClose)}) differ from the FY${P0} profit less transfers (${fmtN(py.reClose - py.reAdj)}) by ${fmtN(py.reAdj)} – shown as ${Math.abs(py.reAdj) <= 10 ? 'a rounding difference' : 'a difference'} in changes in equity`, 'warn');
@@ -3366,7 +3366,7 @@ function cfLineBody(k, yr){
       <tr class="${yr === 'py' ? 'q-hlr' : ''}"><th scope="row">FY${PY}${std('py')}</th><td class="r">${inp('py')}</td></tr>
     </tbody></table></div>
     <p class="small muted">Type a figure, or a formula starting with = (pick amounts from the FY${Y} or FY${PY} list).${src ? ` Figures behind this line: <button class="linkish" data-drill="${src}" data-yr="${yr}">${e_(schedLabel(en, src))}</button>.` : ''}</p>
-    <ul class="checks"><li class="ck ${cf.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${Y} ends at ${fmtN(cf.close)}, cash ${fmtN(r.cy.cash)}${cf.diff ? ' – difference ' + fmtN(cf.diff) : ''}</li><li class="ck ${cfp.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${PY} ends at ${fmtN(cfp.close)}, cash ${fmtN(r.py.cash)}${cfp.diff ? ' – difference ' + fmtN(cfp.diff) : ''}</li></ul>
+    <ul class="checks"><li class="ck ${cf.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${Y} ends at ${fmtN(cf.close)}, cash ${fmtN(cf.cashBal)}${cf.diff ? ' – difference ' + fmtN(cf.diff) : ''}</li><li class="ck ${cfp.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${PY} ends at ${fmtN(cfp.close)}, cash ${fmtN(cfp.cashBal)}${cfp.diff ? ' – difference ' + fmtN(cfp.diff) : ''}</li></ul>
     <div class="foot"><button class="btn" data-act="edit-cfpy">All cash flow lines</button><button class="btn primary" data-close>Done</button></div></div>`);
 }
 function soceModal(){ liveModal(soceBody); }
@@ -3503,7 +3503,7 @@ function checkBody(key){
     const lines = cfLines(en).filter(x => !x.hidden), val = (o, x) => x.kind === 'std' ? R(o[x.key]) : R((o.custom || {})[x.key]);
     let rows = '';
     CF_SECS.forEach(([sec, head, totKey, totLabel]) => { rows += `<tr class="grp"><th scope="row" colspan="2">${e_(head)}</th></tr>` + lines.filter(x => x.sec === sec).map(x => tr(`<button class="linkish" data-drill="cf:${x.key}" data-yr="${yr}">${e_(x.label)}</button>`, [val(bk, x)])).join('') + tr(e_(totLabel), [bk[totKey]], 'tot'); });
-    rows += tr('Net increase / (decrease) in cash', [bk.net], 'tot') + tr('Cash at the beginning of the year', [bk.open]) + tr('Cash at the end of the year per the cash flow', [bk.close], 'tot') + tr('Cash and cash equivalents in the statement of financial position', [b.cash]) + tr('Difference', [d], 'tot');
+    rows += tr('Net increase / (decrease) in cash', [bk.net], 'tot') + tr('Cash at the beginning of the year', [bk.open]) + tr('Cash at the end of the year per the cash flow', [bk.close], 'tot') + tr('Cash and cash equivalents – balance to agree', [bk.cashBal]) + tr('Difference', [d], 'tot');
     body = tbl([`FY${FY}`], rows);
     const list = [], c0 = client(), fxs = en.fx || {};
     lines.concat([CF_OPEN_LINE]).forEach(x => {
@@ -3521,7 +3521,7 @@ function checkBody(key){
       list.push(unmSum ? {label: 'Ledger lines not in any schedule', amt: unmSum, how: 'Movements in these lines are not in any cash flow formula.', btn: whyBtn('unmapped', 'Put them in schedules')} : null);
     } else {
       const dP = r.py.ta - r.py.tel; list.push(dP ? {label: `Statement of financial position FY${PY} does not agree`, amt: dP, how: 'Formulas taking movements from those balances carry its difference.', btn: whyBtn('sofp-py', 'See why')} : null);
-      const need = b.cash - (bk.close - bk.open);
+      const need = bk.cashBal - (bk.close - bk.open);
       body += `<p class="small">${d ? `For FY${PY} to reconcile, cash at the beginning of FY${PY} would need to be <b>${fmtN(need)}</b> (now ${fmtN(bk.open)}).${E.firstPy ? ` FY${PY} is the first year, so it should be nil – a line is missing or wrong.` : ''}` : ''}</p>`;
     }
     body += causes(d, list) + `<div class="row"><button class="btn small" data-act="edit-cfpy">All cash flow lines</button></div>`;
@@ -3711,7 +3711,7 @@ const FX_CF = [['pat', 'Profit for the year'], ['dep', 'Depreciation'], ['gain',
   ['inv', 'Change in inventory'], ['rec', 'Change in receivables'], ['rprec', 'Change due from related parties'], ['pay', 'Change in payables'], ['rppay', 'Change due to related parties'], ['otherOp', 'Other working capital movements'], ['op', 'Net cash from operating activities'],
   ['additions', 'Additions to PPE'], ['proceeds', 'Disposal proceeds'], ['otherInv', 'Other investing movements'], ['invTot', 'Net cash from investing activities'],
   ['shareCap', 'Share capital introduced'], ['loans', 'Net movement in loans'], ['ca', 'Movement in current account'], ['div', 'Dividend paid'], ['otherFin', 'Other financing movements'], ['finTot', 'Net cash from financing activities'],
-  ['net', 'Net increase / (decrease) in cash'], ['open', 'Cash at the beginning of the year'], ['close', 'Cash at the end of the year']];
+  ['net', 'Net increase / (decrease) in cash'], ['open', 'Cash at the beginning of the year'], ['close', 'Cash at the end of the year'], ['cashBal', 'Cash and cash equivalents – balance to agree']];
 const FXERR = new WeakMap();
 const fxErr = msg => Object.assign(new Error(msg), {fx: true});
 const fxMap = en => (en.fx = en.fx || {});
@@ -4110,7 +4110,8 @@ function applyCfLayout(eng, cf, cfp, cy, py){
       bk.custom = {}; rows.forEach(x => { if (x.kind !== 'std') bk.custom[x.key] = R(src[x.key]); });
       const sum = sec => vis.filter(x => x.sec === sec).reduce((a, x) => a + (x.kind === 'std' ? R(bk[x.key]) : R(bk.custom[x.key])), 0);
       bk.opBefore = sum('adj'); bk.op = bk.opBefore + sum('wc'); bk.invTot = sum('inv'); bk.finTot = sum('fin');
-      bk.net = bk.op + bk.invTot + bk.finTot; bk.close = bk.open + bk.net; bk.diff = bk.close - yr.cash;
+      // the cash balance the cash flow must agree with is typed or a formula too
+      bk.cashBal = R(src.cashBal); bk.net = bk.op + bk.invTot + bk.finTot; bk.close = bk.open + bk.net; bk.diff = bk.close - bk.cashBal;
     });
     delete cf.auto; delete cfp.auto;
     return cfp;
@@ -4129,7 +4130,7 @@ function applyCfLayout(eng, cf, cfp, cy, py){
     CFPY_KEYS.forEach(k => { bk[k] = R(bk[k]); });
     const sum = sec => rows.filter(x => x.sec === sec).reduce((a, x) => a + (x.kind === 'std' ? R(bk[x.key]) : R(bk.custom[x.key])), 0);
     bk.opBefore = sum('adj'); bk.op = bk.opBefore + sum('wc'); bk.invTot = sum('inv'); bk.finTot = sum('fin');
-    bk.net = bk.op + bk.invTot + bk.finTot; bk.close = bk.open + bk.net; bk.diff = bk.close - yr.cash;
+    bk.cashBal = yr.cash; bk.net = bk.op + bk.invTot + bk.finTot; bk.close = bk.open + bk.net; bk.diff = bk.close - yr.cash;
   });
   cfp.auto = auto; cf.auto = autoCy;
   return cfp;
@@ -4154,6 +4155,7 @@ function cfStdFormula(c, en, x, side){
 }
 function cfFxValue(c, f){ try { const memo = new Map(); return Math.round(fxRun(fxParse(f), tok => fxRefValue(c, fxTok(tok), memo))); } catch (e) { return null; } }
 const CF_OPEN_LINE = {key: 'open', kind: 'std', label: 'Cash and cash equivalents at the beginning of the year', sec: ''};
+const CF_BAL_LINE = {key: 'cashBal', kind: 'bal', label: 'Cash and cash equivalents – balance to agree', sec: ''};
 /* one-time switch of a year to typed / formula cash flow: today's figures stay exactly the same –
    as a formula linked to the schedules where that formula gives the same figure, otherwise as a typed figure */
 function cfEnsureManual(c, en){
@@ -4192,7 +4194,7 @@ function cfApplyStd(c, en, sides, onlyEmpty, keys){
 function pyCfTable(en, r){
   const c = client(), cf = r.cf, cfp = r.cfp, Y = en.year, PY = Y - 1;
   const lines = cfLines(en), vis = lines.filter(x => !x.hidden), removed = lines.filter(x => x.hidden);
-  const val = (bk, x) => x.key === 'open' ? R(bk.open) : x.kind === 'std' ? R(bk[x.key]) : R((bk.custom || {})[x.key]);
+  const val = (bk, x) => x.key === 'open' || x.key === 'cashBal' ? R(bk[x.key]) : x.kind === 'std' ? R(bk[x.key]) : R((bk.custom || {})[x.key]);
   const inp = (x, side) => { const key = (side === 'cy' ? 'CFC:' : 'CFP:') + x.key; return `<input class="numi${fxCls(en, key)}" id="cf${side}-${x.key}" data-cf${side}="${x.key}"${fxAttrs(en, key, `{${Y}:F:${x.key}:${side}}`)} value="${fmtSigned(val(side === 'cy' ? cf : cfp, x))}" inputmode="decimal" aria-label="${e_(x.label)} FY${side === 'cy' ? Y : PY}">`; };
   const tot = (key, label, cls) => `<tr class="${cls || 'tot'}"><td></td><th scope="row">${e_(label)}</th><td class="r calc b"${fxRefAttr(`{${Y}:F:${key}:cy}`)}>${fmtN(cf[key])}</td><td class="r calc b"${fxRefAttr(`{${Y}:F:${key}:py}`)}>${fmtN(cfp[key])}</td><td></td></tr>`;
   const line = x => `<tr class="cf-line${x.kind === 'user' ? ' cf-user' : ''}" data-cfk="${x.key}">
@@ -4208,7 +4210,7 @@ function pyCfTable(en, r){
   body += tot('net', 'Net increase / (decrease) in cash (A+B+C)')
     + `<tr><td></td><th scope="row">Cash and cash equivalents at the beginning of the year</th><td>${inp(CF_OPEN_LINE, 'cy')}</td><td>${inp(CF_OPEN_LINE, 'py')}</td><td></td></tr>`
     + tot('close', 'Cash and cash equivalents at the end of the year', 'grand')
-    + `<tr><td></td><th scope="row">Cash and cash equivalents in the statement of financial position</th><td class="r calc">${fmtN(r.cy.cash)}</td><td class="r calc">${fmtN(r.py.cash)}</td><td></td></tr>`
+    + `<tr class="cf-bal"><td></td><th scope="row">Cash and cash equivalents – balance to agree <span class="muted small">(type a figure or a formula)</span></th><td>${inp(CF_BAL_LINE, 'cy')}</td><td>${inp(CF_BAL_LINE, 'py')}</td><td></td></tr>`
     + `<tr class="tot"><td></td><th scope="row">Difference</th>${dRow(cf.diff, cfp.diff)}<td></td></tr>`;
   const L = en.cfLayout || {}, changed = (L.order || []).length || Object.keys(L.labels || {}).length || Object.keys(L.hidden || {}).length || (L.custom || []).length;
   const pe = prevOf(c, en);
@@ -4217,7 +4219,7 @@ function pyCfTable(en, r){
     <div class="table-wrap"><table class="ui matrix cfpy cfman"><colgroup><col style="width:78px"><col><col style="width:170px"><col style="width:170px"><col style="width:48px"></colgroup>
       <thead><tr><th></th><th>Line</th><th class="r">FY${Y}</th><th class="r">FY${PY}</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
     ${removed.length ? `<p class="small muted cf-removed">Removed lines: ${removed.map(x => `${e_(x.label)} <button class="linkish" data-act="cf-restore" data-k="${x.key}">restore</button>`).join(' · ')}</p>` : ''}
-    <div class="row between"><p class="small">${cf.diff === 0 ? `<span class="ok-t">FY${Y} ends at ${fmtN(cf.close)} = cash ${fmtN(r.cy.cash)}</span>` : `<span class="bad-t">FY${Y} ends at ${fmtN(cf.close)}, cash is ${fmtN(r.cy.cash)} – difference ${fmtN(cf.diff)}</span>`} · ${cfp.diff === 0 ? `<span class="ok-t">FY${PY} ends at ${fmtN(cfp.close)} = cash ${fmtN(r.py.cash)}</span>` : `<span class="bad-t">FY${PY} ends at ${fmtN(cfp.close)}, cash is ${fmtN(r.py.cash)} – difference ${fmtN(cfp.diff)}</span>`}</p>
+    <div class="row between"><p class="small">${cf.diff === 0 ? `<span class="ok-t">FY${Y} ends at ${fmtN(cf.close)} = cash ${fmtN(cf.cashBal)}</span>` : `<span class="bad-t">FY${Y} ends at ${fmtN(cf.close)}, cash is ${fmtN(cf.cashBal)} – difference ${fmtN(cf.diff)}</span>`} · ${cfp.diff === 0 ? `<span class="ok-t">FY${PY} ends at ${fmtN(cfp.close)} = cash ${fmtN(cfp.cashBal)}</span>` : `<span class="bad-t">FY${PY} ends at ${fmtN(cfp.close)}, cash is ${fmtN(cfp.cashBal)} – difference ${fmtN(cfp.diff)}</span>`}</p>
       <span class="row"><button class="btn small" data-act="cf-std-fx" title="Only lines that are still empty get a formula">Standard formulas in empty lines</button><button class="linkish" data-act="cf-std-fx-all">Standard formulas in every FY${Y} line</button>${pe ? `<button class="linkish" data-act="cf-std-fx-py">Link every FY${PY} line to FY${pe.year}</button>` : ''}${changed ? `<button class="linkish" data-act="cf-reset-layout">Standard cash flow lines</button>` : ''}</span></div>`;
 }
 
