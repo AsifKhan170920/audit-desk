@@ -1,0 +1,66 @@
+# Builds "Fair Tax for Windows" (installer) and publishes it here:
+# https://github.com/AsifKhan170920/audit-desk/releases/download/windows-app/FairTaxPortal-Setup.exe
+name: Build Windows app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop-app/**'
+      - '.github/workflows/windows-app.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the Windows speech helper
+        working-directory: desktop-app/speech
+        run: dotnet build FairTaxSpeech.csproj -c Release -o ../speech-bin
+
+      - name: Add icon and reminder sounds
+        shell: bash
+        run: |
+          mkdir -p desktop-app/assets
+          cp icons/icon-512.png desktop-app/assets/icon.png
+          cp android-app/res/raw/fairtax_alert.wav android-app/res/raw/fairtax_urgent.wav desktop-app/assets/
+          ls desktop-app/assets desktop-app/speech-bin
+
+      - name: Build the installer
+        working-directory: desktop-app
+        shell: bash
+        run: |
+          npm install --no-audit --no-fund
+          npm version "1.0.${GITHUB_RUN_NUMBER}" --no-git-tag-version --allow-same-version
+          for i in 1 2; do npx electron-builder --win nsis --x64 --publish never && break; echo "retrying…"; sleep 20; done
+          test -f dist/FairTaxPortal-Setup.exe
+          ls dist
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-app
+          name: Fair Tax for Windows
+          body: |
+            Windows app for the Fair Tax Portal (CRM, Audit Desk, reminders in the tray, AI assistant with Windows speech).
+            Download FairTaxPortal-Setup.exe and run it. If Windows shows "Windows protected your PC", click More info → Run anyway.
+            Build ${{ github.run_number }}.
+          files: desktop-app/dist/FairTaxPortal-Setup.exe
+          make_latest: false
+          overwrite_files: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FairTaxPortal-Setup
+          path: desktop-app/dist/FairTaxPortal-Setup.exe
