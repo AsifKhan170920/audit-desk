@@ -333,6 +333,19 @@ table.cfpy th[scope=row]{font-weight:400}
 .gs-list{margin:4px 0 8px;padding-left:18px;font-size:13px;max-height:180px;overflow:auto}
 .nn-btn{border:1px dashed var(--line);background:var(--surface);border-radius:6px;cursor:pointer;padding:1px 4px;text-align:center}
 .nn-btn:hover{border-color:var(--accent)}
+table.matrix.cfpy{table-layout:fixed;min-width:780px}table.matrix.cfpy thead th:first-child{min-width:0}table.matrix.cfpy td input{min-width:0}
+table.cfpy td.cf-h{white-space:nowrap;padding-left:2px;padding-right:2px}
+.cf-grip{cursor:grab;color:var(--muted);padding:0 5px;user-select:none;font-weight:700;letter-spacing:-2px;vertical-align:middle}
+table.cfpy .cf-mv{width:22px;height:24px;font-size:10px}
+table.cfpy input.cf-label{width:100%;min-width:230px;border:1px solid transparent;background:transparent;padding:5px 7px;border-radius:6px;font:inherit;font-weight:400;color:var(--ink)}
+table.cfpy input.cf-label:hover{border-color:var(--line);background:var(--surface)}
+table.cfpy input.cf-label:focus{border-color:var(--accent);background:var(--surface);outline:none}
+table.cfpy tr.cf-user input.cf-label{color:var(--primary);font-weight:600}
+table.cfpy tr.cf-sec .cf-add{margin-left:14px;text-transform:none;letter-spacing:0;font-size:12.5px}
+table.cfpy td.cf-acts{white-space:nowrap;text-align:right}
+table.cfpy tr.dragging{opacity:.45}
+table.cfpy tr.drop-before>*{box-shadow:inset 0 3px 0 var(--accent)}
+table.cfpy tr.drop-after>*{box-shadow:inset 0 -3px 0 var(--accent)}
 </style>
 <style id="report-css"></style>
 </head>
@@ -551,7 +564,7 @@ function compute(eng, prevEng){
     cfp.loans = R(mm.loans); cfp.ca = py.caMove; cfp.div = -py.div; cfp.otherFin = R(mm.otherFin); cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin;
     cfp.net = cfp.op + cfp.invTot + cfp.finTot; cfp.open = R(mm.openCash); cfp.close = cfp.open + cfp.net; cfp.diff = cfp.close - py.cash;
   }
-  cfp = applyCfPyOverrides(eng, cfp, py, scheds);
+  cfp = applyCfLayout(eng, cf, cfp, cy, py);
   const checks = [];
   const add = (ok, text, level) => checks.push({ok, text, level: ok ? 'ok' : (level || 'bad')});
   add(dr === cr, dr === cr ? 'Trial balance balances' : `Trial balance is out by ${fmtN(dr - cr)}`);
@@ -606,6 +619,7 @@ function rollForward(client, eng){
   n.ppe = r.ppe.map(p => ({id: uid(), name: p.name, life: p.life, costOpen: p.costClose, add: 0, disp: 0, depOpen: p.depClose, charge: 0, depDisp: 0, docs: []}));
   n.ppePy = {add: r.ppeT.add, disp: r.ppeT.dispWdv, charge: r.ppeT.charge};
   n.layout = JSON.parse(JSON.stringify(layoutOf(eng)));
+  if (eng.cfLayout) n.cfLayout = JSON.parse(JSON.stringify(eng.cfLayout));
   return n;
 }
 function prevOf(client, eng){ return (client.engagements || []).find(e => e.year === eng.year - 1) || null; }
@@ -1081,33 +1095,21 @@ function buildReport(client, eng, prevEng){
     {k: 'grid', plain: true, header: [''].concat(eqCols), sub: [''].concat(eqCols.map(() => 'AED')), rows: soceRows, firstWidth: '*', numWidth: eqCols.length >= 6 ? 52 : 57, small: true},
     {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
 
-  const cf = r.cf, cfp = r.cfp;
-  const socf = [G('Cash flows from operating activities'), row('Profit for the year', '', cf.pat, cfp.pat), G('Adjustments for:'),
-    row('Depreciation on property, plant and equipment', 'dep', cf.dep, cfp.dep)];
-  if (nz(cf.gain, cfp.gain)) socf.push(row('Gain on disposal of property, plant and equipment', 'gain', cf.gain, cfp.gain));
-  if (nz(cf.eosb, cfp.eosb)) socf.push(row('Provision for end of service benefits (net)', 'eosb', cf.eosb, cfp.eosb));
-  socf.push(row('Operating profit before working capital changes', '', cf.opBefore, cfp.opBefore, 'tot'));
-  if (nz(cf.inv, cfp.inv)) socf.push(row('(Increase) / decrease in inventory', '', cf.inv, cfp.inv));
-  socf.push(row('(Increase) / decrease in accounts and other receivables', '', cf.rec, cfp.rec));
-  if (nz(cf.rprec, cfp.rprec)) socf.push(row('(Increase) / decrease in due from related parties', '', cf.rprec, cfp.rprec));
-  socf.push(row('Increase / (decrease) in accounts and other payables', '', cf.pay, cfp.pay));
-  if (nz(cf.rppay, cfp.rppay)) socf.push(row('Increase / (decrease) in due to related parties', '', cf.rppay, cfp.rppay));
-  const cfc = (x) => [cf.custom[x.key] || 0, (cfp.custom || {})[x.key] || 0];
-  custom('ca').concat(custom('cl')).forEach(x => { const [a, b] = cfc(x); if (nz(a, b)) socf.push(row(`${x.sec === 'ca' ? '(Increase) / decrease' : 'Increase / (decrease)'} in ${x.label.toLowerCase()}`, '', a, b)); });
-  if (nz(0, cfp.otherOp)) socf.push(row('Other working capital movements', '', 0, cfp.otherOp));
-  socf.push(row('Net cash generated from / (used in) operating activities (A)', '', cf.op, cfp.op, 'tot'), GAP,
-    G('Cash flows from investing activities'), row('Additions to property, plant and equipment', 'ppe', cf.additions, cfp.additions));
-  if (nz(cf.proceeds, cfp.proceeds)) socf.push(row('Proceeds from disposal of property, plant and equipment', '', cf.proceeds, cfp.proceeds));
-  custom('nca').forEach(x => { const [a, b] = cfc(x); if (nz(a, b)) socf.push(row(`Movement in ${x.label.toLowerCase()}`, x.key, a, b)); });
-  if (nz(0, cfp.otherInv)) socf.push(row('Other investing movements', '', 0, cfp.otherInv));
-  socf.push(row('Net cash used in investing activities (B)', '', cf.invTot, cfp.invTot, 'tot'), GAP, G('Cash flows from financing activities'));
-  if (nz(cf.loans, cfp.loans)) socf.push(row('Net movement in loans and borrowings', '', cf.loans, cfp.loans));
-  if (nz(cf.ca, cfp.ca)) socf.push(row('Net movement in shareholder’s current account', 'ca', cf.ca, cfp.ca));
-  if (nz(cf.div, cfp.div)) socf.push(row('Dividend paid', 're', cf.div, cfp.div));
-  custom('ncl').concat(custom('eq')).forEach(x => { const [a, b] = cfc(x); if (nz(a, b)) socf.push(row(`Movement in ${x.label.toLowerCase()}`, x.key, a, b)); });
-  if (nz(0, cfp.otherFin)) socf.push(row('Other financing movements', '', 0, cfp.otherFin));
-  socf.push(row('Net cash generated from / (used in) financing activities (C)', '', cf.finTot, cfp.finTot, 'tot'), GAP,
-    row('Net increase / (decrease) in cash and cash equivalents (A+B+C)', '', cf.net, cfp.net),
+  const cf = r.cf, cfp = r.cfp, cfRowsL = cfLines(eng).filter(x => !x.hidden);
+  const cfVal = (bk, x) => x.kind === 'std' ? bk[x.key] : (bk.custom || {})[x.key] || 0;
+  const socf = [];
+  CF_SECS.forEach(([sec, head, totKey, totLabel]) => {
+    if (sec === 'adj') socf.push(G(head)); else if (sec !== 'wc') socf.push(GAP, G(head));
+    let adjHead = sec !== 'adj';
+    cfRowsL.filter(x => x.sec === sec).forEach(x => {
+      const a = cfVal(cf, x), b = cfVal(cfp, x);
+      if (!(x.kind === 'user' || CF_ALWAYS.includes(x.key) || nz(a, b))) return;
+      if (!adjHead && x.key !== 'pat'){ socf.push(G('Adjustments for:')); adjHead = true; }
+      socf.push(row(x.label, x.note, a, b));
+    });
+    socf.push(row(totLabel, '', cf[totKey], cfp[totKey], 'tot'));
+  });
+  socf.push(GAP, row('Net increase / (decrease) in cash and cash equivalents (A+B+C)', '', cf.net, cfp.net),
     row('Cash and cash equivalents at the beginning of the year', '', cf.open, cfp.open),
     row('Cash and cash equivalents at the end of the year', 'cash', cf.close, cfp.close, 'grand'));
   sections.push({id: 'socf', kind: 'statement', head: statementHead('STATEMENT OF CASH FLOWS', period), items: [
@@ -2664,7 +2666,7 @@ function vStatements(){
   const tabs = [['sofp', 'Financial position'], ['soci', 'Profit or loss'], ['soce', 'Changes in equity'], ['socf', 'Cash flows'], ['notes', 'Notes']];
   const checks = M.r.checks.map(x => `<li class="ck ${x.level}"><span class="dot"></span>${e_(x.text)}</li>`).join('');
   return `<section class="panel"><div class="head"><div><h1>Financial statements FY${en.year}</h1><p class="sub">Built live from the trial balance with FY${en.year - 1} comparatives. Click a current-year amount to see its ledgers and proof.</p></div>
-    <div class="row">${UI.stTab === 'socf' ? `<button class="btn" data-act="edit-cfpy">Edit FY${en.year - 1} cash flow</button>` : ''}<button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div><ul class="checks">${checks}</ul></section>
+    <div class="row">${UI.stTab === 'socf' ? `<button class="btn" data-act="edit-cfpy">Edit cash flow lines &amp; FY${en.year - 1}</button>` : ''}<button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div><ul class="checks">${checks}</ul></section>
   <section class="panel"><div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${UI.stTab === k}" data-sttab="${k}">${l}</button>`).join('')}</div>
     <div class="paper-wrap"><div class="paper">${reportHtml(M, {only: [UI.stTab], interactive: true})}</div></div></section>`;
 }
@@ -3240,6 +3242,7 @@ function fxGet(en, key){
   if (k[0] === 'L'){ const l = en.tb.find(x => x.id === k[1]); return l ? R(l[k[2]]) : undefined; }
   if (k[0] === 'P'){ const p = (en.ppe || []).find(x => x.id === k[1]); return p ? R(p[k[2]]) : undefined; }
   if (k[0] === 'CFP'){ return R((en.cfPy || {})[k[1]]); }
+  if (k[0] === 'CFC'){ return R((en.cfCy || {})[k[1]]); }
   if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o && o[parts[i]]; } return o ? R(o[parts[parts.length - 1]]) : undefined; }
 }
 function fxSet(en, key, v){
@@ -3247,12 +3250,14 @@ function fxSet(en, key, v){
   if (k[0] === 'L'){ const l = en.tb.find(x => x.id === k[1]); if (l) l[k[2]] = v; return; }
   if (k[0] === 'P'){ const p = (en.ppe || []).find(x => x.id === k[1]); if (p) p[k[2]] = v; return; }
   if (k[0] === 'CFP'){ (en.cfPy = en.cfPy || {})[k[1]] = v; return; }
+  if (k[0] === 'CFC'){ (en.cfCy = en.cfCy || {})[k[1]] = v; return; }
   if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o[parts[i]] = o[parts[i]] || {}; } o[parts[parts.length - 1]] = v; }
 }
 function fxTargetExists(en, key){
   const k = key.split(':');
   if (k[0] === 'L') return en.tb.some(x => x.id === k[1]);
   if (k[0] === 'P') return (en.ppe || []).some(x => x.id === k[1]);
+  if (k[0] === 'CFC' || (k[0] === 'CFP' && /^u/.test(k[1]))) return ((en.cfLayout || {}).custom || []).some(u => u.key === k[1]);
   return true;
 }
 /* recalculate every formula of a client (all years) until nothing changes */
@@ -3307,6 +3312,7 @@ function fxCatalogBuild(c, en){
     if (r.ppe.length) Object.entries(FX_FIELDS_PPE).forEach(([f, lbl]) => push('property, plant & equipment', `PPE total: ${lbl}${yr}`, `{${e.year}:P:*:${f}}`, r.ppeT[f]));
     FX_CALC.forEach(([k, lbl]) => { push('calculated', lbl + yr, `{${e.year}:C:${k}:cy}`, r.cy[k]); push('calculated', lbl + ' PY' + yr, `{${e.year}:C:${k}:py}`, r.py[k]); });
     FX_CF.forEach(([k, lbl]) => { push('cash flow', `Cash flow: ${lbl}${yr}`, `{${e.year}:F:${k}:cy}`, r.cf[k]); push('cash flow', `Cash flow: ${lbl} PY${yr}`, `{${e.year}:F:${k}:py}`, r.cfp[k]); });
+    cfLines(e).filter(x => x.kind !== 'std' && !x.hidden).forEach(x => { push('cash flow', `Cash flow: ${x.label}${yr}`, `{${e.year}:F:${x.key}:cy}`, (r.cf.custom || {})[x.key]); push('cash flow', `Cash flow: ${x.label} PY${yr}`, `{${e.year}:F:${x.key}:py}`, (r.cfp.custom || {})[x.key]); });
   });
   return out;
 }
@@ -3503,46 +3509,78 @@ const fxLinkedCount = en => Object.values(en.fx || {}).filter(f => [...String(f)
    PRIOR YEAR CASH FLOW – every line can be typed (blank = automatic)
    ============================================================ */
 const CFPY_KEYS = ['pat', 'dep', 'gain', 'eosb', 'inv', 'rec', 'rprec', 'pay', 'rppay', 'otherOp', 'additions', 'proceeds', 'otherInv', 'loans', 'ca', 'div', 'otherFin', 'open'];
-function applyCfPyOverrides(eng, cfp, py, scheds){
-  const ov = eng.cfPy || {};
-  const keys = Object.keys(ov).filter(k => ov[k] !== null && ov[k] !== undefined && ov[k] !== '');
-  if (!keys.length) return cfp;
-  cfp.custom = Object.assign({}, cfp.custom || {});
-  keys.forEach(k => { if (CFPY_KEYS.includes(k)) cfp[k] = R(ov[k]); else if (k.startsWith('x')) cfp.custom[k] = R(ov[k]); });
-  CFPY_KEYS.forEach(k => { cfp[k] = R(cfp[k]); });
-  const cS = secs => scheds.filter(s => s.custom && secs.includes(s.sec)).reduce((a, s) => a + R(cfp.custom[s.key]), 0);
-  cfp.opBefore = cfp.pat + cfp.dep + cfp.gain + cfp.eosb;
-  cfp.op = cfp.opBefore + cfp.inv + cfp.rec + cfp.rprec + cfp.pay + cfp.rppay + cfp.otherOp + cS(['ca', 'cl']);
-  cfp.invTot = cfp.additions + cfp.proceeds + cfp.otherInv + cS(['nca']);
-  cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin + cS(['ncl', 'eq']);
-  cfp.net = cfp.op + cfp.invTot + cfp.finTot; cfp.close = cfp.open + cfp.net; cfp.diff = cfp.close - py.cash;
+/* cash flow lines: the standard lines, custom schedule movements and lines the user added – renamed, removed and reordered per year */
+const CF_SECS = [['adj', 'Cash flows from operating activities', 'opBefore', 'Operating profit before working capital changes'], ['wc', 'Working capital changes', 'op', 'Net cash generated from / (used in) operating activities (A)'],
+  ['inv', 'Cash flows from investing activities', 'invTot', 'Net cash used in investing activities (B)'], ['fin', 'Cash flows from financing activities', 'finTot', 'Net cash generated from / (used in) financing activities (C)']];
+const CF_STD = {pat: ['adj', 'Profit for the year'], dep: ['adj', 'Depreciation on property, plant and equipment'], gain: ['adj', 'Gain on disposal of property, plant and equipment'], eosb: ['adj', 'Provision for end of service benefits (net)'],
+  inv: ['wc', '(Increase) / decrease in inventory'], rec: ['wc', '(Increase) / decrease in accounts and other receivables'], rprec: ['wc', '(Increase) / decrease in due from related parties'], pay: ['wc', 'Increase / (decrease) in accounts and other payables'], rppay: ['wc', 'Increase / (decrease) in due to related parties'], otherOp: ['wc', 'Other working capital movements'],
+  additions: ['inv', 'Additions to property, plant and equipment'], proceeds: ['inv', 'Proceeds from disposal of property, plant and equipment'], otherInv: ['inv', 'Other investing movements'],
+  loans: ['fin', 'Net movement in loans and borrowings'], ca: ['fin', 'Net movement in shareholder’s current account'], div: ['fin', 'Dividend paid'], otherFin: ['fin', 'Other financing movements']};
+const CF_ALWAYS = ['pat', 'dep', 'rec', 'pay', 'additions'];
+const CF_NOTE = {dep: 'dep', gain: 'gain', eosb: 'eosb', additions: 'ppe', ca: 'ca', div: 're'};
+const cfLayoutOf = eng => { const L = eng.cfLayout = eng.cfLayout || {}; L.order = L.order || []; L.labels = L.labels || {}; L.hidden = L.hidden || {}; L.custom = L.custom || []; return L; };
+function cfLines(eng){
+  const L = eng.cfLayout || {}, labels = L.labels || {}, hidden = L.hidden || {}, info = {}, bySec = {adj: [], wc: [], inv: [], fin: []};
+  Object.entries(CF_STD).forEach(([k, [sec, def]]) => { info[k] = {key: k, def, kind: 'std', note: CF_NOTE[k] || ''}; if (!/^other/.test(k)) bySec[sec].push(k); });
+  const sch = schedulesInOrder(eng).filter(x => x.custom), add = (list, sec, def, note) => list.forEach(x => { info[x.key] = {key: x.key, def: def(x), kind: 'sched', note: note ? x.key : ''}; bySec[sec].push(x.key); });
+  add(sch.filter(x => x.sec === 'ca').concat(sch.filter(x => x.sec === 'cl')), 'wc', x => `${x.sec === 'ca' ? '(Increase) / decrease' : 'Increase / (decrease)'} in ${x.label.toLowerCase()}`, false);
+  add(sch.filter(x => x.sec === 'nca'), 'inv', x => `Movement in ${x.label.toLowerCase()}`, true);
+  add(sch.filter(x => x.sec === 'ncl').concat(sch.filter(x => x.sec === 'eq')), 'fin', x => `Movement in ${x.label.toLowerCase()}`, true);
+  bySec.wc.push('otherOp'); bySec.inv.push('otherInv'); bySec.fin.push('otherFin');
+  (L.custom || []).forEach(u => { info[u.key] = {key: u.key, def: u.label || 'New line', kind: 'user', note: ''}; (bySec[u.sec] || bySec.fin).push(u.key); });
+  const order = mergeOrder(L.order, [].concat(...CF_SECS.map(([sec]) => ['§' + sec].concat(bySec[sec]))));
+  let sec = 'adj'; const out = [];
+  order.forEach(k => { if (k[0] === '§'){ sec = k.slice(1); return; } out.push(Object.assign({}, info[k], {sec, label: labels[k] || info[k].def, hidden: !!hidden[k] && info[k].kind !== 'user'})); });
+  out.order = order;
+  return out;
+}
+function applyCfLayout(eng, cf, cfp, cy, py){
+  const ov = eng.cfPy || {}, cyv = eng.cfCy || {};
+  cf.custom = Object.assign({}, cf.custom || {}); cfp.custom = Object.assign({}, cfp.custom || {});
+  Object.keys(ov).forEach(k => { const v = ov[k]; if (v === null || v === undefined || v === '') return; if (CFPY_KEYS.includes(k)) cfp[k] = R(v); else cfp.custom[k] = R(v); });
+  Object.keys(cyv).forEach(k => { if (!CFPY_KEYS.includes(k)) cf.custom[k] = R(cyv[k]); });
+  const rows = cfLines(eng).filter(x => !x.hidden);
+  [[cf, cy], [cfp, py]].forEach(([bk, yr]) => {
+    CFPY_KEYS.forEach(k => { bk[k] = R(bk[k]); });
+    const sum = sec => rows.filter(x => x.sec === sec).reduce((a, x) => a + (x.kind === 'std' ? R(bk[x.key]) : R(bk.custom[x.key])), 0);
+    bk.opBefore = sum('adj'); bk.op = bk.opBefore + sum('wc'); bk.invTot = sum('inv'); bk.finTot = sum('fin');
+    bk.net = bk.op + bk.invTot + bk.finTot; bk.close = bk.open + bk.net; bk.diff = bk.close - yr.cash;
+  });
   return cfp;
 }
 function pyCfTable(en, r){
-  const cf = r.cf, cfp = r.cfp, ov = en.cfPy || {}, Y = en.year, PY = Y - 1, pe = prev();
-  const custom = secs => schedulesInOrder(en).filter(s => s.custom && secs.includes(s.sec)).map(s => [s.key, `${s.sec === 'ca' || s.sec === 'nca' ? '(Increase) / decrease in' : 'Increase / (decrease) in'} ${s.label.toLowerCase()}`, true]);
-  const rows = [['g', 'Cash flows from operating activities'], ['pat', 'Profit for the year'], ['dep', 'Depreciation'], ['gain', 'Gain on disposal of PPE (as a minus)'], ['eosb', 'End of service benefits (net)'],
-    ['t', 'opBefore', 'Operating profit before working capital changes'], ['inv', '(Increase) / decrease in inventory'], ['rec', '(Increase) / decrease in accounts and other receivables'], ['rprec', '(Increase) / decrease due from related parties'],
-    ['pay', 'Increase / (decrease) in accounts and other payables'], ['rppay', 'Increase / (decrease) due to related parties']].concat(custom(['ca', 'cl']), [['otherOp', 'Other working capital movements'],
-    ['t', 'op', 'Net cash from operating activities (A)'], ['g', 'Cash flows from investing activities'], ['additions', 'Additions to property, plant and equipment'], ['proceeds', 'Proceeds from disposal of PPE']], custom(['nca']), [['otherInv', 'Other investing movements'],
-    ['t', 'invTot', 'Net cash from investing activities (B)'], ['g', 'Cash flows from financing activities'], ['loans', 'Net movement in loans and borrowings'], ['ca', 'Net movement in shareholder’s current account'], ['div', 'Dividend paid']], custom(['ncl', 'eq']), [['otherFin', 'Other financing movements'],
-    ['t', 'finTot', 'Net cash from financing activities (C)'], ['t', 'net', 'Net increase / (decrease) in cash (A+B+C)'], ['open', `Cash and cash equivalents at the beginning of FY${PY}`], ['t', 'close', `Cash and cash equivalents at the end of FY${PY}`]]);
-  const val = (b, k, isCustom) => isCustom ? R((b.custom || {})[k]) : R(b[k]);
-  const body = rows.map(row => {
-    if (row[0] === 'g') return `<tr class="msub"><th colspan="4">${e_(row[1])}</th></tr>`;
-    if (row[0] === 't') return `<tr class="tot"><th scope="row">${e_(row[2])}</th><td class="r calc"${fxRefAttr(`{${Y}:F:${row[1]}:cy}`)}>${fmtN(cf[row[1]])}</td><td class="r calc b"${fxRefAttr(`{${Y}:F:${row[1]}:py}`)}>${fmtN(cfp[row[1]])}</td><td></td></tr>`;
-    const [k, label, isCustom] = row, key = 'CFP:' + k, has = ov[k] !== undefined && ov[k] !== null && ov[k] !== '';
-    return `<tr><th scope="row">${e_(label)}</th><td class="r calc"${fxRefAttr(`{${Y}:F:${k}:cy}`)}>${fmtN(val(cf, k, isCustom))}</td>
-      <td><input class="numi${has ? ' ov' : ''}${fxCls(en, key)}" id="cfpy-${k}" data-cfpy="${k}"${fxAttrs(en, key, `{${Y}:F:${k}:py}`)} value="${fmtSigned(val(cfp, k, isCustom))}" inputmode="decimal" aria-label="${e_(label)} FY${PY}"></td>
-      <td>${has ? `<button class="linkish" data-act="cfpy-reset" data-k="${k}" title="Back to the automatic figure">↺ auto</button>` : ''}</td></tr>`;
-  }).join('');
-  const src = pe ? `Blank lines come automatically from FY${pe.year} in this software.` : `Blank lines come from the prior year details above (or 0).`;
-  return `<h3 class="h3" id="py-cf">Prior year cash flow FY${PY}</h3>
-    <p class="small muted">Type any FY${PY} figure exactly as in last year’s audited cash flow – it overrides the automatic figure. ${src} Formulas work here too (type =).</p>
-    <div class="table-wrap"><table class="ui matrix cfpy"><colgroup><col><col style="width:150px"><col style="width:170px"><col style="width:70px"></colgroup>
-      <thead><tr><th>Line</th><th class="r">FY${Y}</th><th class="r">FY${PY} <span class="muted">(type to change)</span></th><th></th></tr></thead><tbody>${body}</tbody></table></div>
-    <div class="row between"><p class="small ${cfp.diff === 0 ? 'ok-t' : 'bad-t'}">${cfp.diff === 0 ? `FY${PY} cash flow reconciles to cash of ${fmtN(r.py.cash)}` : `FY${PY} cash flow ends at ${fmtN(cfp.close)}, but cash at the end of FY${PY} is ${fmtN(r.py.cash)} (difference ${fmtN(cfp.diff)})`}</p>
-      ${Object.keys(ov).length ? `<button class="linkish" data-act="cfpy-reset-all">Clear all typed FY${PY} figures</button>` : ''}</div>`;
+  const cf = r.cf, cfp = r.cfp, ov = en.cfPy || {}, cyv = en.cfCy || {}, Y = en.year, PY = Y - 1, pe = prev();
+  const lines = cfLines(en), vis = lines.filter(x => !x.hidden), removed = lines.filter(x => x.hidden);
+  const val = (bk, x) => x.kind === 'std' ? R(bk[x.key]) : R((bk.custom || {})[x.key]);
+  const pyIn = (k, label) => { const key = 'CFP:' + k; return `<input class="numi${ov[k] !== undefined && ov[k] !== null && ov[k] !== '' ? ' ov' : ''}${fxCls(en, key)}" id="cfpy-${k}" data-cfpy="${k}"${fxAttrs(en, key, `{${Y}:F:${k}:py}`)} value="${fmtSigned(k === 'open' ? cfp.open : val(cfp, lines.find(x => x.key === k) || {key: k, kind: 'std'}))}" inputmode="decimal" aria-label="${e_(label)} FY${PY}">`; };
+  const auto = k => ov[k] !== undefined && ov[k] !== null && ov[k] !== '' ? `<button class="linkish" data-act="cfpy-reset" data-k="${k}" title="Back to the automatic FY${PY} figure">↺ auto</button>` : '';
+  const tot = (key, label) => `<tr class="tot"><td></td><th scope="row">${e_(label)}</th><td class="r calc"${fxRefAttr(`{${Y}:F:${key}:cy}`)}>${fmtN(cf[key])}</td><td class="r calc b"${fxRefAttr(`{${Y}:F:${key}:py}`)}>${fmtN(cfp[key])}</td><td></td></tr>`;
+  const line = x => {
+    const k = x.key, ck = 'CFC:' + k;
+    const cyCell = x.kind === 'user' ? `<td><input class="numi${fxCls(en, ck)}" id="cfcy-${k}" data-cfcy="${k}"${fxAttrs(en, ck, `{${Y}:F:${k}:cy}`)} value="${fmtSigned(cyv[k])}" inputmode="decimal" aria-label="${e_(x.label)} FY${Y}"></td>`
+      : `<td class="r calc"${fxRefAttr(`{${Y}:F:${k}:cy}`)} title="Automatic from the FY${Y} figures">${fmtN(val(cf, x))}</td>`;
+    return `<tr class="cf-line${x.kind === 'user' ? ' cf-user' : ''}" data-cfk="${k}">
+      <td class="cf-h"><span class="cf-grip" title="Drag up or down" aria-hidden="true">⋮⋮</span><button class="icon-btn cf-mv" data-act="cf-move" data-k="${k}" data-dir="-1" title="Move up" aria-label="Move up">▲</button><button class="icon-btn cf-mv" data-act="cf-move" data-k="${k}" data-dir="1" title="Move down" aria-label="Move down">▼</button></td>
+      <th scope="row"><input class="cf-label" id="cfl-${k}" data-cflabel="${k}" value="${e_(x.label)}" placeholder="${e_(x.def)}" aria-label="Line name"></th>${cyCell}
+      <td>${pyIn(k, x.label)}</td><td class="cf-acts">${auto(k)}<button class="icon-btn" data-act="cf-del" data-k="${k}" title="Remove this line" aria-label="Remove ${e_(x.label)}">${IC.trash}</button></td></tr>`;
+  };
+  let body = '';
+  CF_SECS.forEach(([sec, head, totKey, totLabel]) => {
+    body += `<tr class="msub cf-sec" data-cfsec="${sec}"><th colspan="5">${e_(head)}<button class="linkish cf-add" data-act="cf-add" data-sec="${sec}">+ Add line</button></th></tr>`
+      + vis.filter(x => x.sec === sec).map(line).join('') + tot(totKey, totLabel);
+  });
+  body += tot('net', 'Net increase / (decrease) in cash (A+B+C)')
+    + `<tr><td></td><th scope="row">Cash and cash equivalents at the beginning of FY${PY}</th><td class="r calc"${fxRefAttr(`{${Y}:F:open:cy}`)}>${fmtN(cf.open)}</td><td>${pyIn('open', 'Cash at the beginning')}</td><td class="cf-acts">${auto('open')}</td></tr>`
+    + tot('close', `Cash and cash equivalents at the end of the year`);
+  const src = pe ? `Blank FY${PY} figures come automatically from FY${pe.year} in this software.` : `Blank FY${PY} figures come from the prior year details above (or 0).`;
+  const L = en.cfLayout || {}, changed = (L.order || []).length || Object.keys(L.labels || {}).length || Object.keys(L.hidden || {}).length || (L.custom || []).length;
+  return `<h3 class="h3" id="py-cf">Cash flow lines &amp; prior year FY${PY}</h3>
+    <p class="small muted">Click a line name to rename it, <b>+ Add line</b> for a new account, 🗑 to remove, and drag ⋮⋮ (or ▲ ▼) to change its position – the statement of cash flows prints in this order. Type any FY${PY} figure exactly as in last year’s audited cash flow; ${src} Formulas work too (type =).</p>
+    <div class="table-wrap"><table class="ui matrix cfpy"><colgroup><col style="width:78px"><col><col style="width:140px"><col style="width:160px"><col style="width:96px"></colgroup>
+      <thead><tr><th></th><th>Line</th><th class="r">FY${Y}</th><th class="r">FY${PY} <span class="muted">(type to change)</span></th><th></th></tr></thead><tbody>${body}</tbody></table></div>
+    ${removed.length ? `<p class="small muted cf-removed">Removed lines: ${removed.map(x => `${e_(x.label)} <button class="linkish" data-act="cf-restore" data-k="${x.key}">restore</button>`).join(' · ')}</p>` : ''}
+    <div class="row between"><p class="small ${cfp.diff === 0 ? 'ok-t' : 'bad-t'}">${cfp.diff === 0 ? `FY${PY} cash flow reconciles to cash of ${fmtN(r.py.cash)}` : `FY${PY} cash flow ends at ${fmtN(cfp.close)}, but cash at the end of FY${PY} is ${fmtN(r.py.cash)} (difference ${fmtN(cfp.diff)})`}${cf.diff === 0 ? '' : ` · <span class="bad-t">FY${Y} difference ${fmtN(cf.diff)}</span>`}</p>
+      <span class="row">${Object.keys(ov).length ? `<button class="linkish" data-act="cfpy-reset-all">Clear all typed FY${PY} figures</button>` : ''}${changed ? `<button class="linkish" data-act="cf-reset-layout">Standard cash flow lines</button>` : ''}</span></div>`;
 }
 
 /* ============================================================
@@ -3629,6 +3667,7 @@ function copyStructure(from, n){
   n.schedules = JSON.parse(JSON.stringify(ensureSchedules(from))); ensureSchedules(n);
   n.texts = JSON.parse(JSON.stringify(from.texts)); n.customNotes = JSON.parse(JSON.stringify(from.customNotes || []));
   n.layout = JSON.parse(JSON.stringify(layoutOf(from))); n.settings.deprMethod = from.settings.deprMethod;
+  if (from.cfLayout) n.cfLayout = JSON.parse(JSON.stringify(from.cfLayout));
 }
 /* keep a year's prior-year cash flow exactly as it is before it gets linked to a new earlier year */
 function freezeCfPy(c, en){
@@ -3985,6 +4024,7 @@ function fsImportDo(){
       imp.type = nearest.type; imp.texts = JSON.parse(JSON.stringify(nearest.texts)); imp.customNotes = JSON.parse(JSON.stringify(nearest.customNotes || []));
       const L = JSON.parse(JSON.stringify(layoutOf(nearest))); L.noteOrder = (imp.layout || {}).noteOrder || L.noteOrder; imp.layout = L;
       if (old){ imp.gsheet = old.gsheet; imp.reports = old.reports; imp.tbDocs = old.tbDocs; }
+      if (!imp.cfLayout && nearest.cfLayout) imp.cfLayout = JSON.parse(JSON.stringify(nearest.cfLayout));
     }
     if (old){ c.engagements[c.engagements.indexOf(old)] = imp; }
     else c.engagements.push(imp);
@@ -4034,8 +4074,7 @@ function gsFormula(c, en, stored, cellOf){
   try { const out = '=' + conv(fxParse(stored)); return mapped ? out : null; } catch (e) { return null; }
 }
 function gsCfRows(en){
-  const custom = schedulesInOrder(en).filter(s => s.custom && ['ca', 'cl', 'nca', 'ncl', 'eq'].includes(s.sec)).map(s => [s.key, 'Movement in ' + s.label.toLowerCase()]);
-  return FX_CF.filter(([k]) => CFPY_KEYS.includes(k)).concat(custom);
+  return cfLines(en).filter(x => !x.hidden).map(x => [x.key, x.label]).concat([['open', 'Cash at the beginning of the year']]);
 }
 /* the sheet contents from the software, plus what was written (to spot later changes in the sheet) */
 function gsLayout(c, en){
@@ -4339,6 +4378,26 @@ document.addEventListener('click', async ev => {
         if (setNoteNumber(c, en, t.dataset.key, to, mode)){ save(); closeModal(); render(); toast(`Now note ${to}`); } else closeModal(); break; }
       case 'cfpy-reset': if (en.cfPy) delete en.cfPy[t.dataset.k]; if (en.fx) delete en.fx['CFP:' + t.dataset.k]; save(); render(); break;
       case 'cfpy-reset-all': if (confirm(`Clear all typed FY${en.year - 1} cash flow figures and use the automatic figures?`)){ en.cfPy = {}; Object.keys(en.fx || {}).forEach(k => { if (k.startsWith('CFP:')) delete en.fx[k]; }); save(); render(); } break;
+      case 'cf-add': { const L = cfLayoutOf(en), key = 'u' + uid(); L.custom.push({key, sec: t.dataset.sec, label: 'New line'});
+        const order = cfLines(en).order.filter(o => o !== key), nx = order.findIndex((o, i) => i > order.indexOf('§' + t.dataset.sec) && o[0] === '§');
+        order.splice(nx < 0 ? order.length : nx, 0, key); L.order = order; save(); render();
+        { const el = document.getElementById('cfl-' + key); if (el){ el.focus(); el.select(); el.scrollIntoView({block: 'center'}); } } break; }
+      case 'cf-move': { const L = cfLayoutOf(en), order = cfLines(en).order.slice(), k = t.dataset.k, d = +t.dataset.dir, i = order.indexOf(k); let j = i + d;
+        while (j > 0 && j < order.length && order[j][0] !== '§' && L.hidden[order[j]]) j += d;
+        if (i < 0 || j < 1 || j >= order.length) break;
+        order.splice(i, 1); order.splice(j, 0, k); L.order = order; save(); render();
+        { const b2 = document.querySelector(`[data-act=cf-move][data-k="${k}"][data-dir="${t.dataset.dir}"]`); if (b2) b2.focus(); } break; }
+      case 'cf-del': { const k = t.dataset.k, x = cfLines(en).find(y => y.key === k); if (!x) break;
+        const r0 = compute(en, prev()), a0 = x.kind === 'std' ? R(r0.cf[k]) : R((r0.cf.custom || {})[k]), b0 = x.kind === 'std' ? R(r0.cfp[k]) : R((r0.cfp.custom || {})[k]);
+        if ((a0 || b0) && !confirm(`“${x.label}” has figures (FY${en.year}: ${fmtN(a0)} · FY${en.year - 1}: ${fmtN(b0)}). After removing it, the cash flow totals will not include them. Remove it?`)) break;
+        const L = cfLayoutOf(en);
+        if (x.kind === 'user'){ L.custom = L.custom.filter(u => u.key !== k); L.order = L.order.filter(o => o !== k); delete L.labels[k]; if (en.cfCy) delete en.cfCy[k]; if (en.cfPy) delete en.cfPy[k]; if (en.fx){ delete en.fx['CFC:' + k]; delete en.fx['CFP:' + k]; } }
+        else L.hidden[k] = true;
+        save(); render(); toast(x.kind === 'user' ? 'Line deleted' : 'Line removed – restore it below the table'); break; }
+      case 'cf-restore': delete cfLayoutOf(en).hidden[t.dataset.k]; save(); render(); break;
+      case 'cf-reset-layout': if (confirm('Go back to the standard cash flow lines? Names, order and removed lines are reset, and lines you added are deleted with their figures.')){
+        cfLayoutOf(en).custom.forEach(u => { if (en.cfCy) delete en.cfCy[u.key]; if (en.cfPy) delete en.cfPy[u.key]; if (en.fx){ delete en.fx['CFC:' + u.key]; delete en.fx['CFP:' + u.key]; } });
+        delete en.cfLayout; save(); render(); } break;
       case 'edit-cfpy': UI.view = 'adjust'; save(); render(); { const el = document.getElementById('py-cf'); if (el) el.scrollIntoView({block: 'start'}); } break;
       case 'fx-link-prev': { const pe = prev(); if (!pe) break;
         if (!fxLinkedCount(en) && en.tb.some(l => R(l.py)) && !confirm(`Link FY${en.year} to FY${pe.year}? The FY${en.year - 1} column, PPE opening balances, reserves and prior year tax will follow FY${pe.year} live (figures typed there now are replaced).`)) break;
@@ -4435,6 +4494,12 @@ document.addEventListener('change', async ev => {
     try { toast('Reading the financial statements…'); const res = await readFsWorkbookFile(f); UI.fsImp = {res, fileName: f.name, newOnly: el.id === 'fs-in-client'}; document.querySelectorAll('.toast').forEach(x => x.remove()); fsImportModal(); }
     catch (err) { console.error(err); toast(err.message, true); } return; }
   if (el.id === 'ay-file-in' && el.files[0]){ UI.ayFile = el.files[0]; const s = document.getElementById('ay-file-name'); if (s) s.textContent = el.files[0].name; const rb = document.querySelector('input[name=ay-src][value=file]'); if (rb) rb.checked = true; return; }
+  if (el.dataset.cflabel){ const k = el.dataset.cflabel, L = cfLayoutOf(en), x = cfLines(en).find(y => y.key === k), v = el.value.trim();
+    if (!v || (x && v === x.def)) delete L.labels[k]; else L.labels[k] = v; save(); scheduleRender(); return; }
+  if (el.dataset.cfcy){ const k = el.dataset.cfcy;
+    if (!el.value.trim()){ if (en.cfCy) delete en.cfCy[k]; if (en.fx) delete en.fx['CFC:' + k]; }
+    else { try { fxInput(c, en, 'CFC:' + k, el.value, v => { (en.cfCy = en.cfCy || {})[k] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
+    save(); scheduleRender(); return; }
   if (el.dataset.cfpy){ const k = el.dataset.cfpy;
     if (!el.value.trim()){ if (en.cfPy) delete en.cfPy[k]; if (en.fx) delete en.fx['CFP:' + k]; }
     else { try { fxInput(c, en, 'CFP:' + k, el.value, v => { (en.cfPy = en.cfPy || {})[k] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
@@ -4490,8 +4555,23 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape' && document.getElementById('layer').innerHTML) closeModal();
-  if (ev.key === 'Enter' && ev.target.matches('td input')){ ev.preventDefault(); ev.target.blur(); }
+  if (ev.key === 'Enter' && ev.target.matches('td input, input.cf-label')){ ev.preventDefault(); ev.target.blur(); }
 });
+
+/* drag cash flow lines (Tax, reserve & prior year screen) */
+let CFDRAG = null;
+const cfDropAt = (tr, y) => tr.dataset.cfsec ? true : y > tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+document.addEventListener('mousedown', ev => { const g = ev.target.closest && ev.target.closest('.cf-grip'); if (g) g.closest('tr').draggable = true; });
+document.addEventListener('mouseup', () => { if (!CFDRAG) document.querySelectorAll('tr[data-cfk][draggable=true]').forEach(x => { x.draggable = false; }); });
+document.addEventListener('dragstart', ev => { const tr = ev.target.closest && ev.target.closest('tr[data-cfk]'); if (!tr || !tr.draggable) return; CFDRAG = tr.dataset.cfk; tr.classList.add('dragging'); ev.dataTransfer.effectAllowed = 'move'; try { ev.dataTransfer.setData('text/plain', CFDRAG); } catch (e) {} });
+document.addEventListener('dragover', ev => { if (!CFDRAG) return; const tr = ev.target.closest && ev.target.closest('tr[data-cfk],tr[data-cfsec]'); if (!tr) return; ev.preventDefault();
+  const after = cfDropAt(tr, ev.clientY); document.querySelectorAll('.drop-before,.drop-after').forEach(x => { if (x !== tr) x.classList.remove('drop-before', 'drop-after'); });
+  tr.classList.toggle('drop-after', after); tr.classList.toggle('drop-before', !after); });
+document.addEventListener('drop', ev => { if (!CFDRAG) return; const tr = ev.target.closest && ev.target.closest('tr[data-cfk],tr[data-cfsec]'); const k = CFDRAG; CFDRAG = null; if (!tr) { render(); return; } ev.preventDefault();
+  const en = eng(), L = cfLayoutOf(en), order = cfLines(en).order.filter(o => o !== k), target = tr.dataset.cfsec ? '§' + tr.dataset.cfsec : tr.dataset.cfk, at = order.indexOf(target);
+  if (at >= 0 && target !== k){ order.splice(cfDropAt(tr, ev.clientY) ? at + 1 : at, 0, k); L.order = order; save(); }
+  render(); });
+document.addEventListener('dragend', () => { CFDRAG = null; document.querySelectorAll('tr[data-cfk][draggable=true]').forEach(x => { x.draggable = false; }); document.querySelectorAll('.dragging,.drop-before,.drop-after').forEach(x => x.classList.remove('dragging', 'drop-before', 'drop-after')); });
 
 /* year controls live in the nav */
 function renderYearActions(){}
