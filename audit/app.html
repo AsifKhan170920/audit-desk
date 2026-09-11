@@ -335,6 +335,15 @@ table.cfpy th[scope=row]{font-weight:400}
 .gs-list{margin:4px 0 8px;padding-left:18px;font-size:13px;max-height:180px;overflow:auto}
 .nn-btn{border:1px dashed var(--line);background:var(--surface);border-radius:6px;cursor:pointer;padding:1px 4px;text-align:center}
 .nn-btn:hover{border-color:var(--accent)}
+.qd table.ui td input{min-width:0}.qd .q-tab td,.qd .q-tab th{padding:4px 6px}.qd .q-ppe input{min-width:78px}
+.qd th.q-hl,.qd td.q-hl{background:#FFF6E3}.qd tr.q-hlr th,.qd tr.q-hlr td{background:#FFF6E3}
+.qd .q-tot{display:flex;gap:18px;font-size:14px;color:var(--muted)}.qd .q-tot b{color:var(--ink);font-variant-numeric:tabular-nums}
+.qd .q-fig th[scope=row]{font-weight:400;font-size:14px;text-transform:none;letter-spacing:0;color:var(--ink);background:transparent;white-space:normal}
+.qd .q-fig tr.tot th,.qd .q-fig tr.tot td{font-weight:700;border-top:1.5px solid var(--ink)}
+.qd .q-soce th[scope=row]{text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--ink);background:transparent;font-weight:400;white-space:normal;min-width:190px}
+.qd .q-soce tr.q-auto th,.qd .q-soce tr.q-auto td{color:var(--muted)}.qd .q-soce tr.bold th,.qd .q-soce tr.tot th,.qd .q-soce tr.grand th,.qd .q-soce tr.tot td,.qd .q-soce tr.grand td{font-weight:700;color:var(--ink)}
+.qd .q-soce tr.tot td,.qd .q-soce tr.grand td{border-top:1.5px solid var(--ink)}.qd .q-soce tr.q-add td{border-bottom:0;padding-bottom:10px}
+.qd .q-soce input.numi{min-width:86px}
 table.matrix.cfpy{table-layout:fixed;min-width:900px}table.matrix.cfpy thead th{white-space:normal;vertical-align:bottom}table.cfpy td.cf-auto{color:var(--muted)}table.cfpy td.cf-dif{background:#FBF0DC;color:#7a5200;font-weight:700}table.cfpy input.numi.dv{box-shadow:inset 3px 0 0 var(--warn);background:#FFF8EC}.cf-review{margin:8px 0}.cf-review .btn{margin-left:8px}tr.wdv-diff th{color:var(--bad);font-weight:600}table.matrix.cfpy thead th:first-child{min-width:0}table.matrix.cfpy td input{min-width:0}
 table.cfpy td.cf-h{white-space:nowrap;padding-left:2px;padding-right:2px}
 .cf-grip{cursor:grab;color:var(--muted);padding:0 5px;user-select:none;font-weight:700;letter-spacing:-2px;vertical-align:middle}
@@ -530,11 +539,14 @@ function compute(eng, prevEng){
   py.ctAdj = R(PYI.ctAdjust);
   py.ct = PYI.ctMode === 'manual' ? R(PYI.ctAmount) : ctFor(py.pbt, py.ctAdj);
   cy.pat = cy.pbt - cy.ct; py.pat = py.pbt - py.ct;
-  cy.lrOpen = cy.lr; cy.lrTransfer = R(S.lrTransfer); cy.lrClose = cy.lrOpen + cy.lrTransfer;
+  const eqIt = (yr, col) => (eng.soceItems || []).filter(x => x.yr === yr).reduce((a, x) => a + R(x[col]), 0);
+  ['cap', 'lr', 're', 'ca', 'oth'].forEach(col => { cy[col + 'Items'] = eqIt('cy', col); py[col + 'Items'] = eqIt('py', col); });
+  cy.lrOpen = cy.lr; cy.lrTransfer = R(S.lrTransfer); cy.lrClose = cy.lrOpen + cy.lrTransfer + cy.lrItems;
   cy.lrSuggest = Math.max(0, Math.min(Math.round(cy.pat * 0.05), Math.round(cy.cap * 0.5) - cy.lrOpen));
-  py.lrClose = py.lr; py.lrTransfer = R(PYI.lrTransfer); py.lrOpen = py.lrClose - py.lrTransfer;
-  cy.reOpen = cy.re; cy.reClose = cy.reOpen + cy.pat - cy.div - cy.lrTransfer;
-  py.reClose = py.re; py.reOpen = py.reClose - py.pat + py.div + py.lrTransfer;
+  py.lrClose = py.lr; py.lrTransfer = R(PYI.lrTransfer); py.lrOpen = py.lrClose - py.lrTransfer - py.lrItems;
+  cy.reOpen = cy.re; cy.reClose = cy.reOpen + cy.pat - cy.div - cy.lrTransfer + cy.reItems;
+  py.reClose = py.re; py.reOpen = py.reClose - py.pat + py.div + py.lrTransfer - py.reItems;
+  cy.capOpen = py.cap; py.capOpen = py.cap - py.capItems;
   cy.caOpen = py.ca; cy.caClose = cy.ca; cy.caMove = cy.caClose - cy.caOpen;
   py.caClose = py.ca; py.caOpen = R(PYI.caOpen); py.caMove = py.caClose - py.caOpen;
   for (const b of [cy, py]){
@@ -554,7 +566,7 @@ function compute(eng, prevEng){
   cf.op = cf.opBefore + cf.inv + cf.rec + cf.rprec + cf.pay + cf.rppay + cSum(['ca', 'cl']);
   cf.additions = ppe.length ? -ppeT.add : -R(S.ppeAdditions); cf.proceeds = R(S.disposalProceeds);
   cf.invTot = cf.additions + cf.proceeds + cSum(['nca']);
-  cf.loans = (cy.ltl + cy.stb) - (py.ltl + py.stb); cf.ca = cy.caMove; cf.div = -cy.div;
+  cf.loans = (cy.ltl + cy.stb) - (py.ltl + py.stb); cf.ca = cy.caMove; cf.div = -cy.div; cf.shareCap = cy.cap - py.cap;
   cf.finTot = cf.loans + cf.ca + cf.div + cSum(['ncl', 'eq']);
   cf.net = cf.op + cf.invTot + cf.finTot; cf.open = py.cash; cf.close = cf.open + cf.net; cf.diff = cf.close - cy.cash;
   // cash flow – prior year
@@ -567,7 +579,7 @@ function compute(eng, prevEng){
     cfp.inv = R(mm.inv); cfp.rec = R(mm.rec); cfp.rprec = R(mm.rprec); cfp.pay = R(mm.pay); cfp.rppay = R(mm.rppay); cfp.otherOp = R(mm.otherOp);
     cfp.op = cfp.opBefore + cfp.inv + cfp.rec + cfp.rprec + cfp.pay + cfp.rppay + cfp.otherOp;
     cfp.additions = ppe.length ? -ppeT.pyAdd : R(mm.additions); cfp.proceeds = R(mm.proceeds); cfp.otherInv = R(mm.otherInv); cfp.invTot = cfp.additions + cfp.proceeds + cfp.otherInv;
-    cfp.loans = R(mm.loans); cfp.ca = py.caMove; cfp.div = -py.div; cfp.otherFin = R(mm.otherFin); cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin;
+    cfp.loans = R(mm.loans); cfp.ca = py.caMove; cfp.div = -py.div; cfp.shareCap = py.capItems; cfp.otherFin = R(mm.otherFin); cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin;
     cfp.net = cfp.op + cfp.invTot + cfp.finTot; cfp.open = R(mm.openCash); cfp.close = cfp.open + cfp.net; cfp.diff = cfp.close - py.cash;
   }
   cfp = applyCfLayout(eng, cf, cfp, cy, py);
@@ -1076,30 +1088,34 @@ function buildReport(client, eng, prevEng){
   ['dep','fin'].forEach(k => { if (nz(cy[k], py[k])) soci.push(row(L(k), k, -cy[k], -py[k])); });
   ['gain','oi'].forEach(k => { if (nz(cy[k], py[k])) soci.push(row(L(k), k, cy[k], py[k])); });
   addC(soci, 'inc');
-  soci.push(GAP, row('Profit before tax', '', cy.pbt, py.pbt, 'tot'), row('Corporate tax', 'ct', -cy.ct, -py.ct), GAP,
+  soci.push(GAP, row('Profit before tax', '', cy.pbt, py.pbt, 'tot'), Object.assign(row('Corporate tax', 'ct', -cy.ct, -py.ct), {drill: 'ct'}), GAP,
     row('Profit after tax', '', cy.pat, py.pat, 'tot'), row('Other comprehensive income', '', 0, 0), GAP,
     row('Total comprehensive income for the year', '', cy.pat, py.pat, 'grand'));
   sections.push({id: 'soci', kind: 'statement', head: statementHead('STATEMENT OF PROFIT OR LOSS AND OTHER COMPREHENSIVE INCOME', period), items: [
     {k: 'fs', rows: soci, noteCol: true, years: [Y, PY]}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
 
-  const hasCA = nz(cy.caClose, py.caClose) || nz(py.caOpen, 0), hasLR = nz(cy.lrClose, py.lrClose) || nz(py.lrOpen, 0), hasOR = nz(cy.xeq, py.xeq);
+  const eqItems = eng.soceItems || [], anyIt = col => eqItems.some(x => R(x[col]));
+  const hasCA = nz(cy.caClose, py.caClose) || nz(py.caOpen, 0) || anyIt('ca'), hasLR = nz(cy.lrClose, py.lrClose) || nz(py.lrOpen, 0) || anyIt('lr'), hasOR = nz(cy.xeq, py.xeq) || anyIt('oth');
   const eqCols = ['Share\ncapital'].concat(hasLR ? ['Legal\nreserve'] : [], ['Retained\nearnings'], hasCA ? ['Current\naccount'] : [], hasOR ? ['Other\nreserves'] : [], ['Total']);
   const eqRow = (label, cap, lr, re, ca, style, oth) => { const vals = [cap].concat(hasLR ? [lr] : [], [re], hasCA ? [ca] : [], hasOR ? [oth || 0] : []); return {cells: [label].concat(vals, [vals.reduce((a, b) => a + b, 0)]), style: style || ''}; };
-  const soceRows = [eqRow(`At ${openText}`, py.cap, py.lrOpen, py.reOpen, py.caOpen, 'bold', py.xeq),
+  const itRows = yr => eqItems.filter(x => x.yr === yr && ['cap', 'lr', 're', 'ca', 'oth'].some(col => R(x[col]))).map(x => eqRow(x.label || 'Other movement', R(x.cap), R(x.lr), R(x.re), R(x.ca), '', R(x.oth)));
+  const soceRows = [eqRow(`At ${openText}`, py.capOpen, py.lrOpen, py.reOpen, py.caOpen, 'bold', py.xeq - py.othItems),
     eqRow('Total comprehensive income for the year', 0, 0, py.pat, 0)];
   if (py.div) soceRows.push(eqRow('Dividend paid', 0, 0, -py.div, 0));
   if (py.lrTransfer) soceRows.push(eqRow('Transfer to legal reserve', 0, py.lrTransfer, -py.lrTransfer, 0));
-  if (hasCA) soceRows.push(eqRow('Net movement in current account', 0, 0, 0, py.caMove));
+  soceRows.push(...itRows('py'));
+  if (hasCA && !(py.caItems && py.caMove === py.caItems)) soceRows.push(eqRow('Net movement in current account', 0, 0, 0, py.caMove - py.caItems));
   soceRows.push(eqRow(`At ${yeText}, ${PY}`, py.cap, py.lrClose, py.reClose, py.caClose, 'tot', py.xeq), {cells: [], style: 'gap'},
     eqRow('Total comprehensive income for the year', 0, 0, cy.pat, 0));
   if (cy.div) soceRows.push(eqRow('Dividend paid', 0, 0, -cy.div, 0));
   if (cy.lrTransfer) soceRows.push(eqRow('Transfer to legal reserve', 0, cy.lrTransfer, -cy.lrTransfer, 0));
-  if (hasCA) soceRows.push(eqRow('Net movement in current account', 0, 0, 0, cy.caMove));
-  if (cy.cap !== py.cap) soceRows.push(eqRow('Movement in share capital', cy.cap - py.cap, 0, 0, 0));
-  if (hasOR && cy.xeq !== py.xeq) soceRows.push(eqRow('Movement in other reserves', 0, 0, 0, 0, '', cy.xeq - py.xeq));
+  soceRows.push(...itRows('cy'));
+  if (hasCA && !(cy.caItems && cy.caMove === cy.caItems)) soceRows.push(eqRow('Net movement in current account', 0, 0, 0, cy.caMove - cy.caItems));
+  if (cy.cap - py.cap - cy.capItems) soceRows.push(eqRow('Movement in share capital', cy.cap - py.cap - cy.capItems, 0, 0, 0));
+  if (hasOR && cy.xeq - py.xeq - cy.othItems) soceRows.push(eqRow('Movement in other reserves', 0, 0, 0, 0, '', cy.xeq - py.xeq - cy.othItems));
   soceRows.push(eqRow(`At ${yeText}, ${Y}`, cy.cap, cy.lrClose, cy.reClose, cy.caClose, 'grand', cy.xeq));
   sections.push({id: 'soce', kind: 'statement', head: statementHead('STATEMENT OF CHANGES IN SHAREHOLDERS’ EQUITY', period), items: [
-    {k: 'grid', plain: true, header: [''].concat(eqCols), sub: [''].concat(eqCols.map(() => 'AED')), rows: soceRows, firstWidth: '*', numWidth: eqCols.length >= 6 ? 52 : 57, small: true},
+    {k: 'grid', drill: 'soce', plain: true, header: [''].concat(eqCols), sub: [''].concat(eqCols.map(() => 'AED')), rows: soceRows, firstWidth: '*', numWidth: eqCols.length >= 6 ? 52 : 57, small: true},
     {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
 
   const cf = r.cf, cfp = r.cfp, cfRowsL = cfLines(eng).filter(x => !x.hidden);
@@ -1112,12 +1128,12 @@ function buildReport(client, eng, prevEng){
       const a = cfVal(cf, x), b = cfVal(cfp, x);
       if (!(x.kind === 'user' || CF_ALWAYS.includes(x.key) || nz(a, b))) return;
       if (!adjHead && x.key !== 'pat'){ socf.push(G('Adjustments for:')); adjHead = true; }
-      socf.push(row(x.label, x.note, a, b));
+      socf.push(Object.assign(row(x.label, x.note, a, b), {cf: x.key}));
     });
     socf.push(row(totLabel, '', cf[totKey], cfp[totKey], 'tot'));
   });
   socf.push(GAP, row('Net increase / (decrease) in cash and cash equivalents (A+B+C)', '', cf.net, cfp.net),
-    row('Cash and cash equivalents at the beginning of the year', '', cf.open, cfp.open),
+    Object.assign(row('Cash and cash equivalents at the beginning of the year', '', cf.open, cfp.open), {cf: 'open'}),
     row('Cash and cash equivalents at the end of the year', 'cash', cf.close, cfp.close, 'grand'));
   sections.push({id: 'socf', kind: 'statement', head: statementHead('STATEMENT OF CASH FLOWS', period), items: [
     {k: 'fs', rows: socf, noteCol: true, years: [Y, PY]}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
@@ -1147,6 +1163,8 @@ function buildReport(client, eng, prevEng){
   const T = (rows) => ({k: 'fs', rows, noteCol: false, years: [Y, PY], noHead: true});
   const subRows = (key, extra) => { const s = subLines(eng, key).filter(x => Math.round(x.cy || 0) || Math.round(x.py || 0)).map(x => row(x.caption, '', x.cy, x.py)); return s.concat(extra || []); };
   const total = (label, a, b) => row(label || '', '', a, b, 'tot');
+  // movements typed in the statement of changes in equity, one row per description
+  const eqNoteRows = col => { const m = new Map(); (eng.soceItems || []).filter(x => R(x[col])).forEach(x => { const lbl = (x.label || 'Other movement').trim(), k2 = lbl.toLowerCase(); if (!m.has(k2)) m.set(k2, {lbl, cy: 0, py: 0}); m.get(k2)[x.yr] += R(x[col]); }); return [...m.values()].map(o => row(o.lbl, '', o.cy, o.py)); };
   const items = [];
   const head = (key, title) => ({k: 'noteHead', num: noteNo[key] + '.', title});
   numericNotes.forEach(key => {
@@ -1186,14 +1204,15 @@ function buildReport(client, eng, prevEng){
           rows: sh.map(s => { const amt = (+s.shares || 0) * (+s.value || 0); return {cells: [s.name, s.country || s.nationality || '', capTot ? `${Math.round(amt / capTot * 100)}%` : '', capTot ? Math.round(cy.cap * amt / capTot) : amt, capTot ? Math.round(py.cap * amt / capTot) : amt]}; }),
           widths: ['*', 58, 34, 64, 64], small: true});
     } else if (key === 'lr'){
-      grp.push(head(key, NT('lr', 'LEGAL RESERVE')), T([row('Balance at the beginning of the year', '', cy.lrOpen, py.lrOpen), row('Transfer for the year', '', cy.lrTransfer, py.lrTransfer), total('Balance at the end of the year', cy.lrClose, py.lrClose)]));
+      grp.push(head(key, NT('lr', 'LEGAL RESERVE')), T([row('Balance at the beginning of the year', '', cy.lrOpen, py.lrOpen), row('Transfer for the year', '', cy.lrTransfer, py.lrTransfer)].concat(eqNoteRows('lr'), [total('Balance at the end of the year', cy.lrClose, py.lrClose)])));
     } else if (key === 're'){
       const rr = [row('Balance at the beginning of the year', '', cy.reOpen, py.reOpen), row('Total comprehensive income for the year', '', cy.pat, py.pat)];
       if (nz(cy.div, py.div)) rr.push(row('Dividend paid', '', -cy.div, -py.div));
       if (nz(cy.lrTransfer, py.lrTransfer)) rr.push(row('Transfer to legal reserve', '', -cy.lrTransfer, -py.lrTransfer));
+      rr.push(...eqNoteRows('re'));
       grp.push(head(key, NT('re', 'RETAINED EARNINGS')), T(rr.concat([total('Balance at the end of the year', cy.reClose, py.reClose)])));
     } else if (key === 'ca'){
-      grp.push(head(key, NT('ca', 'SHAREHOLDER’S CURRENT ACCOUNT')), T([row('Balance at the beginning of the year', '', cy.caOpen, py.caOpen), row('Net movement during the year', '', cy.caMove, py.caMove), total('Balance at the end of the year', cy.caClose, py.caClose)]),
+      grp.push(head(key, NT('ca', 'SHAREHOLDER’S CURRENT ACCOUNT')), T([row('Balance at the beginning of the year', '', cy.caOpen, py.caOpen), row('Net movement during the year', '', cy.caMove - cy.caItems, py.caMove - py.caItems)].concat(eqNoteRows('ca'), [total('Balance at the end of the year', cy.caClose, py.caClose)])),
         {k: 'small', text: 'The current account is unsecured, interest-free and has no fixed repayment terms.'});
     } else if (key === 'pay'){
       const extra = nz(cy.ct, py.ct) ? [row('Provision for corporate tax', '', cy.ct, py.ct)] : [];
@@ -1245,6 +1264,7 @@ function buildReport(client, eng, prevEng){
     const sch = SMAP[key === 'dep' ? 'ppe' : key];
     if (sch && (sch.textAbove || '').trim() && !(key === 'ppe' && r.ppe.length)){ const at = grp.findIndex((g, i) => i > 0 && g.k !== 'p'); grp.splice(at < 0 ? grp.length : at, 0, blocks(sch.textAbove)); }
     if (sch && (sch.textBelow || '').trim()) grp.push(blocks(sch.textBelow));
+    { const fk = key === 'dep' ? 'ppe' : key; grp.forEach(g => { if (g.k === 'fs' && !g.fs && !g.drill){ if (key === 'ct') g.drill = 'ct'; else if (SMAP[fk]) g.fs = fk; } if (g.k === 'grid' && key === 'ppe' && !g.drill) g.drill = 'ppe'; }); }
     items.push({k: 'group', items: grp, keep: !['risk', 'fi', 'ppe'].includes(key)});
   });
   items.push({k: 'marker', id: 'notes-end'});
@@ -1700,24 +1720,24 @@ function htmlBlocks(item, tokens, o){
   }).join('');
 }
 function htmlFs(it, o){
-  const amt = (r, v) => (o.interactive && r.fs && typeof v === 'number') ? `<button class="amt-btn" data-drill="${r.fs}">${nf(v)}</button>` : nf(v);
+  const amt = (r, v, yr) => { const d = o.interactive && typeof v === 'number' ? (r.drill || (r.cf ? 'cf:' + r.cf : '') || r.fs || it.drill || it.fs || '') : ''; return d ? `<button class="amt-btn" data-drill="${esc(d)}" data-yr="${yr}" title="Click to see and change">${nf(v)}</button>` : nf(v); };
   let h = `<table class="rfs">${it.noHead ? '' : `<thead><tr><td></td>${it.noteCol ? '<td class="c">Note</td>' : ''}<td class="r yr">${it.years[0]}</td><td class="r yr">${it.years[1]}</td></tr><tr><td></td>${it.noteCol ? '<td></td>' : ''}<td class="r aed">AED</td><td class="r aed">AED</td></tr></thead>`}<tbody>`;
   it.rows.forEach(r => {
     const cols = it.noteCol ? 4 : 3;
     if (r.style === 'gap'){ h += `<tr class="gap"><td colspan="${cols}"></td></tr>`; return; }
     if (r.style === 'grp'){ h += `<tr class="grp"><td colspan="${cols}">${esc(r.label)}</td></tr>`; return; }
-    h += `<tr class="${r.style}"><td>${esc(r.label)}</td>${it.noteCol ? `<td class="c">${esc(r.note || '')}</td>` : ''}<td class="r a">${amt(r, r.cy)}</td><td class="r a">${nf(r.py)}</td></tr>`;
+    h += `<tr class="${r.style}"><td>${esc(r.label)}</td>${it.noteCol ? `<td class="c">${esc(r.note || '')}</td>` : ''}<td class="r a">${amt(r, r.cy, 'cy')}</td><td class="r a">${amt(r, r.py, 'py')}</td></tr>`;
   });
   return h + '</tbody></table>';
 }
-function htmlGrid(it){
+function htmlGrid(it, o){
   let h = `<table class="rgrid ${it.boxed ? 'boxed' : 'plain'}"><thead><tr>${it.header.map((x, i) => `<th class="${i ? 'r' : ''}">${esc(x).replace(/\n/g, '<br>')}</th>`).join('')}</tr>`;
   if (it.sub) h += `<tr>${it.sub.map((x, i) => `<td class="${i ? 'r aed' : ''}">${esc(x)}</td>`).join('')}</tr>`;
   h += '</thead><tbody>';
   it.rows.forEach(r => {
     if (r.style === 'gap'){ h += `<tr class="gap"><td colspan="${it.header.length}"></td></tr>`; return; }
     if (r.style === 'grp'){ h += `<tr class="grp"><td colspan="${it.header.length}">${esc(r.cells[0])}</td></tr>`; return; }
-    h += `<tr class="${r.style || ''}">${it.header.map((_, i) => { const v = r.cells[i]; return `<td class="${typeof v === 'number' ? 'r a' : ''}">${typeof v === 'number' ? nf(v) : esc(v ?? '')}</td>`; }).join('')}</tr>`;
+    h += `<tr class="${r.style || ''}">${it.header.map((_, i) => { const v = r.cells[i]; return `<td class="${typeof v === 'number' ? 'r a' : ''}">${typeof v === 'number' ? (o && o.interactive && it.drill ? `<button class="amt-btn" data-drill="${esc(it.drill)}" title="Click to see and change">${nf(v)}</button>` : nf(v)) : esc(v ?? '')}</td>`; }).join('')}</tr>`;
   });
   return h + '</tbody></table>';
 }
@@ -1727,7 +1747,7 @@ function htmlItem(it, tokens, o){
     case 'title': return `<h2 class="c">${esc(it.text)}</h2>`;
     case 'coHead': return `<div class="cohead"><b>${esc(it.name)}</b></div><h3>${esc(it.title)}</h3>`;
     case 'fs': return htmlFs(it, o);
-    case 'grid': return htmlGrid(it);
+    case 'grid': return htmlGrid(it, o);
     case 'small': return `<p class="small">${esc(fillPageTokens(it.text, o.num))}</p>`;
     case 'p': return `<p>${htmlRuns(it.text)}</p>`;
     case 'sign': return `<div class="sign"><div class="line"></div>${esc(it.label)}</div>`;
@@ -2281,8 +2301,11 @@ function blockedHelp(what, name){
     <div class="foot"><button class="btn primary" data-close>OK</button></div>`);
 }
 const safeName = s => String(s || 'client').replace(/[^\w\- ]+/g, '').replace(/\s+/g, '_').slice(0, 60);
-function modal(html, wide){ document.getElementById('layer').innerHTML = `<div class="scrim" data-scrim><div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${html}</div></div>`; const f = document.querySelector('.modal input:not([type=file]),.modal textarea,.modal select'); if (f) f.focus(); }
-function closeModal(){ document.getElementById('layer').innerHTML = ''; }
+let MODAL_QUIET = false, MODAL_LIVE = false;
+function liveModal(fn){ UI.modalFn = fn; MODAL_LIVE = true; try { fn(); } finally { MODAL_LIVE = false; } }
+function refreshModal(){ const box = document.querySelector('#layer .modal'); if (!UI.modalFn || !box) return; const st = box.scrollTop; MODAL_QUIET = true; try { UI.modalFn(); } finally { MODAL_QUIET = false; } const nb = document.querySelector('#layer .modal'); if (nb) nb.scrollTop = st; }
+function modal(html, wide){ if (!MODAL_QUIET && !MODAL_LIVE) UI.modalFn = null; document.getElementById('layer').innerHTML = `<div class="scrim" data-scrim><div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${html}</div></div>`; if (MODAL_QUIET) return; const f = document.querySelector('.modal input:not([type=file]),.modal textarea,.modal select'); if (f) f.focus(); }
+function closeModal(){ UI.modalFn = null; document.getElementById('layer').innerHTML = ''; }
 let renderTimer = null;
 function scheduleRender(){ clearTimeout(renderTimer); renderTimer = setTimeout(render, 0); }
 const fsOptions = sel => `<option value="">— choose —</option>` + CATALOG.map(c => `<option value="${c.key}"${sel === c.key ? ' selected' : ''}>${e_(c.label)}</option>`).join('');
@@ -2312,6 +2335,7 @@ function render(){
   renderNav();
   const views = {clients: vClients, settings: vSettings, profile: vProfile, tb: vTB, adjust: vAdjust, statements: vStatements, texts: vTexts, layout: vLayout, export: vExport};
   document.getElementById('main').innerHTML = (views[UI.view] || vClients)();
+  refreshModal();
   if (aid){ const el = document.getElementById(aid); if (el){ el.focus({preventScroll: true}); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
   window.scrollTo(0, scrollY);
 }
@@ -2704,8 +2728,8 @@ function vStatements(){
   const M = buildReport(c, en, prev());
   const tabs = [['sofp', 'Financial position'], ['soci', 'Profit or loss'], ['soce', 'Changes in equity'], ['socf', 'Cash flows'], ['notes', 'Notes']];
   const checks = M.r.checks.map(x => `<li class="ck ${x.level}"><span class="dot"></span>${e_(x.text)}</li>`).join('');
-  return `<section class="panel"><div class="head"><div><h1>Financial statements FY${en.year}</h1><p class="sub">Built live from the trial balance with FY${en.year - 1} comparatives. Click a current-year amount to see its ledgers and proof.</p></div>
-    <div class="row">${UI.stTab === 'socf' ? `<button class="btn" data-act="edit-cfpy">Edit cash flow lines &amp; FY${en.year - 1}</button>` : ''}<button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div><ul class="checks">${checks}</ul></section>
+  return `<section class="panel"><div class="head"><div><h1>Financial statements FY${en.year}</h1><p class="sub">Built live from the trial balance with FY${en.year - 1} comparatives. Click any amount to see where it comes from and change it right there.</p></div>
+    <div class="row">${UI.stTab === 'soce' ? `<button class="btn" data-act="soce-open">✎ Items in changes in equity</button>` : ''}${UI.stTab === 'socf' ? `<button class="btn" data-act="edit-cfpy">Edit cash flow lines &amp; FY${en.year - 1}</button>` : ''}<button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div><ul class="checks">${checks}</ul></section>
   <section class="panel"><div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${UI.stTab === k}" data-sttab="${k}">${l}</button>`).join('')}</div>
     <div class="paper-wrap"><div class="paper">${reportHtml(M, {only: [UI.stTab], interactive: true})}</div></div></section>`;
 }
@@ -3098,13 +3122,128 @@ function docsModal(type, id){
       <button class="btn" data-act="link-doc" data-type="${type}" data-id="${id}">${IC.clip}Attach link</button></div>
     <div class="foot"><button class="btn" data-close>Done</button></div>`, true);
 }
-function drillModal(key){
-  const en = eng();
-  const lines = en.tb.filter(l => l.fs === key);
-  modal(`<h2>${e_(schedLabel(en, key))}</h2><div class="table-wrap"><table class="ui compact"><thead><tr><th>Ledger</th><th class="r">FY${en.year}</th><th class="r">FY${en.year - 1}</th><th>Proof</th></tr></thead>
-    <tbody>${lines.map(l => `<tr><td>${e_(l.ledger)}</td><td class="r">${fmtN(natural(l, en))}</td><td class="r">${fmtN(l.py)}</td><td>${docCell('line', l)}</td></tr>`).join('')}</tbody></table></div>
-    <div class="foot"><button class="btn" data-act="go-tb-filter" data-key="${key}">Open schedule</button><button class="btn primary" data-close>Done</button></div>`, true);
+/* ============================================================
+   QUICK EDIT FROM THE FINANCIAL STATEMENTS – click any amount: its schedule opens in a window,
+   figures can be changed and lines added there; the statements update behind the window
+   ============================================================ */
+const CF_SOURCE = {dep: 'dep', gain: 'gain', eosb: 'eosb', inv: 'inv', rec: 'rec', rprec: 'rprec', pay: 'pay', rppay: 'rppay', additions: 'ppe', loans: 'ltl', ca: 'ca', div: 'div', shareCap: 'cap', open: 'cash'};
+function drillModal(key, yr){ liveModal(() => drillBody(key, yr || 'cy')); }
+function drillBody(key, yr){
+  const c = client(), en = eng(); if (!en) return;
+  const r = compute(en, prev()), sm = SM(en), Y = en.year, PY = Y - 1, T = r.ppeT;
+  const k = key === 'dep' && en.ppe.length && !en.tb.some(l => l.fs === 'dep') ? 'ppe' : key, s = sm[k];
+  if (!s){ toast('This amount is calculated – change the figures it is made of', true); return; }
+  let noteNo = ''; try { noteNo = buildReport(c, en, prev()).noteNo[k] || ''; } catch (e) {}
+  const lines = en.tb.filter(l => l.fs === k), hl = y => yr === y ? ' q-hl' : '';
+  const num = (l, f) => `<input class="numi${R(l[f]) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':' + f)}" id="q-${f}-${l.id}" data-line="${l.id}" data-field="${f}"${fxAttrs(en, 'L:' + l.id + ':' + f, `{${Y}:L:${l.id}:${f}}`)} value="${fmtSigned(l[f])}" inputmode="decimal" aria-label="${f === 'amt' ? 'FY' + Y : 'FY' + PY}">`;
+  const isRes = k === 're' || k === 'lr';
+  const linesTable = `<div class="table-wrap"><table class="ui compact q-tab"><colgroup><col><col><col style="width:130px"><col style="width:130px"><col style="width:110px"><col style="width:40px"></colgroup>
+    <thead><tr><th>Ledger</th><th>Wording in notes</th><th class="r${hl('cy')}">FY${Y}${isRes ? ' opening' : ''}</th><th class="r${hl('py')}">FY${PY}${isRes ? ' closing' : ''}</th><th>Proof</th><th></th></tr></thead>
+    <tbody>${lines.map(l => `<tr><td><input id="q-led-${l.id}" data-line="${l.id}" data-field="ledger" value="${e_(l.ledger)}" placeholder="Ledger name" aria-label="Ledger"></td><td><input id="q-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td><td class="${hl('cy')}">${num(l, 'amt')}</td><td class="${hl('py')}">${num(l, 'py')}</td><td>${docCell('line', l)}</td><td><button class="icon-btn" data-act="del-line" data-id="${l.id}" title="Delete line">${IC.trash}</button></td></tr>`).join('') || `<tr><td colspan="6" class="empty">No ledger lines yet.</td></tr>`}</tbody>
+    ${lines.length ? `<tfoot><tr><td colspan="2">Total of the lines</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.amt), 0))}</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.py), 0))}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>
+    <div class="row"><button class="btn small" data-act="q-add-line" data-key="${k}">${IC.plus}Add line</button></div>`;
+  const bind = (id, path, v, label) => `<input class="numi${fxCls(en, 'B:' + path)}" id="${id}" data-bind="eng.${path}" data-num="1" inputmode="decimal"${fxAttrs(en, 'B:' + path, '')} value="${fmtIn(v)}" aria-label="${e_(label)}">`;
+  let extra = '';
+  const fig = (label, a, b, cls) => `<tr class="${cls || ''}"><th scope="row">${label}</th><td class="r${hl('cy')}">${a}</td><td class="r${hl('py')}">${b}</td></tr>`;
+  const figT = rows => `<div class="table-wrap"><table class="ui compact q-fig"><colgroup><col><col style="width:150px"><col style="width:150px"></colgroup><thead><tr><th></th><th class="r${hl('cy')}">FY${Y}</th><th class="r${hl('py')}">FY${PY}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  if (k === 'ppe' && en.ppe.length){
+    const P = en.ppePy || {};
+    const pIn = (p, f) => `<input class="numi${fxCls(en, `P:${p.id}:${f}`)}" id="q-pm-${f}-${p.id}" data-ppe="${p.id}" data-field="${f}"${fxAttrs(en, `P:${p.id}:${f}`, `{${Y}:P:${p.id}:${f}}`)} value="${fmtIn(p[f])}" inputmode="decimal" aria-label="${e_(p.name)} ${f}">`;
+    const rp = r.ppe;
+    extra = `<h3 class="h3">Asset classes FY${Y}</h3><div class="table-wrap"><table class="ui compact q-tab q-ppe"><thead><tr><th>Class</th><th class="r">Cost opening</th><th class="r">Additions</th><th class="r">Disposals</th><th class="r">Depreciation opening</th><th class="r">Charge</th><th class="r">On disposals</th><th class="r">Net book value</th><th></th></tr></thead>
+      <tbody>${en.ppe.map((p, i) => `<tr><td><input id="q-pm-name-${p.id}" data-ppe="${p.id}" data-field="name" value="${e_(p.name)}" placeholder="Class name" aria-label="Asset class"></td>${['costOpen', 'add', 'disp', 'depOpen', 'charge', 'depDisp'].map(f => `<td>${pIn(p, f)}</td>`).join('')}<td class="r b">${fmtN(rp[i] ? rp[i].nbv : 0)}</td><td><button class="icon-btn" data-act="del-ppe" data-id="${p.id}" title="Remove class">${IC.trash}</button></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Total</td>${['costOpen', 'add', 'disp', 'depOpen', 'charge', 'depDisp', 'nbv'].map(f => `<td class="r">${fmtN(T[f])}</td>`).join('')}<td></td></tr></tfoot></table></div>
+      <div class="row"><button class="btn small" data-act="q-add-ppe">${IC.plus}Add asset class</button></div>
+      <h3 class="h3">Written down value FY${PY}</h3>${figT(
+        fig('Opening written down value', fmtN(T.nbvPy), `<input class="numi${T.pyOpenTyped ? ' ov' : ''}${fxCls(en, 'B:ppePy.open')}" id="q-ppy-open" data-bind="eng.ppePy.open" data-num="1" inputmode="decimal"${fxAttrs(en, 'B:ppePy.open', '')} value="${T.pyOpenTyped ? e_(R(P.open).toLocaleString('en-US')) : ''}" placeholder="${e_(fmtN(T.nbvPyOpenAuto))} (auto)" aria-label="Opening WDV FY${PY}">`)
+        + fig('Additions', fmtN(T.add), bind('q-ppy-add', 'ppePy.add', P.add, 'Additions FY' + PY))
+        + fig('Disposals at written down value', fmtN(T.dispWdv), bind('q-ppy-disp', 'ppePy.disp', P.disp, 'Disposals FY' + PY))
+        + fig('Depreciation charge', fmtN(T.charge), bind('q-ppy-charge', 'ppePy.charge', P.charge, 'Depreciation FY' + PY))
+        + fig('Closing written down value', fmtN(T.nbv), fmtN(T.nbvPy), 'tot')
+        + (T.pyDiff ? fig(`<span class="bad-t">FY${PY} figures add up to ${fmtN(T.pyCloseCalc)} – difference</span>`, '', `<b class="bad-t">${fmtN(T.pyDiff)}</b>`) : ''))}`;
+  } else if (k === 're' || k === 'lr' || k === 'ca' || k === 'cap'){
+    const trIn = `${bind('q-lr-cy', 'settings.lrTransfer', en.settings.lrTransfer, 'Transfer to legal reserve FY' + Y)}`, trInPy = bind('q-lr-py', 'pyInfo.lrTransfer', en.pyInfo.lrTransfer, 'Transfer to legal reserve FY' + PY);
+    const itemsBtn = `<button class="linkish" data-act="soce-open">items in changes in equity</button>`;
+    if (k === 're') extra = `<h3 class="h3">How retained earnings are worked out</h3>${figT(fig('Balance at the beginning of the year', fmtN(r.cy.reOpen), fmtN(r.py.reOpen) + ' <span class="muted small">(worked back)</span>') + fig('Total comprehensive income for the year', fmtN(r.cy.pat), fmtN(r.py.pat)) + fig('Dividend paid', fmtN(-r.cy.div), fmtN(-r.py.div)) + fig('Transfer to legal reserve', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.reItems), fmtN(r.py.reItems)) + fig('Balance at the end of the year', fmtN(r.cy.reClose), fmtN(r.py.reClose), 'tot'))}`;
+    if (k === 'lr') extra = `<h3 class="h3">How the legal reserve is worked out</h3>${figT(fig('Balance at the beginning of the year', fmtN(r.cy.lrOpen), fmtN(r.py.lrOpen) + ' <span class="muted small">(worked back)</span>') + fig('Transfer for the year', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.lrItems), fmtN(r.py.lrItems)) + fig('Balance at the end of the year', fmtN(r.cy.lrClose), fmtN(r.py.lrClose), 'tot'))}`;
+    if (k === 'ca') extra = `<h3 class="h3">Current account movement</h3>${figT(fig('Balance at the beginning of the year', fmtN(r.cy.caOpen), bind('q-ca-open', 'pyInfo.caOpen', en.pyInfo.caOpen, 'Current account at start of FY' + PY)) + fig('Net movement during the year', fmtN(r.cy.caMove - r.cy.caItems), fmtN(r.py.caMove - r.py.caItems)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.caItems), fmtN(r.py.caItems)) + fig('Balance at the end of the year', fmtN(r.cy.caClose), fmtN(r.py.caClose), 'tot'))}`;
+    if (k === 'cap') extra = `<h3 class="h3">Share capital</h3>${figT(fig('Balance at the beginning of the year', fmtN(r.py.cap), fmtN(r.py.capOpen) + ' <span class="muted small">(worked back)</span>') + fig(`Share capital introduced (${itemsBtn})`, fmtN(r.cy.cap - r.py.cap), fmtN(r.py.capItems)) + fig('Balance at the end of the year', fmtN(r.cy.cap), fmtN(r.py.cap), 'tot'))}
+      <p class="small muted">If share capital was introduced in FY${PY}, add it as an item for FY${PY} so the FY${PY} opening balance is right.</p>`;
+  } else if (k === 'pay' && (r.cy.ct || r.py.ct)){
+    extra = `<h3 class="h3">Corporate tax included in payables</h3>${figT(fig('Provision for corporate tax', fmtN(r.cy.ct), fmtN(r.py.ct)) + fig('Total payables in the statement', fmtN(r.cy.payTot), fmtN(r.py.payTot), 'tot'))}<div class="row"><button class="btn small" data-drill="ct">Change corporate tax</button></div>`;
+  }
+  const lineNote = isRes ? `<p class="small muted">${e_(s.label)} lines: FY${Y} = <b>opening</b> balance, FY${PY} = <b>closing</b> balance.</p>` : '';
+  modal(`<div class="qd"><div class="row between"><h2>${e_(s.label)}${noteNo ? ` <span class="chip neutral">Note ${noteNo}</span>` : ''}</h2>
+      <div class="q-tot"><span>FY${Y} <b>${fmtN(r.cy[k])}</b></span><span>FY${PY} <b>${fmtN(r.py[k])}</b></span></div></div>
+    <p class="sub">Change any figure, wording or line here – the financial statements behind this window update at once. Type = in an amount for a formula.</p>
+    ${k === 'ppe' && en.ppe.length ? extra + (lines.length ? `<h3 class="h3">Ledger lines</h3>${linesTable}` : '') : lineNote + linesTable + extra}
+    <div class="foot"><button class="btn" data-act="go-tb-filter" data-key="${k}">Open the Schedules screen</button><button class="btn primary" data-close>Done</button></div></div>`, true);
+  if (k === 'ppe' || lines.length > 6) { const m = document.querySelector('.modal'); if (m) m.classList.add('xwide'); }
 }
+function taxModal(){ liveModal(taxBody); }
+function taxBody(){
+  const en = eng(); if (!en) return;
+  const r = compute(en, prev()), S = en.settings, P = en.pyInfo, Y = en.year, PY = Y - 1;
+  modal(`<div class="qd"><h2>Corporate tax</h2><p class="sub">Changes show in the statement of profit or loss, payables and the tax note at once.</p>
+    <div class="form-grid"><div class="box"><h3 class="h3">FY${Y}</h3>
+      ${field('q-ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
+      ${S.ctMode === 'manual' ? field('q-ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('q-ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}
+      <p class="small">Profit before tax ${fmtN(r.cy.pbt)} · corporate tax <b>${fmtN(r.cy.ct)}</b></p></div>
+    <div class="box"><h3 class="h3">FY${PY}</h3>
+      ${field('q-py-ct-mode', 'Corporate tax', P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
+      ${P.ctMode === 'manual' ? field('q-py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('q-py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}
+      <p class="small">Profit before tax ${fmtN(r.py.pbt)} · corporate tax <b>${fmtN(r.py.ct)}</b></p></div></div>
+    <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
+}
+function cfLineModal(k, yr){ liveModal(() => cfLineBody(k, yr || 'cy')); }
+function cfLineBody(k, yr){
+  const en = eng(); if (!en) return;
+  const r = compute(en, prev()), Y = en.year, PY = Y - 1, cf = r.cf, cfp = r.cfp, A = cfp.auto || cfp, ov = en.cfPy || {};
+  const x = k === 'open' ? {key: 'open', label: 'Cash and cash equivalents at the beginning of the year', kind: 'std', sec: 'fin'} : cfLines(en).find(y => y.key === k);
+  if (!x){ toast('This cash flow line was removed', true); return; }
+  const val = (bk, z) => z.kind === 'std' ? R(bk[z.key]) : R((bk.custom || {})[z.key]);
+  const typed = ov[k] !== undefined && ov[k] !== null && ov[k] !== '', key = 'CFP:' + k, src = CF_SOURCE[k] || (x.kind === 'sched' ? k : '');
+  const cyCell = x.kind === 'user' ? `<input class="numi${fxCls(en, 'CFC:' + k)}" id="q-cfcy-${k}" data-cfcy="${k}"${fxAttrs(en, 'CFC:' + k, '')} value="${fmtSigned((en.cfCy || {})[k])}" inputmode="decimal" aria-label="FY${Y}">` : `<b>${fmtN(val(cf, x))}</b>`;
+  const hint = x.kind === 'user' ? 'A line you added – type both years.' : k === 'pat' ? `FY${Y} comes from the statement of profit or loss.` : k === 'proceeds' ? '' : src ? `FY${Y} is worked out from the <button class="linkish" data-drill="${src}" data-yr="cy">${e_(schedLabel(en, src))}</button> figures – change them to change this line.` : `FY${Y} is worked out from the schedules.`;
+  modal(`<div class="qd"><h2>Cash flow line</h2>
+    ${k === 'open' ? `<p class="sub">${e_(x.label)}</p>` : `<div class="field"><label for="q-cfl-${k}">Name in the statement of cash flows</label><input id="q-cfl-${k}" data-cflabel="${k}" value="${e_(x.label)}" placeholder="${e_(x.def || '')}"></div>`}
+    <div class="table-wrap"><table class="ui compact q-fig"><colgroup><col><col style="width:170px"></colgroup><tbody>
+      <tr class="${yr === 'cy' ? 'q-hlr' : ''}"><th scope="row">FY${Y}</th><td class="r">${cyCell}</td></tr>
+      ${k === 'proceeds' ? `<tr><th scope="row">FY${Y} proceeds from disposal of PPE</th><td>${`<input class="numi" id="q-disp-pr" data-bind="eng.settings.disposalProceeds" data-num="1" inputmode="decimal" value="${fmtIn(en.settings.disposalProceeds)}" aria-label="Proceeds FY${Y}">`}</td></tr>` : ''}
+      <tr><th scope="row">FY${PY} automatic</th><td class="r muted">${x.kind === 'user' ? '' : fmtN(k === 'open' ? A.open : val(A, x))}</td></tr>
+      <tr class="${yr === 'py' ? 'q-hlr' : ''}"><th scope="row">FY${PY} in the report ${typed && x.kind !== 'user' ? `<button class="linkish" data-act="cfpy-reset" data-k="${k}">↺ use automatic</button>` : ''}</th><td><input class="numi${typed ? ' ov' : ''}${fxCls(en, key)}" id="q-cfpy-${k}" data-cfpy="${k}"${fxAttrs(en, key, '')} value="${fmtSigned(k === 'open' ? cfp.open : val(cfp, x))}" inputmode="decimal" aria-label="FY${PY}"></td></tr>
+    </tbody></table></div>
+    <p class="small muted">${hint}</p>
+    <ul class="checks"><li class="ck ${cf.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${Y} ${cf.diff ? 'differs by ' + fmtN(cf.diff) : 'reconciles'}</li><li class="ck ${cfp.diff ? 'warn' : 'ok'}"><span class="dot"></span>Cash flow FY${PY} ${cfp.diff ? 'differs by ' + fmtN(cfp.diff) : 'reconciles'}</li></ul>
+    <div class="foot"><button class="btn" data-act="edit-cfpy">All cash flow lines</button><button class="btn primary" data-close>Done</button></div></div>`);
+}
+function soceModal(){ liveModal(soceBody); }
+function soceBody(){
+  const en = eng(); if (!en) return;
+  const r = compute(en, prev()), Y = en.year, PY = Y - 1, items = en.soceItems || [];
+  const hasOR = schedulesInOrder(en).some(x => x.custom && x.sec === 'eq') || items.some(x => R(x.oth));
+  const cols = [['cap', 'Share capital'], ['lr', 'Legal reserve'], ['re', 'Retained earnings'], ['ca', 'Current account']].concat(hasOR ? [['oth', 'Other reserves']] : []);
+  const auto = (label, vals, cls) => `<tr class="q-auto ${cls || ''}"><th scope="row">${label}</th>${cols.map(([c]) => `<td class="r">${fmtN(vals[c] || 0)}</td>`).join('')}<td class="r b">${fmtN(cols.reduce((a, [c]) => a + (vals[c] || 0), 0))}</td><td></td></tr>`;
+  const custom = yr => items.filter(x => x.yr === yr).map(x => `<tr><th scope="row"><input id="q-soce-label-${x.id}" data-soce="${x.id}" data-f="label" value="${e_(x.label || '')}" placeholder="e.g. Share capital introduced" aria-label="Item"></th>${cols.map(([c, l]) => `<td><input class="numi" id="q-soce-${c}-${x.id}" data-soce="${x.id}" data-f="${c}" value="${fmtSigned(x[c])}" inputmode="decimal" aria-label="${l}"></td>`).join('')}<td class="r b">${fmtN(cols.reduce((a, [c]) => a + R(x[c]), 0))}</td><td><button class="icon-btn" data-act="soce-del" data-id="${x.id}" title="Delete item">${IC.trash}</button></td></tr>`).join('');
+  const addBtn = yr => `<tr class="q-add"><td colspan="${cols.length + 3}"><button class="btn small" data-act="soce-add" data-yr="${yr}">${IC.plus}Add item for FY${yr === 'py' ? PY : Y}</button></td></tr>`;
+  const head = `<thead><tr><th></th>${cols.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th><th></th></tr></thead>`;
+  const body = auto(`At the beginning of FY${PY} <span class="muted small">(worked back)</span>`, {cap: r.py.capOpen, lr: r.py.lrOpen, re: r.py.reOpen, ca: r.py.caOpen, oth: r.py.xeq - r.py.othItems}, 'bold')
+    + auto('Total comprehensive income', {re: r.py.pat}) + (r.py.div ? auto('Dividend paid', {re: -r.py.div}) : '') + (r.py.lrTransfer ? auto('Transfer to legal reserve', {lr: r.py.lrTransfer, re: -r.py.lrTransfer}) : '')
+    + custom('py') + addBtn('py') + (r.py.caMove - r.py.caItems ? auto('Net movement in current account', {ca: r.py.caMove - r.py.caItems}) : '')
+    + auto(`At the end of FY${PY}`, {cap: r.py.cap, lr: r.py.lrClose, re: r.py.reClose, ca: r.py.caClose, oth: r.py.xeq}, 'tot')
+    + auto('Total comprehensive income', {re: r.cy.pat}) + (r.cy.div ? auto('Dividend paid', {re: -r.cy.div}) : '') + (r.cy.lrTransfer ? auto('Transfer to legal reserve', {lr: r.cy.lrTransfer, re: -r.cy.lrTransfer}) : '')
+    + custom('cy') + addBtn('cy') + (r.cy.caMove - r.cy.caItems ? auto('Net movement in current account', {ca: r.cy.caMove - r.cy.caItems}) : '') + (r.cy.cap - r.py.cap - r.cy.capItems ? auto('Movement in share capital', {cap: r.cy.cap - r.py.cap - r.cy.capItems}) : '')
+    + (hasOR && r.cy.xeq - r.py.xeq - r.cy.othItems ? auto('Movement in other reserves', {oth: r.cy.xeq - r.py.xeq - r.cy.othItems}) : '')
+    + auto(`At the end of FY${Y}`, {cap: r.cy.cap, lr: r.cy.lrClose, re: r.cy.reClose, ca: r.cy.caClose, oth: r.cy.xeq}, 'grand');
+  modal(`<div class="qd"><h2>Items in the statement of changes in equity</h2>
+    <p class="sub">Grey rows come from the schedules. <b>Add an item</b> for any other movement – for example share capital introduced in FY${PY}. Increases are <b>+</b>, decreases <b>−</b>. The FY${PY} opening balances are worked back from the FY${PY} closing balances less the FY${PY} movements, so every FY${PY} movement must be here.</p>
+    <div class="table-wrap"><table class="ui compact q-tab q-soce">${head}<tbody>${body}</tbody></table></div>
+    <div class="form-grid three">${field('q-soce-lr-py', `Transfer to legal reserve FY${PY}`, en.pyInfo.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}${field('q-soce-lr-cy', `Transfer to legal reserve FY${Y}`, en.settings.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true})}${field('q-soce-ca', `Current account at start of FY${PY}`, en.pyInfo.caOpen, {bind: 'eng.pyInfo.caOpen', num: true})}</div>
+    <p class="small muted">Items for FY${Y} in share capital, current account or other reserves only split the movement (closing balances come from the schedules). Items in legal reserve or retained earnings change the FY${Y} closing balance.</p>
+    <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
+  const m = document.querySelector('.modal'); if (m) m.classList.add('xwide');
+}
+
 function schedModal(key){
   const en = eng(); const x = key ? SM(en)[key] : null;
   const isNew = !x;
@@ -3202,7 +3341,7 @@ const FX_CALC = [['pbt', 'Profit before tax'], ['ct', 'Corporate tax'], ['pat', 
 const FX_CF = [['pat', 'Profit for the year'], ['dep', 'Depreciation'], ['gain', 'Gain on disposal'], ['eosb', 'End of service benefits'], ['opBefore', 'Operating profit before working capital changes'],
   ['inv', 'Change in inventory'], ['rec', 'Change in receivables'], ['rprec', 'Change due from related parties'], ['pay', 'Change in payables'], ['rppay', 'Change due to related parties'], ['otherOp', 'Other working capital movements'], ['op', 'Net cash from operating activities'],
   ['additions', 'Additions to PPE'], ['proceeds', 'Disposal proceeds'], ['otherInv', 'Other investing movements'], ['invTot', 'Net cash from investing activities'],
-  ['loans', 'Net movement in loans'], ['ca', 'Movement in current account'], ['div', 'Dividend paid'], ['otherFin', 'Other financing movements'], ['finTot', 'Net cash from financing activities'],
+  ['shareCap', 'Share capital introduced'], ['loans', 'Net movement in loans'], ['ca', 'Movement in current account'], ['div', 'Dividend paid'], ['otherFin', 'Other financing movements'], ['finTot', 'Net cash from financing activities'],
   ['net', 'Net increase / (decrease) in cash'], ['open', 'Cash at the beginning of the year'], ['close', 'Cash at the end of the year']];
 const FXERR = new WeakMap();
 const fxErr = msg => Object.assign(new Error(msg), {fx: true});
@@ -3554,14 +3693,14 @@ const fxLinkedCount = en => Object.values(en.fx || {}).filter(f => [...String(f)
 /* ============================================================
    PRIOR YEAR CASH FLOW – every line can be typed (blank = automatic)
    ============================================================ */
-const CFPY_KEYS = ['pat', 'dep', 'gain', 'eosb', 'inv', 'rec', 'rprec', 'pay', 'rppay', 'otherOp', 'additions', 'proceeds', 'otherInv', 'loans', 'ca', 'div', 'otherFin', 'open'];
+const CFPY_KEYS = ['pat', 'dep', 'gain', 'eosb', 'inv', 'rec', 'rprec', 'pay', 'rppay', 'otherOp', 'additions', 'proceeds', 'otherInv', 'shareCap', 'loans', 'ca', 'div', 'otherFin', 'open'];
 /* cash flow lines: the standard lines, custom schedule movements and lines the user added – renamed, removed and reordered per year */
 const CF_SECS = [['adj', 'Cash flows from operating activities', 'opBefore', 'Operating profit before working capital changes'], ['wc', 'Working capital changes', 'op', 'Net cash generated from / (used in) operating activities (A)'],
   ['inv', 'Cash flows from investing activities', 'invTot', 'Net cash used in investing activities (B)'], ['fin', 'Cash flows from financing activities', 'finTot', 'Net cash generated from / (used in) financing activities (C)']];
 const CF_STD = {pat: ['adj', 'Profit for the year'], dep: ['adj', 'Depreciation on property, plant and equipment'], gain: ['adj', 'Gain on disposal of property, plant and equipment'], eosb: ['adj', 'Provision for end of service benefits (net)'],
   inv: ['wc', '(Increase) / decrease in inventory'], rec: ['wc', '(Increase) / decrease in accounts and other receivables'], rprec: ['wc', '(Increase) / decrease in due from related parties'], pay: ['wc', 'Increase / (decrease) in accounts and other payables'], rppay: ['wc', 'Increase / (decrease) in due to related parties'], otherOp: ['wc', 'Other working capital movements'],
   additions: ['inv', 'Additions to property, plant and equipment'], proceeds: ['inv', 'Proceeds from disposal of property, plant and equipment'], otherInv: ['inv', 'Other investing movements'],
-  loans: ['fin', 'Net movement in loans and borrowings'], ca: ['fin', 'Net movement in shareholder’s current account'], div: ['fin', 'Dividend paid'], otherFin: ['fin', 'Other financing movements']};
+  shareCap: ['fin', 'Proceeds from issue of share capital'], loans: ['fin', 'Net movement in loans and borrowings'], ca: ['fin', 'Net movement in shareholder’s current account'], div: ['fin', 'Dividend paid'], otherFin: ['fin', 'Other financing movements']};
 const CF_ALWAYS = ['pat', 'dep', 'rec', 'pay', 'additions'];
 const CF_NOTE = {dep: 'dep', gain: 'gain', eosb: 'eosb', additions: 'ppe', ca: 'ca', div: 're'};
 const cfLayoutOf = eng => { const L = eng.cfLayout = eng.cfLayout || {}; L.order = L.order || []; L.labels = L.labels || {}; L.hidden = L.hidden || {}; L.custom = L.custom || []; return L; };
@@ -3581,9 +3720,11 @@ function cfLines(eng){
   return out;
 }
 function applyCfLayout(eng, cf, cfp, cy, py){
-  const ov = eng.cfPy || {}, cyv = eng.cfCy || {};
+  let ov = eng.cfPy || {}; const cyv = eng.cfCy || {};
   cf.custom = Object.assign({}, cf.custom || {}); cfp.custom = Object.assign({}, cfp.custom || {});
   const auto = Object.assign({}, cfp, {custom: Object.assign({}, cfp.custom)}); delete auto.auto;
+  // prior year figures typed or imported before the share capital line existed: that line was not part of them
+  if (ov.shareCap === undefined && ['open', 'loans', 'pat'].every(k => ov[k] !== undefined && ov[k] !== null && ov[k] !== '')) ov = Object.assign({}, ov, {shareCap: 0});
   Object.keys(ov).forEach(k => { const v = ov[k]; if (v === null || v === undefined || v === '') return; if (CFPY_KEYS.includes(k)) cfp[k] = R(v); else cfp.custom[k] = R(v); });
   Object.keys(cyv).forEach(k => { if (!CFPY_KEYS.includes(k)) cf.custom[k] = R(cyv[k]); });
   const rows = cfLines(eng).filter(x => !x.hidden);
@@ -3907,6 +4048,7 @@ function fsCashFlow(cf){
     else if (/payable|accrual|creditor/.test(t)) k = 'pay';
     else if (/addition|purchase of (property|fixed|plant)/.test(t)) k = 'additions';
     else if (/proceeds|disposal/.test(t)) k = 'proceeds';
+    else if (/share capital|capital introduced|issue of shares/.test(t)) k = 'shareCap';
     else if (/loan|borrowing|overdraft/.test(t)) k = 'loans';
     else if (/current account/.test(t)) k = 'ca';
     else if (/dividend|drawing/.test(t)) k = 'div';
@@ -4371,7 +4513,7 @@ document.addEventListener('click', async ev => {
   if (t.dataset.nav){ UI.view = t.dataset.nav; closeModal(); save(); render(); window.scrollTo(0, 0); return; }
   if (t.dataset.open){ const c = DB.clients.find(x => x.id === t.dataset.open); UI.clientId = c.id; UI.engId = c.engagements.slice().sort((a, b) => b.year - a.year)[0].id; UI.view = 'tb'; save(); render(); window.scrollTo(0, 0); return; }
   if (t.dataset.docs){ const [type, id] = t.dataset.docs.split(':'); docsModal(type, id); return; }
-  if (t.dataset.drill){ drillModal(t.dataset.drill); return; }
+  if (t.dataset.drill){ const d = t.dataset.drill, yr = t.dataset.yr || 'cy'; if (d.startsWith('cf:')) cfLineModal(d.slice(3), yr); else if (d === 'soce') soceModal(); else if (d === 'ct') taxModal(); else drillModal(d, yr); return; }
   if (t.dataset.sttab){ UI.stTab = t.dataset.sttab; save(); render(); return; }
   if (t.dataset.textopen){ UI.textOpen = UI.textOpen === t.dataset.textopen ? '' : t.dataset.textopen; render(); return; }
   const a = t.dataset.act, c = client(), en = eng();
@@ -4403,7 +4545,7 @@ document.addEventListener('click', async ev => {
         if (document.querySelector('input[name=pmode]:checked').value === 'replace') en.tb = []; en.tb.push(...rows); fxTbImported(en, rows); save(); closeModal(); render(); toast(`${rows.length} lines added`); break; }
       case 'tb-file': docsModal('tb', 'tb'); break;
       case 'add-ppe': en.ppe.push({id: uid(), name: '', life: '', costOpen: 0, add: 0, disp: 0, depOpen: 0, charge: 0, depDisp: 0, docs: []}); UI.collapsed = UI.collapsed || {}; UI.collapsed.ppe = false; UI.view = 'tb'; save(); render(); { const inputs = document.querySelectorAll('.m-name'); const last = inputs[inputs.length - 1]; if (last){ last.focus(); last.scrollIntoView({block: 'center'}); } } break;
-      case 'del-ppe': en.ppe = en.ppe.filter(p => p.id !== t.dataset.id); save(); render(); break;
+      case 'del-ppe': { const p = en.ppe.find(q => q.id === t.dataset.id); if (p && UI.modalFn && (R(p.costOpen) || R(p.add) || R(p.depOpen)) && !confirm(`Remove ${p.name || 'this asset class'} and its figures?`)) break; en.ppe = en.ppe.filter(q => q.id !== t.dataset.id); save(); render(); break; }
       case 'lr-suggest': ev.preventDefault(); en.settings.lrTransfer = compute(en, prev()).cy.lrSuggest; save(); render(); break;
       case 'add-pol': en.texts.policies.push({id: uid(), title: 'New policy', mode: 'on', text: ''}); save(); render(); break;
       case 'del-pol': en.texts.policies.splice(+t.dataset.i, 1); save(); render(); break;
@@ -4426,6 +4568,11 @@ document.addEventListener('click', async ev => {
       }
       case 'del-doc': docTarget(t.dataset.type, t.dataset.id).docs.splice(+t.dataset.i, 1); save(); docsModal(t.dataset.type, t.dataset.id); render(); break;
       case 'go-tb-filter': UI.view = 'tb'; UI.tbMode = 'sched'; UI.collapsed = UI.collapsed || {}; UI.collapsed[t.dataset.key] = false; closeModal(); render(); { const el = document.getElementById('sch-' + t.dataset.key); if (el) el.scrollIntoView({block: 'start'}); } break;
+      case 'q-add-line': { const l = {id: uid(), ledger: '', fs: t.dataset.key, caption: '', amt: 0, py: 0, docs: []}; en.tb.push(l); save(); render(); const el = document.getElementById('q-led-' + l.id); if (el) el.focus(); break; }
+      case 'q-add-ppe': { const p = {id: uid(), name: '', life: '', costOpen: 0, add: 0, disp: 0, depOpen: 0, charge: 0, depDisp: 0, docs: []}; en.ppe.push(p); save(); render(); const el = document.getElementById('q-pm-name-' + p.id); if (el) el.focus(); break; }
+      case 'soce-open': soceModal(); break;
+      case 'soce-add': { const x = {id: uid(), yr: t.dataset.yr, label: '', cap: 0, lr: 0, re: 0, ca: 0, oth: 0}; (en.soceItems = en.soceItems || []).push(x); save(); render(); const el = document.getElementById('q-soce-label-' + x.id); if (el) el.focus(); break; }
+      case 'soce-del': { const x = (en.soceItems || []).find(i => i.id === t.dataset.id); if (x && (!['cap', 'lr', 're', 'ca', 'oth'].some(c => R(x[c])) || confirm(`Delete “${x.label || 'this item'}”?`))){ en.soceItems = en.soceItems.filter(i => i !== x); save(); render(); } break; }
       case 'add-year': UI.ayFile = null; addYearModal(); break;
       case 'ay-pick': { document.getElementById('ay-year').value = t.dataset.y; document.getElementById('ay-opts').innerHTML = addYearOptions(c, num(t.dataset.y)); break; }
       case 'ay-create': t.disabled = true; try { await createYear(); } finally { t.disabled = false; } break;
@@ -4454,7 +4601,7 @@ document.addEventListener('click', async ev => {
       case 'cf-reset-layout': if (confirm('Go back to the standard cash flow lines? Names, order and removed lines are reset, and lines you added are deleted with their figures.')){
         cfLayoutOf(en).custom.forEach(u => { if (en.cfCy) delete en.cfCy[u.key]; if (en.cfPy) delete en.cfPy[u.key]; if (en.fx){ delete en.fx['CFC:' + u.key]; delete en.fx['CFP:' + u.key]; } });
         delete en.cfLayout; save(); render(); } break;
-      case 'edit-cfpy': UI.view = 'adjust'; save(); render(); { const el = document.getElementById('py-cf'); if (el) el.scrollIntoView({block: 'start'}); } break;
+      case 'edit-cfpy': closeModal(); UI.view = 'adjust'; save(); render(); { const el = document.getElementById('py-cf'); if (el) el.scrollIntoView({block: 'start'}); } break;
       case 'fx-link-prev': { const pe = prev(); if (!pe) break;
         if (!fxLinkedCount(en) && en.tb.some(l => R(l.py)) && !confirm(`Link FY${en.year} to FY${pe.year}? The FY${en.year - 1} column, PPE opening balances, reserves and prior year tax will follow FY${pe.year} live (figures typed there now are replaced).`)) break;
         const res = fxLinkToPrev(c, en); save(); render(); toast(`${res.n} figures linked live to FY${pe.year}${res.added ? ` · ${res.added} line(s) added` : ''}`); break; }
@@ -4552,6 +4699,7 @@ document.addEventListener('change', async ev => {
     try { toast('Reading the financial statements…'); const res = await readFsWorkbookFile(f); UI.fsImp = {res, fileName: f.name, newOnly: el.id === 'fs-in-client'}; document.querySelectorAll('.toast').forEach(x => x.remove()); fsImportModal(); }
     catch (err) { console.error(err); toast(err.message, true); } return; }
   if (el.id === 'ay-file-in' && el.files[0]){ UI.ayFile = el.files[0]; const s = document.getElementById('ay-file-name'); if (s) s.textContent = el.files[0].name; const rb = document.querySelector('input[name=ay-src][value=file]'); if (rb) rb.checked = true; return; }
+  if (el.dataset.soce){ const x = (en.soceItems || []).find(i => i.id === el.dataset.soce); if (!x) return; const f = el.dataset.f; x[f] = f === 'label' ? el.value : num(el.value); save(); scheduleRender(); return; }
   if (el.dataset.pvyr){ const L = layoutOf(en);
     if (L.notesYears !== 'custom'){ L.yearsOff = {}; ((UI.pvDoc || {}).sheets || []).forEach(sh => { if (sh.notes && sh.off) L.yearsOff[sh.key + ':' + sh.cur] = true; }); L.notesYears = 'custom'; }
     if (el.checked) delete L.yearsOff[el.dataset.pvyr]; else L.yearsOff[el.dataset.pvyr] = true;

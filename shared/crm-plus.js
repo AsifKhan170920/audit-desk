@@ -290,7 +290,7 @@
         '<div class="rc-act"><button class="btn" data-cp="phone-test">🔔 Send a test notification</button>' +
         (phone.hasSystem ? '<button class="btn" data-cp="phone-sound">🔊 Sound & pop-up settings</button>' + (phone.battery === false ? '<button class="btn btn-primary" data-cp="phone-battery">🔋 Allow reminders in background</button>' : '') : '') + '</div>' +
         (phone.battery === false ? '<div class="q-hint">Samsung: also open Settings → Apps → Fair Tax → Battery → <b>Unrestricted</b>, otherwise reminders may stop when the app is closed.</div>' : '') +
-        (phone.ok && !phone.loud ? '<div class="q-hint">Install the latest app version for the louder Fair Tax reminder sound.</div>' : '') + '</div>' : '') +
+        (phone.ok && !phone.loud ? '<div class="q-hint">Install the latest app version for the soft Fair Tax reminder chime.</div>' : '') + '</div>' : '') +
       '<div style="display:flex;justify-content:flex-end;margin:-4px 0 10px"><button class="btn btn-primary btn-sm" data-cp="quick-add">＋ Quick add</button></div>' +
       '<div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">' +
       statCard('bg-blue', '📞', 'Open leads', db.leads.filter(function (l) { return l.stage !== 'Closed'; }).length, 'nudged every ' + P.leadEveryHours + 'h') +

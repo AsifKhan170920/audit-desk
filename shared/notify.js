@@ -9,15 +9,16 @@
   if (window.FTNotify) return;
   var ROOT = (function () { try { return new URL('../', document.currentScript.src).href; } catch (e) { return location.origin + '/audit-desk/'; } })();
   var IDS_KEY = 'ft-notify-ids', LAST_KEY = 'ft-notify-last', PENDING_KEY = 'ft-pending-action', MAX = 400;
-  // v2 channels: loud, long Fair Tax sounds (need app build 2+); older builds get the phone's default sound
+  // v3 channels: soft Fair Tax chimes (need app build SOFT_BUILD+); older builds use the phone's own notification sound
+  var SOFT_BUILD = 4;
   var CH = {
-    meeting: {id: 'fta-meetings', name: 'Meetings', description: 'Meeting reminders', importance: 5, sound: 'fairtax_urgent.wav'},
-    deadline: {id: 'fta-deadlines', name: 'Deadlines', description: 'VAT, Corporate Tax, financial statements, audit, bookkeeping, cheques, invoices', importance: 5, sound: 'fairtax_urgent.wav'},
-    lead: {id: 'fta-leads', name: 'Leads to contact', description: 'Nudges to call or message leads', importance: 4, sound: 'fairtax_alert.wav'},
-    client: {id: 'fta-clients', name: 'Client care', description: 'Check-ins, missing details, contracts, assignments', importance: 4, sound: 'fairtax_alert.wav'},
-    agenda: {id: 'fta-agenda', name: 'Daily agenda', description: 'Morning summary', importance: 4, sound: 'fairtax_alert.wav'}
+    meeting: {id: 'fts-meetings', name: 'Meetings', description: 'Meeting reminders', importance: 5, sound: 'fairtax_urgent.wav'},
+    deadline: {id: 'fts-deadlines', name: 'Deadlines', description: 'VAT, Corporate Tax, financial statements, audit, bookkeeping, cheques, invoices', importance: 5, sound: 'fairtax_urgent.wav'},
+    lead: {id: 'fts-leads', name: 'Leads to contact', description: 'Nudges to call or message leads', importance: 4, sound: 'fairtax_alert.wav'},
+    client: {id: 'fts-clients', name: 'Client care', description: 'Check-ins, missing details, contracts, assignments', importance: 4, sound: 'fairtax_alert.wav'},
+    agenda: {id: 'fts-agenda', name: 'Daily agenda', description: 'Morning summary', importance: 4, sound: 'fairtax_alert.wav'}
   };
-  var OLD_CHANNELS = ['ft-meetings', 'ft-leads', 'ft-clients', 'ft-compliance', 'ft-agenda'];
+  var OLD_CHANNELS = ['ft-meetings', 'ft-leads', 'ft-clients', 'ft-compliance', 'ft-agenda', 'fta-meetings', 'fta-deadlines', 'fta-leads', 'fta-clients', 'fta-agenda'];
   var GROUP_OF = {meeting: 'meeting', lead: 'lead', health: 'client', missing: 'client', contract: 'client', assign: 'client', agenda: 'agenda'};
   var LABEL = {meeting: 'Meeting', lead: 'Lead follow-up', health: 'Client check-in', missing: 'Missing details', contract: 'Contract', assign: 'Assignment', agenda: 'Daily agenda',
     vat: 'VAT', corporate_tax: 'Corporate Tax', financial_statements: 'Financial statements', audit: 'Audit', bookkeeping: 'Bookkeeping', pdc: 'Cheque', invoice: 'Invoice', task: 'Task'};
@@ -52,11 +53,11 @@
   var prepared = false;
   async function prepare() {
     if (prepared) return; var LN = plugin(); if (!LN) return;
-    var loud = (await appBuild()) >= 2;
+    var loud = (await appBuild()) >= SOFT_BUILD;
     try { for (var i = 0; i < OLD_CHANNELS.length; i++) await LN.deleteChannel({id: OLD_CHANNELS[i]}); } catch (e) {}
     for (var k in CH) {
       var c = Object.assign({visibility: 1, vibration: true, lights: true, lightColor: '#0F9D6B'}, CH[k]);
-      if (!loud) { delete c.sound; c.id = c.id.replace('fta-', 'ftd-'); }
+      if (!loud) { delete c.sound; c.id = c.id.replace('fts-', 'ftd-'); }
       try { await LN.createChannel(c); } catch (e) {}
     }
     try {
@@ -72,7 +73,7 @@
   }
   function channelFor(kind, loud) {
     var g = GROUP_OF[kind] || 'deadline';
-    return loud ? CH[g].id : CH[g].id.replace('fta-', 'ftd-');
+    return loud ? CH[g].id : CH[g].id.replace('fts-', 'ftd-');
   }
   function actionTypeFor(r) {
     if (r.grouped) return 'ft-open';
@@ -112,7 +113,7 @@
     try {
       if ((await permission(false)) !== 'granted') { state.error = 'Notifications are off'; return {skipped: true}; }
       await prepare();
-      var loud = (await appBuild()) >= 2;
+      var loud = (await appBuild()) >= SOFT_BUILD;
       var list = FTReminders.compute(db, {days: 7, me: me(), max: MAX});
       var old = []; try { old = JSON.parse(localStorage.getItem(IDS_KEY) || '[]'); } catch (e) {}
       try { var pend = await LN.getPending(); (pend.notifications || []).forEach(function (n) { if (old.indexOf(n.id) < 0 && !(n.extra && n.extra.snoozed)) old.push(n.id); }); } catch (e) {}
@@ -151,7 +152,7 @@
     var LN = plugin(); if (!LN) return false;
     if ((await permission(true)) !== 'granted') return false;
     await prepare();
-    var loud = (await appBuild()) >= 2;
+    var loud = (await appBuild()) >= SOFT_BUILD;
     var at = new Date(Date.now() + 8000);
     await LN.schedule({notifications: [toNotification({id: 1999000001, kind: 'vat', at: at, route: '#/reminders', title: '🔔 Test reminder – Fair Tax',
       body: 'If you hear the Fair Tax sound with the app closed, reminders are working.',
@@ -171,7 +172,7 @@
     if (state.permission !== 'granted') return {ok: false, text: 'Phone notifications are not turned on yet.'};
     var when = state.at ? new Date(state.at).toLocaleString('en-GB', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : '—';
     return {ok: true, text: state.count + ' reminders scheduled on this phone for the next 7 days (updated ' + when + ')' + (state.error ? ' · ' + state.error : ''),
-      battery: state.battery, loud: state.build >= 2, build: state.build, hasSystem: !!sys()};
+      battery: state.battery, loud: state.build >= SOFT_BUILD, build: state.build, hasSystem: !!sys()};
   }
 
   // tapping a notification or one of its buttons
@@ -181,7 +182,7 @@
   }
   async function snooze(n) {
     var LN = plugin(); if (!LN) return;
-    var loud = (await appBuild()) >= 2, ex = n.extra || {};
+    var loud = (await appBuild()) >= SOFT_BUILD, ex = n.extra || {};
     await LN.schedule({notifications: [{id: (n.id % 1000000000) + 1000000000 + Math.floor(Math.random() * 1000), title: '⏰ ' + (ex.title || n.title || 'Reminder'), body: ex.body || n.body || '',
       largeBody: ex.largeBody || ex.body || '', schedule: {at: new Date(Date.now() + 60 * 60 * 1000), allowWhileIdle: true}, channelId: channelFor(ex.kind, loud),
       smallIcon: 'ic_stat_notify', iconColor: '#0F9D6B', actionTypeId: n.actionTypeId || 'ft-open', extra: Object.assign({}, ex, {snoozed: true})}]});
