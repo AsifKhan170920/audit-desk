@@ -7,6 +7,10 @@
 (function () {
   'use strict';
   if (window.CRMAI) return;
+  // embed mode: the assistant runs inside a small frame on the dashboard / Audit Desk
+  var EMBED = /[?&]embed=1\b/.test(location.search);
+  function toParent(msg) { try { if (EMBED && window.parent !== window) window.parent.postMessage(Object.assign({ft: 1}, msg), location.origin); } catch (e) {} }
+  function goto(hash) { if (EMBED) toParent({type: 'navigate', url: location.pathname.replace(/[^/]*$/, '') + hash}); else location.hash = hash; }
   var OWN_KEY = 'fairtax-crm-ai-key', AUDIT_KEY = 'fairtax-audit-desk-ai-key', PREF_KEY = 'fairtax-crm-ai-prefs';
   var DEFAULT_MODEL = 'claude-sonnet-5';
   var MODELS = [['claude-sonnet-5', 'Claude Sonnet 5 – recommended'], ['claude-haiku-4-5-20251001', 'Claude Haiku 4.5 – fastest, lowest cost'], ['claude-opus-5', 'Claude Opus 5 – most careful']];
@@ -334,10 +338,10 @@
     open_page: function (a) {
       var d = db(), p = lc(a.page).trim();
       var lists = ['dashboard', 'leads', 'clients', 'tasks', 'quotations', 'agreements', 'invoices', 'receipts', 'payments', 'retention', 'settings'];
-      if (a.ref && coll(p)) { var c = coll(p); if (c.type === 'service') { var sv = findOne(d, 'service', a.ref); location.hash = '#/client/' + sv.clientId; return {ok: true}; } var x = findOne(d, c.type, a.ref); location.hash = '#/' + c.type + '/' + x.id; return {ok: true, opened: c.type}; }
+      if (a.ref && coll(p)) { var c = coll(p); if (c.type === 'service') { var sv = findOne(d, 'service', a.ref); goto('#/client/' + sv.clientId); return {ok: true}; } var x = findOne(d, c.type, a.ref); goto('#/' + c.type + '/' + x.id); return {ok: true, opened: c.type}; }
       var l = pick(lists, p.replace(/^invoice$/, 'invoices'), null) || (coll(p) ? coll(p).key : null);
       if (!l || lists.indexOf(l) < 0) l = 'dashboard';
-      location.hash = '#/' + l; return {ok: true, opened: l};
+      goto('#/' + l); return {ok: true, opened: l};
     }
   };
 
@@ -577,7 +581,7 @@
       p.addEventListener('click', function (e) {
         var b = e.target.closest('[data-c]'); if (!b) return;
         var c = b.getAttribute('data-c');
-        if (c === 'close') UI.open(false);
+        if (c === 'close') { if (EMBED) { Voice.stop(); toParent({type: 'close'}); } else UI.open(false); }
         else if (c === 'settings') UI.settings(!$('#cai-set').classList.contains('open'));
         else if (c === 'clear') { if (busy) { stopFlag = true; return; } history = []; $('#cai-body').innerHTML = ''; UI.welcome(); }
         else if (c === 'send') { var t = $('#cai-input').value; $('#cai-input').value = ''; UI.grow(); ask(t, false); }
@@ -666,10 +670,28 @@
 
   /* ---------------- start ---------------- */
   function ready() { return typeof load === 'function' && typeof save === 'function' && typeof route === 'function'; }
+  var EMBED_CSS = 'html,body{background:transparent!important;overflow:hidden!important}body.ft-embed>*:not(#cai):not(style):not(script){display:none!important}' +
+    '#cai{inset:0!important;width:100%!important;max-width:none!important;height:100%!important;border-radius:0!important;border:0!important;box-shadow:none!important;display:flex!important}#cai-fab{display:none!important}';
   function start() {
     if (!ready()) { console.warn('CRM AI: CRM functions not found'); return; }
     UI.build();
+    if (EMBED) {
+      document.body.classList.add('ft-embed');
+      var st = document.createElement('style'); st.textContent = EMBED_CSS; document.head.appendChild(st);
+      UI.open(true);
+      $('#cai .hd small').textContent = 'Works on your CRM from any page – type or speak';
+      window.addEventListener('message', function (ev) {
+        if (ev.origin !== location.origin || !ev.data || !ev.data.ft) return;
+        var d = ev.data;
+        if (d.type === 'focus') setTimeout(function () { $('#cai-input').focus(); }, 30);
+        if (d.type === 'ask' && d.text) ask(d.text, !!d.spoken);
+        if (d.type === 'voice') { Voice.conversation = false; Voice.start(); }
+        if (d.type === 'talk') { Voice.conversation = true; UI.conv(true); setPref('speak', true); Voice.start(); }
+        if (d.type === 'stop') { Voice.stop(); UI.conv(false); }
+      });
+      toParent({type: 'ready'});
+    }
   }
-  window.CRMAI = {ask: ask, tools: TOOLS, run: RUN, open: function () { UI.open(true); }, _history: function () { return history; }};
+  window.CRMAI = {ask: ask, tools: TOOLS, run: RUN, open: function () { UI.open(true); }, embed: EMBED, _history: function () { return history; }};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

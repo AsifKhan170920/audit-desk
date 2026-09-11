@@ -116,12 +116,22 @@
     return me;
   };
   // admin: Google sign-in, only the registered Gmail is accepted
-  var TOKEN_KEY = 'ft-admin-token';
+  var TOKEN_KEY = 'ft-admin-token', needConsent = false;
+  var SCOPE_MSG = 'Google did not give the “manage users” permission. Click the button again – on Google’s screen tick the box “View and administer all your Firebase Authentication data” (or “Select all”), then press Continue.';
   function googleProvider() {
     var p = new firebase.auth.GoogleAuthProvider();
     p.addScope(FT.ADMIN_SCOPE);
-    p.setCustomParameters({login_hint: FT.OWNER_EMAIL, prompt: 'select_account'});
+    p.setCustomParameters({login_hint: FT.OWNER_EMAIL, prompt: needConsent ? 'consent' : 'select_account'});
     return p;
+  }
+  // which permissions did Google really grant with this token?
+  async function tokenHasScope(token) {
+    try {
+      var r = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(token));
+      if (!r.ok) return null;
+      var j = await r.json();
+      return String(j.scope || '').split(' ').indexOf(FT.ADMIN_SCOPE) >= 0;
+    } catch (e) { return null; }   // could not check – let the call decide
   }
   function keepToken(result) {
     var t = result && result.credential && result.credential.accessToken;
@@ -166,9 +176,13 @@
     if (!FT.isOwner(u)) throw new Error('Only the admin can manage users.');
     var result = await u.reauthenticateWithPopup(googleProvider());
     var t = keepToken(result);
-    if (!t) throw new Error('Google did not give permission to manage users. Please try again.');
+    if (!t) throw new Error(SCOPE_MSG);
+    if ((await tokenHasScope(t)) === false) { forgetToken(); needConsent = true; throw new Error(SCOPE_MSG); }
+    needConsent = false;
     return t;
   };
+  function forgetToken() { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+  function denied(msg) { var e = new Error(msg); e.adminApiDenied = true; return e; }
   var API_ERRORS = {EMAIL_EXISTS: 'This user ID is already taken.', WEAK_PASSWORD: 'The password is too weak – use at least 8 characters.', INVALID_EMAIL: 'The user ID can use letters, numbers, dot, dash or underscore.',
     USER_NOT_FOUND: 'This user no longer exists.', PERMISSION_DENIED: 'Your Google account has no permission to manage users in the Firebase project.', INSUFFICIENT_PERMISSION: 'Your Google account has no permission to manage users in the Firebase project.'};
   FT.adminApi = async function (path, body) {
@@ -178,11 +192,19 @@
       var j = null; try { j = await r.json(); } catch (e) {}
       return {r: r, j: j || {}};
     };
-    var out = await call(await FT.adminToken());
-    if (out.r.status === 401) { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} out = await call(await FT.adminToken(true)); }
+    var token = await FT.adminToken();
+    var out = await call(token);
+    if (out.r.status === 401) { forgetToken(); out = await call(await FT.adminToken(true)); }
     if (!out.r.ok) {
-      var m = (out.j.error && (out.j.error.message || out.j.error.status)) || out.r.statusText, code = String(m).split(/[ :]/)[0];
-      throw new Error(API_ERRORS[code] || API_ERRORS[out.j.error && out.j.error.status] || ('Could not change the user account: ' + m));
+      var err = out.j.error || {}, m = err.message || err.status || out.r.statusText, code = String(m).split(/[ :]/)[0];
+      var reasons = JSON.stringify(err.details || err.errors || '');
+      FT.lastAdminError = {status: out.r.status, message: m, reasons: reasons};
+      console.warn('Admin API error', FT.lastAdminError);
+      if (API_ERRORS[code] && code !== 'PERMISSION_DENIED' && code !== 'INSUFFICIENT_PERMISSION') throw new Error(API_ERRORS[code]);
+      if (/SCOPE_INSUFFICIENT|insufficient authentication scopes/i.test(m + reasons)) { forgetToken(); needConsent = true; throw denied(SCOPE_MSG); }
+      if (/SERVICE_DISABLED|has not been used|is disabled/i.test(m + reasons)) throw denied('The Identity Toolkit API is switched off for the project. Tell Claude: ' + m);
+      if (out.r.status === 403) { if ((await tokenHasScope(token)) === false) { forgetToken(); needConsent = true; throw denied(SCOPE_MSG); } throw denied('Google refused the change (' + m + ').'); }
+      throw new Error('Could not change the user account: ' + m);
     }
     return out.j;
   };
@@ -224,26 +246,45 @@
     await FT.init();
     var email = FT.emailFor(u.id);
     if (email === FT.OWNER_EMAIL) throw new Error('That is the admin account.');
-    var made = await FT.adminApi('accounts', {email: email, password: u.password, displayName: u.name || u.id});
-    var uid = made.localId;
+    var uid, fallback = false;
+    try {
+      uid = (await FT.adminApi('accounts', {email: email, password: u.password, displayName: u.name || u.id})).localId;
+    } catch (err) {
+      if (!err.adminApiDenied) throw err;
+      // admin permission not available yet – create the account the standard way (a second, temporary connection)
+      var tmp = firebase.initializeApp(FT.config, 'add-' + Date.now());
+      try {
+        var cred = await tmp.auth().createUserWithEmailAndPassword(email, u.password);
+        uid = cred.user.uid;
+        try { await cred.user.updateProfile({displayName: u.name || u.id}); } catch (e3) {}
+        await tmp.auth().signOut();
+      } catch (e4) { throw new Error(FT.friendlyError(e4)); }
+      finally { try { await tmp.delete(); } catch (e5) {} }
+      fallback = true; FT.lastAddNote = err.message;
+    }
     try {
       await FT.db.collection('users').doc(uid).set({id: FT.idFromEmail(email), name: u.name || u.id, role: 'staff', apps: {audit: !!u.audit, crm: !!u.crm}, active: true, expertise: u.expertise || [],
         createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: (FT.me && FT.me.name) || ''});
     } catch (e) {
-      try { await FT.adminApi('accounts:delete', {localId: uid}); } catch (e2) {}
+      if (!fallback) { try { await FT.adminApi('accounts:delete', {localId: uid}); } catch (e2) {} }
       throw e;
     }
+    FT.lastAddFallback = fallback;
     return uid;
   };
   FT.setUserPassword = async function (uid, password) { await FT.adminApi('accounts:update', {localId: uid, password: password}); };
+  // blocking always works through the access profile (the database refuses blocked users); the sign-in account is also disabled when Google allows it
   FT.setUserActive = async function (uid, active) {
-    await FT.adminApi('accounts:update', {localId: uid, disableUser: !active});
     await FT.updateUser(uid, {active: !!active});
+    try { await FT.adminApi('accounts:update', {localId: uid, disableUser: !active}); return {full: true}; }
+    catch (e) { if (e.adminApiDenied) return {full: false, note: e.message}; throw e; }
   };
   FT.deleteUser = async function (uid) {
+    var note = '';
     try { await FT.adminApi('accounts:delete', {localId: uid}); }
-    catch (e) { if (!/no longer exists/.test(e.message)) throw e; }
-    await FT.db.collection('users').doc(uid).delete();
+    catch (e) { if (e.adminApiDenied) note = e.message; else if (!/no longer exists/.test(e.message)) throw e; }
+    await FT.db.collection('users').doc(uid).delete();   // without a profile the account can open nothing
+    return {note: note};
   };
   // team directory that staff may read (names, expertise, access) – used for assignment and reminders
   FT.getTeam = async function () {

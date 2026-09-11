@@ -156,7 +156,7 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
         crm: document.getElementById('u-crm').checked, audit: document.getElementById('u-audit').checked,
         expertise: [].slice.call(document.querySelectorAll('.u-exp')).filter(function(x){ return x.checked; }).map(function(x){ return x.value; })};
       var shareText = 'Fair Tax Portal: https://asifkhan170920.github.io/audit-desk/  User ID: ' + FT.idFromEmail(FT.emailFor(u.id)) + '  Password: ' + u.password;
-      try { await FT.addUser(u); await refreshTeam(); msg('u-msg', 'User added. Share this with ' + (u.name || u.id) + ': ' + shareText, 'ok'); this.reset(); document.getElementById('u-crm').checked = true; await list(); }
+      try { await FT.addUser(u); await refreshTeam(); msg('u-msg', 'User added. Share this with ' + (u.name || u.id) + ': ' + shareText + (FT.lastAddFallback ? '  (Created with the standard method – to set passwords later, allow “manage users” when Google asks.)' : ''), 'ok'); this.reset(); document.getElementById('u-crm').checked = true; await list(); }
       catch (err) { msg('u-msg', FT.friendlyError(err)); }
       b.disabled = false; b.textContent = 'Add user';
     };
