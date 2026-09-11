@@ -256,6 +256,8 @@ table.matrix.wdv td input{min-width:0}
 .pv-pages{background:#5b616b;border-radius:8px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:14px;max-height:78vh;overflow:auto}
 .pv-sheet{display:flex;flex-direction:column;align-items:center;gap:4px;width:min(820px,100%)}
 .pv-page{width:100%;height:auto;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.pv-yr{display:flex;align-items:center;gap:8px;background:#fff;color:#1A2130;border-radius:7px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer}.pv-yr input{width:16px;height:16px}.pv-yr span{font-weight:400;color:#5D6879}.pv-yr.off{background:#FBF0DC}
+.ny-box{margin-top:12px}.pv-head [hidden]{display:none!important}
 .pv-cap{font-size:11px;color:#dfe3ea}
 .pv-wait{color:#fff;padding:60px 0;display:flex;gap:10px;align-items:center}
 .spinner{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .8s linear infinite}
@@ -1395,6 +1397,13 @@ function pdfHead(h, years, W, v){
     layout: fsLayout(), fontSize: 10.5, margin: [30, 0, 0, 4]});
   return {stack: st};
 }
+/* year columns at the top of notes pages: every page (standard), only pages with amount tables, or chosen page by page */
+function notesYearsOff(L, part, cur){
+  const mode = (L && L.notesYears) || 'all';
+  if (mode === 'amounts') return !!part.tblPages && !part.tblPages.includes(cur);
+  if (mode === 'custom') return !!((L.yearsOff || {})[part.key + ':' + cur]);
+  return false;
+}
 /* page geometry from the page setup (millimetres); content area adjusts to margins, header and footer */
 function pageGeometry(M){
   const P = (M.layout || {}).page || PAGE_DEFAULT;
@@ -1471,7 +1480,8 @@ function notesFlow(items, tokens, opt){
       // small notes stay together on one page; longer ones flow (tables themselves never split, headings never stranded)
       return it.keep && estHeight(it.items) < 260 ? [{stack: inner, unbreakable: true}] : inner;
     }
-    return [ind(pdfItem(it, tokens, opt))];
+    const node = ind(pdfItem(it, tokens, opt)); if (it._tid) node.id = it._tid;
+    return [node];
   };
   items.forEach(it => out.push(...one(it)));
   return keepWithNext(out);
@@ -1503,14 +1513,18 @@ function pdfPartDef(M, part, ctx){
     content = [pdfHead(s.head, null, G.W, sopt.v)].concat(s.items.map(it => pdfItem(it2(it), s.tokens, sopt)));
   } else if (part.kind === 'notes'){
     const years = s.years && !part.chunk.some(it => it.noYears) ? s.years : null;
+    // every amount table without its own year heading gets an id, so the layout pass knows its page
+    let tid = 0;
+    const tagT = it => it.k === 'fs' && it.noHead ? Object.assign({}, it, {_tid: 't' + (++tid)}) : it.k === 'group' ? Object.assign({}, it, {items: it.items.map(tagT)}) : it;
+    const tpage = id => ((part.tpos || {})[id] || {}).pageNumber;
     // pages without the year columns at the top: amount tables carry their own year heading
-    const withHead = it => (it.k === 'fs' && it.noHead && !years ? Object.assign({}, it, {noHead: false}) : it.k === 'group' && !years ? Object.assign({}, it, {items: it.items.map(withHead)}) : it);
+    const withHead = it => (it.k === 'fs' && it.noHead && (!years || (it._tid && tpage(it._tid) && notesYearsOff(L, part, tpage(it._tid)))) ? Object.assign({}, it, {noHead: false}) : it.k === 'group' ? Object.assign({}, it, {items: it.items.map(withHead)}) : it);
     // a NEW heading object for every page: pdfmake changes the objects it lays out, so re-using one
     // would lose the rule line and the year columns from the second page onwards
     const tag = n => { if (Array.isArray(n)) return n.forEach(tag); if (n && typeof n === 'object'){ if ('text' in n) n.style = 'hf'; Object.values(n).forEach(v => { if (v && typeof v === 'object') tag(v); }); } };
-    runHead = () => { const h = pdfHead(s.head, years, G.W); tag(h); return h; };
+    runHead = cur => { const h = pdfHead(s.head, years && !notesYearsOff(L, part, cur) ? years : null, G.W); tag(h); return h; };
     top = G.top + (years ? ctx.headH.y : ctx.headH.n) + 6;
-    content = notesFlow(part.chunk.map(withHead), s.tokens, {W: G.W, keepTables: true, flow: true});
+    content = notesFlow(part.chunk.map(tagT).map(withHead), s.tokens, {W: G.W, keepTables: true, flow: true});
   }
   if (part.kind === 'statement') content = content.concat([mark('end')]);
   const numbered = part.kind !== 'cover' && part.kind !== 'index';
@@ -1530,7 +1544,7 @@ function pdfPartDef(M, part, ctx){
         if (n) cols.push({style: 'hf', text: n, fontSize: 10, alignment: align(P.numPos), width: w});
         nodes.push({columns: cols, absolutePosition: {x: G.left, y: G.topM + 2}});
       }
-      if (runHead) nodes.push(runHead());
+      if (runHead) nodes.push(runHead(cur));
       return nodes.length ? {stack: nodes, margin: [G.left, runHead ? G.top : 0, G.right, 0]} : null;
     },
     footer: (cur, total) => {
@@ -1595,7 +1609,24 @@ async function passPart(M, part, F, headH){
     await renderDef(def, F);
     return info;
   };
-  let v = 1, info = await run(v);
+  let v = 1, info;
+  if (part.kind === 'notes'){
+    const sig = pos => Object.keys(pos).filter(k => /^t\d+$/.test(k)).sort().map(k => k + '@' + pos[k].pageNumber).join(',');
+    part.tpos = null; part.tblPages = null;
+    info = await run(v);
+    for (let round = 0; round < 3; round++){
+      const before = sig(part.tpos || {}), now = sig(info.pos);
+      if (round > 0 && before === now) break;
+      part.tpos = info.pos;
+      const offTables = Object.keys(info.pos).some(k => /^t\d+$/.test(k) && notesYearsOff(M.layout, Object.assign({}, part, {tblPages: null}), info.pos[k].pageNumber) && (M.layout.notesYears === 'custom'));
+      if (!offTables) break;
+      info = await run(v);
+    }
+    part.tblPages = [...new Set(Object.keys(part.tpos || {}).filter(k => /^t\d+$/.test(k)).map(k => part.tpos[k].pageNumber))];
+    part.pages = info.total; part.v = v;
+    return;
+  }
+  info = await run(v);
   if (part.kind === 'statement'){
     for (let round = 0; round < 6 && info.total > 1; round++){
       const end = info.pos.end || {pageNumber: info.total, top: G.ph - G.bottom};
@@ -1642,7 +1673,9 @@ async function makePdf(M, opts){
   const pieces = [];
   for (const pt of chosen) pieces.push(await renderDef(pdfPartDef(M, pt, {v: pt.v, headH, num, letterhead: !!opts.letterhead}), F, true));
   const bytes = await joinPdfs(pieces, `${M.client.name} – Financial statements ${M.eng.year}`);
-  return {num, bytes,
+  const sheets = [];
+  chosen.forEach(pt => { for (let cur = 1; cur <= (pt.pages || 1); cur++){ const yrs = pt.kind === 'notes' && pt.s.years && !pt.chunk.some(it => it.noYears); sheets.push({key: pt.key, cur, notes: !!yrs, off: yrs ? notesYearsOff(M.layout, pt, cur) : false, tbl: (pt.tblPages || []).includes(cur), years: pt.s.years}); } });
+  return {num, bytes, sheets,
     getBuffer(cb){ cb(bytes.slice()); },
     getBlob(cb){ cb(new Blob([bytes], {type: 'application/pdf'})); }};
 }
@@ -2773,7 +2806,11 @@ function vLayout(){
     <ul class="lay-list" data-list="sec">${secRows}</ul></section>
 
   <section class="panel"><div class="head"><div><h2>Order of notes</h2><p class="sub">Notes 1–4 (legal status, basis of preparation, policies, judgments) stay first. Drag the others; note numbers in the statements follow automatically.</p></div><button class="linkish" data-act="lay-reset-notes">Standard order</button></div>
-    <ul class="lay-list" data-list="note">${noteRows}</ul></section>
+    <ul class="lay-list" data-list="note">${noteRows}</ul>
+    <div class="box ny-box"><h3 class="h3">Year columns (${en.year} · ${en.year - 1}) at the top of notes pages</h3>
+      ${[['all', 'Every page', 'standard'], ['amounts', 'Only pages that have amount tables', 'text-only pages such as financial risk, contingent liabilities and approval show just the heading'], ['custom', 'I choose page by page', `open <button class="linkish" data-act="pdf-preview">Preview pages</button> and tick or untick “Show the year columns” above each notes page`]]
+        .map(([v, t, d]) => `<label class="radio-row"><input type="radio" name="notes-years" value="${v}" ${(L.notesYears || 'all') === v ? 'checked' : ''}><span><b>${t}</b> – ${d}</span></label>`).join('')}
+      ${L.notesYears === 'custom' ? `<p class="small muted">${Object.keys(L.yearsOff || {}).length} page(s) without year columns. If notes move to other pages after changes, check the preview again.</p>` : ''}</div></section>
 
   <section class="panel"><h2>Print</h2><p class="sub">Choose what to print. Page numbers stay the same as in the full report.</p>
     <div class="chips print-chips">${printList}</div>
@@ -2810,11 +2847,11 @@ async function pdfPages(doc, scale, onPage, alive){
   return pdf.numPages;
 }
 async function blobOf(doc){ return new Promise(res => doc.getBlob(res)); }
-async function previewPdf(doc, label){
+async function previewPdf(doc, label, opts){
   UI.pvDoc = doc; UI.pvName = `${safeName(client().name)}_FS_${eng().year}${label ? '_selected' : ''}.pdf`;
   const token = uid(); UI.pvToken = token;
   modal(`<div class="row between pv-head"><h2>Preview${label ? ' – ' + e_(label) : ''} <span class="muted small" id="pv-count"></span></h2>
-      <div class="row"><button class="btn" data-act="pv-print">${IC.print}Print</button><button class="btn" data-act="pv-download">${IC.down}Download PDF</button><button class="btn" data-close>Close</button></div></div>
+      <div class="row"><button class="btn primary" data-act="pv-refresh" id="pv-refresh" hidden>⟳ Update pages</button><button class="btn" data-act="pv-print">${IC.print}Print</button><button class="btn" data-act="pv-download">${IC.down}Download PDF</button><button class="btn" data-close>Close</button></div></div>
     <div class="pv-pages" id="pv-pages"><div class="pv-wait"><span class="spinner"></span>Preparing pages…</div></div>`, true);
   document.querySelector('.modal').classList.add('xwide');
   const box = document.getElementById('pv-pages');
@@ -2829,7 +2866,10 @@ async function previewPdf(doc, label){
       cv.className = 'pv-page'; cv.setAttribute('aria-label', `Sheet ${i} of ${n}`);
       const w = document.createElement('div'); w.className = 'pv-sheet'; w.appendChild(cv);
       const cap = document.createElement('div'); cap.className = 'pv-cap'; cap.textContent = `Sheet ${i} of ${n}`; w.appendChild(cap);
+      const sh = (doc.sheets || [])[i - 1];
+      if (sh && sh.notes){ const yl = document.createElement('label'); yl.className = 'pv-yr' + (sh.off ? ' off' : ''); yl.innerHTML = `<input type="checkbox" data-pvyr="${e_(sh.key + ':' + sh.cur)}"${sh.off ? '' : ' checked'}> Show the year columns (${sh.years[0]} · ${sh.years[1]}) at the top of this page${sh.tbl ? '' : ' <span>· no amount table on this page</span>'}`; w.insertBefore(yl, cv); }
       box.appendChild(w);
+      if (opts && opts.scroll && box.scrollHeight > opts.scroll + box.clientHeight) { box.scrollTop = opts.scroll; opts.scroll = 0; }
     }, alive);
   } catch (err) {
     // fallback: browser PDF viewer
@@ -4456,6 +4496,8 @@ document.addEventListener('click', async ev => {
         (en.reports = en.reports || []).push({name: up.name, url: up.webViewLink, at: new Date().toISOString()}); save();
         toast('PDF saved to Google Drive'); window.open(up.webViewLink, '_blank', 'noopener'); break;
       }
+      case 'pv-refresh': { t.disabled = true; t.textContent = 'Updating…'; const sc = (document.getElementById('pv-pages') || {}).scrollTop || 0;
+        try { const doc = await makePdf(buildReport(c, en, prev()), {only: UI.pvOnly || null, letterhead: true}); await previewPdf(doc, UI.pvOnly ? 'selected sections' : '', {scroll: sc}); } finally { t.disabled = false; } break; }
       case 'pv-print': case 'pv-download': { if (!UI.pvDoc) break; t.disabled = true;
         try { let doc = UI.pvDoc; if (UI.pvWithLh){ toast('Preparing the pages without the letterhead picture…'); doc = await makePdf(buildReport(c, en, prev()), {only: UI.pvOnly || null}); }
           if (a === 'pv-print') await printPdf(doc); else download(await blobOf(doc), UI.pvName || 'report.pdf'); } finally { t.disabled = false; } break; }
@@ -4494,6 +4536,12 @@ document.addEventListener('change', async ev => {
     try { toast('Reading the financial statements…'); const res = await readFsWorkbookFile(f); UI.fsImp = {res, fileName: f.name, newOnly: el.id === 'fs-in-client'}; document.querySelectorAll('.toast').forEach(x => x.remove()); fsImportModal(); }
     catch (err) { console.error(err); toast(err.message, true); } return; }
   if (el.id === 'ay-file-in' && el.files[0]){ UI.ayFile = el.files[0]; const s = document.getElementById('ay-file-name'); if (s) s.textContent = el.files[0].name; const rb = document.querySelector('input[name=ay-src][value=file]'); if (rb) rb.checked = true; return; }
+  if (el.dataset.pvyr){ const L = layoutOf(en);
+    if (L.notesYears !== 'custom'){ L.yearsOff = {}; ((UI.pvDoc || {}).sheets || []).forEach(sh => { if (sh.notes && sh.off) L.yearsOff[sh.key + ':' + sh.cur] = true; }); L.notesYears = 'custom'; }
+    if (el.checked) delete L.yearsOff[el.dataset.pvyr]; else L.yearsOff[el.dataset.pvyr] = true;
+    el.closest('.pv-yr').classList.toggle('off', !el.checked);
+    const b = document.getElementById('pv-refresh'); if (b) b.hidden = false; save(); scheduleRender(); return; }
+  if (el.name === 'notes-years'){ const L = layoutOf(en); L.notesYears = el.value; save(); render(); return; }
   if (el.dataset.cflabel){ const k = el.dataset.cflabel, L = cfLayoutOf(en), x = cfLines(en).find(y => y.key === k), v = el.value.trim();
     if (!v || (x && v === x.def)) delete L.labels[k]; else L.labels[k] = v; save(); scheduleRender(); return; }
   if (el.dataset.cfcy){ const k = el.dataset.cfcy;
