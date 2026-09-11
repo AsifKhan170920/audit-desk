@@ -497,6 +497,29 @@ function subLines(eng, key){
   return out;
 }
 
+/* equity modes: first year from the settings or the date established; reserve ledger lines as opening or closing balances */
+function engClient(en){ return (typeof DB !== 'undefined' && DB && (DB.clients || []).find(c => (c.engagements || []).includes(en))) || null; }
+function estYearOf(en){ const c = engClient(en), m = String((c && c.profile && c.profile.estDate) || '').match(/\b(19|20)\d{2}\b/g); return m ? +m[m.length - 1] : null; }
+function eqModes(eng, cy, py){
+  const PYI = eng.pyInfo || {}, S = eng.settings || {}, tol = 10;
+  const estYear = estYearOf(eng), firstMode = PYI.firstYear || 'auto';
+  const firstPy = firstMode === 'yes' || (firstMode === 'auto' && estYear === eng.year - 1);
+  // reserve balances in the prior year column: only then can this year's lines be told apart as opening or closing
+  const hasPy = R(py.re) !== 0 || R(py.lr) !== 0;
+  const tbMode = S.eqTb || 'auto';
+  const pick = (tbv, pyClose) => tbMode === 'open' || tbMode === 'close' ? tbMode : (!hasPy || Math.abs(tbv - pyClose) <= tol ? 'open' : 'close');
+  return {estYear, firstMode, firstPy, hasPy, tbMode, lr: pick(cy.lr, py.lr), re: pick(cy.re, py.re)};
+}
+function eqModeFields(en, r, pre){
+  const Y = en.year, PY = Y - 1, E = (r.cy && r.cy.eqModes) || {}, c = engClient(en), est = c && c.profile && c.profile.estDate;
+  const autoFirst = E.estYear !== null && E.estYear !== undefined ? `Auto – established ${est} → ${E.estYear === PY ? 'yes' : 'no'}` : 'Auto – no date established in the company profile → no';
+  const word = m => m === 'close' ? 'closing' : 'opening';
+  const autoTb = 'Auto – ' + (E.re === E.lr ? `${word(E.re)} balances found` : `retained earnings ${word(E.re)}, legal reserve ${word(E.lr)}`);
+  return field(pre + '-first', `Was FY${PY} the company’s first year?`, en.pyInfo.firstYear || 'auto', {bind: 'eng.pyInfo.firstYear', select: [['auto', autoFirst], ['yes', `Yes – company started in FY${PY}`], ['no', `No – work back FY${PY} openings`]]})
+    + field(pre + '-eqtb', `FY${Y} retained earnings and legal reserve lines hold`, en.settings.eqTb || 'auto', {bind: 'eng.settings.eqTb', select: [['auto', autoTb], ['open', `Opening balances (before FY${Y} profit)`], ['close', `Closing balances (after FY${Y} profit and transfer)`]]});
+}
+function eqDiffLabel(v){ return Math.abs(v) <= 10 ? 'Rounding difference' : 'Other movements (difference – check)'; }
+
 function ctFor(pbt, adj){ return Math.round(Math.max(0, pbt + (adj || 0) - 375000) * 0.09); }
 
 function compute(eng, prevEng){
@@ -541,14 +564,33 @@ function compute(eng, prevEng){
   cy.pat = cy.pbt - cy.ct; py.pat = py.pbt - py.ct;
   const eqIt = (yr, col) => (eng.soceItems || []).filter(x => x.yr === yr).reduce((a, x) => a + R(x[col]), 0);
   ['cap', 'lr', 're', 'ca', 'oth'].forEach(col => { cy[col + 'Items'] = eqIt('cy', col); py[col + 'Items'] = eqIt('py', col); });
-  cy.lrOpen = cy.lr; cy.lrTransfer = R(S.lrTransfer); cy.lrClose = cy.lrOpen + cy.lrTransfer + cy.lrItems;
+  // equity: is the prior year the company's first year, and are this year's reserve lines opening or closing balances?
+  const EQ = eqModes(eng, cy, py);
+  const firstPy = EQ.firstPy;
+  // prior year – closing balances come from the ledger; a first year starts from nothing, otherwise openings are worked back
+  py.lrClose = py.lr;
+  if (firstPy){ py.lrOpen = 0; py.lrTransfer = py.lrClose - py.lrItems; }
+  else { py.lrTransfer = R(PYI.lrTransfer); py.lrOpen = py.lrClose - py.lrTransfer - py.lrItems; }
+  py.reClose = py.re;
+  if (firstPy){ py.reOpen = 0; py.reAdj = py.reClose - (py.pat - py.div - py.lrTransfer + py.reItems); }
+  else { py.reOpen = py.reClose - py.pat + py.div + py.lrTransfer - py.reItems; py.reAdj = 0; }
+  py.capOpen = firstPy ? 0 : py.cap - py.capItems; py.capIntro = py.cap - py.capOpen - py.capItems;
+  py.caClose = py.ca; py.caOpen = firstPy ? 0 : R(PYI.caOpen); py.caMove = py.caClose - py.caOpen;
+  py.othOpen = firstPy ? 0 : py.xeq - py.othItems; py.othMove = py.xeq - py.othOpen - py.othItems;
+  // current year – opening balances are last year's closing balances
+  const lrIsClose = EQ.lr === 'close', reIsClose = EQ.re === 'close';
+  if (lrIsClose){ cy.lrClose = cy.lr; cy.lrOpen = py.lrClose; cy.lrTransfer = cy.lrClose - cy.lrOpen - cy.lrItems; }
+  else { cy.lrOpen = cy.lr; cy.lrTransfer = R(S.lrTransfer); cy.lrClose = cy.lrOpen + cy.lrTransfer + cy.lrItems; }
   cy.lrSuggest = Math.max(0, Math.min(Math.round(cy.pat * 0.05), Math.round(cy.cap * 0.5) - cy.lrOpen));
-  py.lrClose = py.lr; py.lrTransfer = R(PYI.lrTransfer); py.lrOpen = py.lrClose - py.lrTransfer - py.lrItems;
-  cy.reOpen = cy.re; cy.reClose = cy.reOpen + cy.pat - cy.div - cy.lrTransfer + cy.reItems;
-  py.reClose = py.re; py.reOpen = py.reClose - py.pat + py.div + py.lrTransfer - py.reItems;
-  cy.capOpen = py.cap; py.capOpen = py.cap - py.capItems;
+  if (reIsClose){ cy.reClose = cy.re; cy.reOpen = py.reClose; cy.reAdj = cy.reClose - (cy.reOpen + cy.pat - cy.div - cy.lrTransfer + cy.reItems); }
+  else { cy.reOpen = cy.re; cy.reClose = cy.reOpen + cy.pat - cy.div - cy.lrTransfer + cy.reItems; cy.reAdj = 0; }
+  cy.lrOpenDiff = EQ.hasPy ? cy.lrOpen - py.lrClose : 0; cy.reOpenDiff = EQ.hasPy ? cy.reOpen - py.reClose : 0;
+  cy.capOpen = py.cap; cy.capIntro = cy.cap - py.cap - cy.capItems;
   cy.caOpen = py.ca; cy.caClose = cy.ca; cy.caMove = cy.caClose - cy.caOpen;
-  py.caClose = py.ca; py.caOpen = R(PYI.caOpen); py.caMove = py.caClose - py.caOpen;
+  cy.othOpen = py.xeq; cy.othMove = cy.xeq - py.xeq - cy.othItems;
+  cy.eqModes = EQ;
+  // a trial balance holding closing reserves also still holds this year's profit – take the difference out for the balance check
+  const eqTbAdj = (lrIsClose ? cy.lr - cy.lrOpen : 0) + (reIsClose ? cy.re - cy.reOpen : 0);
   for (const b of [cy, py]){
     b.payTot = b.pay + b.ct;
     b.nca = b.ppe + b.xnca; b.caTot = b.inv + b.rec + b.rprec + b.cash + b.xca; b.ta = b.nca + b.caTot;
@@ -579,13 +621,13 @@ function compute(eng, prevEng){
     cfp.inv = R(mm.inv); cfp.rec = R(mm.rec); cfp.rprec = R(mm.rprec); cfp.pay = R(mm.pay); cfp.rppay = R(mm.rppay); cfp.otherOp = R(mm.otherOp);
     cfp.op = cfp.opBefore + cfp.inv + cfp.rec + cfp.rprec + cfp.pay + cfp.rppay + cfp.otherOp;
     cfp.additions = ppe.length ? -ppeT.pyAdd : R(mm.additions); cfp.proceeds = R(mm.proceeds); cfp.otherInv = R(mm.otherInv); cfp.invTot = cfp.additions + cfp.proceeds + cfp.otherInv;
-    cfp.loans = R(mm.loans); cfp.ca = py.caMove; cfp.div = -py.div; cfp.shareCap = py.capItems; cfp.otherFin = R(mm.otherFin); cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin;
+    cfp.loans = R(mm.loans); cfp.ca = py.caMove; cfp.div = -py.div; cfp.shareCap = py.cap - py.capOpen; cfp.otherFin = R(mm.otherFin); cfp.finTot = cfp.loans + cfp.ca + cfp.div + cfp.otherFin;
     cfp.net = cfp.op + cfp.invTot + cfp.finTot; cfp.open = R(mm.openCash); cfp.close = cfp.open + cfp.net; cfp.diff = cfp.close - py.cash;
   }
   cfp = applyCfLayout(eng, cf, cfp, cy, py);
   const checks = [];
   const add = (ok, text, level) => checks.push({ok, text, level: ok ? 'ok' : (level || 'bad')});
-  add(dr === cr, dr === cr ? 'Trial balance balances' : `Trial balance is out by ${fmtN(dr - cr)}`);
+  { const crT = cr - eqTbAdj, note = eqTbAdj ? ' (reserves taken as closing balances)' : ''; add(dr === crT, dr === crT ? 'Trial balance balances' + note : `Trial balance is out by ${fmtN(dr - crT)}${note}`); }
   add(unmapped === 0, unmapped ? `${unmapped} ledger line(s) not in any schedule` : 'All ledger lines are in schedules');
   add(cy.ta === cy.tel, cy.ta === cy.tel ? `Statement of financial position ${eng.year} agrees` : `Statement of financial position ${eng.year} out by ${fmtN(cy.ta - cy.tel)}`);
   add(py.ta === py.tel, py.ta === py.tel ? `Statement of financial position ${eng.year-1} agrees` : `Prior year (${eng.year-1}) figures out by ${fmtN(py.ta - py.tel)}`);
@@ -603,7 +645,14 @@ function compute(eng, prevEng){
   }
   add(cf.diff === 0, cf.diff === 0 ? `Cash flow ${eng.year} reconciles to cash balance` : `Cash flow ${eng.year} does not reconcile – difference ${fmtN(cf.diff)}`);
   add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} reconciles` : `Prior year cash flow does not reconcile – difference ${fmtN(cfp.diff)} (enter prior year cash flow figures)`, 'warn');
-  if (cy.lr < cy.cap * 0.5 && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below 50% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
+  if (cy.lrClose < cy.cap * 0.5 && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below 50% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
+  { const Y0 = eng.year, P0 = eng.year - 1;
+    if (py.reAdj) add(false, `Retained earnings at the end of FY${P0} (${fmtN(py.reClose)}) differ from the FY${P0} profit less transfers (${fmtN(py.reClose - py.reAdj)}) by ${fmtN(py.reAdj)} – shown as ${Math.abs(py.reAdj) <= 10 ? 'a rounding difference' : 'a difference'} in changes in equity`, 'warn');
+    if (cy.reAdj) add(false, `Retained earnings at the end of FY${Y0} (${fmtN(cy.reClose)}) differ from FY${P0} closing + profit − dividend − transfer (${fmtN(cy.reClose - cy.reAdj)}) by ${fmtN(cy.reAdj)}`, 'warn');
+    if (cy.reOpenDiff) add(false, `Retained earnings at the start of FY${Y0} (${fmtN(cy.reOpen)}) differ from the FY${P0} closing balance (${fmtN(py.reClose)}) by ${fmtN(cy.reOpenDiff)} – if the FY${Y0} ledger shows the closing balance, choose “Closing balances” for the FY${Y0} retained earnings and legal reserve lines`, 'warn');
+    if (cy.lrOpenDiff) add(false, `Legal reserve at the start of FY${Y0} (${fmtN(cy.lrOpen)}) differs from the FY${P0} closing balance (${fmtN(py.lrClose)}) by ${fmtN(cy.lrOpenDiff)}`, 'warn');
+    if (!firstPy && EQ.firstMode === 'auto' && EQ.estYear === null && EQ.hasPy && py.reOpen < 0) add(false, `Retained earnings at the start of FY${P0} work back to ${fmtN(py.reOpen)} – if FY${P0} was the company’s first year, answer “Yes” to “Was FY${P0} the company’s first year?” (click any equity amount in the statements) or enter the date established in the company profile`, 'warn');
+  }
   if (eng.tb.length) add(docsCount === eng.tb.length, `${docsCount} of ${eng.tb.length} ledger lines have supporting documents`, 'info');
   return {cy, py, dr, cr, unmapped, docsCount, ppe, ppeT, cf, cfp, checks};
 }
@@ -1095,24 +1144,29 @@ function buildReport(client, eng, prevEng){
     {k: 'fs', rows: soci, noteCol: true, years: [Y, PY]}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
 
   const eqItems = eng.soceItems || [], anyIt = col => eqItems.some(x => R(x[col]));
-  const hasCA = nz(cy.caClose, py.caClose) || nz(py.caOpen, 0) || anyIt('ca'), hasLR = nz(cy.lrClose, py.lrClose) || nz(py.lrOpen, 0) || anyIt('lr'), hasOR = nz(cy.xeq, py.xeq) || anyIt('oth');
+  const hasCA = nz(cy.caClose, py.caClose) || nz(py.caOpen, 0) || anyIt('ca'), hasLR = nz(cy.lrClose, py.lrClose) || nz(py.lrOpen, 0) || anyIt('lr') || nz(cy.lrOpenDiff, 0), hasOR = nz(cy.xeq, py.xeq) || anyIt('oth');
   const eqCols = ['Share\ncapital'].concat(hasLR ? ['Legal\nreserve'] : [], ['Retained\nearnings'], hasCA ? ['Current\naccount'] : [], hasOR ? ['Other\nreserves'] : [], ['Total']);
   const eqRow = (label, cap, lr, re, ca, style, oth) => { const vals = [cap].concat(hasLR ? [lr] : [], [re], hasCA ? [ca] : [], hasOR ? [oth || 0] : []); return {cells: [label].concat(vals, [vals.reduce((a, b) => a + b, 0)]), style: style || ''}; };
   const itRows = yr => eqItems.filter(x => x.yr === yr && ['cap', 'lr', 're', 'ca', 'oth'].some(col => R(x[col]))).map(x => eqRow(x.label || 'Other movement', R(x.cap), R(x.lr), R(x.re), R(x.ca), '', R(x.oth)));
-  const soceRows = [eqRow(`At ${openText}`, py.capOpen, py.lrOpen, py.reOpen, py.caOpen, 'bold', py.xeq - py.othItems),
+  const EQM = cy.eqModes || {}, estInPy = EQM.firstPy && EQM.estYear === PY && p.estDate;
+  const soceRows = [eqRow(estInPy ? `At ${p.estDate} (date of establishment)` : `At ${openText}`, py.capOpen, py.lrOpen, py.reOpen, py.caOpen, 'bold', py.othOpen),
     eqRow('Total comprehensive income for the year', 0, 0, py.pat, 0)];
   if (py.div) soceRows.push(eqRow('Dividend paid', 0, 0, -py.div, 0));
   if (py.lrTransfer) soceRows.push(eqRow('Transfer to legal reserve', 0, py.lrTransfer, -py.lrTransfer, 0));
   soceRows.push(...itRows('py'));
+  if (py.capIntro) soceRows.push(eqRow(py.capIntro > 0 ? 'Share capital introduced' : 'Movement in share capital', py.capIntro, 0, 0, 0));
   if (hasCA && !(py.caItems && py.caMove === py.caItems)) soceRows.push(eqRow('Net movement in current account', 0, 0, 0, py.caMove - py.caItems));
+  if (hasOR && py.othMove) soceRows.push(eqRow('Movement in other reserves', 0, 0, 0, 0, '', py.othMove));
+  if (py.reAdj) soceRows.push(eqRow(eqDiffLabel(py.reAdj), 0, 0, py.reAdj, 0));
   soceRows.push(eqRow(`At ${yeText}, ${PY}`, py.cap, py.lrClose, py.reClose, py.caClose, 'tot', py.xeq), {cells: [], style: 'gap'},
     eqRow('Total comprehensive income for the year', 0, 0, cy.pat, 0));
   if (cy.div) soceRows.push(eqRow('Dividend paid', 0, 0, -cy.div, 0));
   if (cy.lrTransfer) soceRows.push(eqRow('Transfer to legal reserve', 0, cy.lrTransfer, -cy.lrTransfer, 0));
   soceRows.push(...itRows('cy'));
   if (hasCA && !(cy.caItems && cy.caMove === cy.caItems)) soceRows.push(eqRow('Net movement in current account', 0, 0, 0, cy.caMove - cy.caItems));
-  if (cy.cap - py.cap - cy.capItems) soceRows.push(eqRow('Movement in share capital', cy.cap - py.cap - cy.capItems, 0, 0, 0));
-  if (hasOR && cy.xeq - py.xeq - cy.othItems) soceRows.push(eqRow('Movement in other reserves', 0, 0, 0, 0, '', cy.xeq - py.xeq - cy.othItems));
+  if (cy.capIntro) soceRows.push(eqRow(cy.capIntro > 0 ? 'Share capital introduced' : 'Movement in share capital', cy.capIntro, 0, 0, 0));
+  if (hasOR && cy.othMove) soceRows.push(eqRow('Movement in other reserves', 0, 0, 0, 0, '', cy.othMove));
+  if (cy.reAdj + cy.reOpenDiff || cy.lrOpenDiff) soceRows.push(eqRow(eqDiffLabel(Math.abs(cy.reAdj + cy.reOpenDiff) + Math.abs(cy.lrOpenDiff)), 0, cy.lrOpenDiff, cy.reAdj + cy.reOpenDiff, 0));
   soceRows.push(eqRow(`At ${yeText}, ${Y}`, cy.cap, cy.lrClose, cy.reClose, cy.caClose, 'grand', cy.xeq));
   sections.push({id: 'soce', kind: 'statement', head: statementHead('STATEMENT OF CHANGES IN SHAREHOLDERS’ EQUITY', period), items: [
     {k: 'grid', drill: 'soce', plain: true, header: [''].concat(eqCols), sub: [''].concat(eqCols.map(() => 'AED')), rows: soceRows, firstWidth: '*', numWidth: eqCols.length >= 6 ? 52 : 57, small: true},
@@ -1210,6 +1264,7 @@ function buildReport(client, eng, prevEng){
       if (nz(cy.div, py.div)) rr.push(row('Dividend paid', '', -cy.div, -py.div));
       if (nz(cy.lrTransfer, py.lrTransfer)) rr.push(row('Transfer to legal reserve', '', -cy.lrTransfer, -py.lrTransfer));
       rr.push(...eqNoteRows('re'));
+      if (nz(cy.reAdj, py.reAdj)) rr.push(row(eqDiffLabel(Math.abs(cy.reAdj) + Math.abs(py.reAdj)), '', cy.reAdj, py.reAdj));
       grp.push(head(key, NT('re', 'RETAINED EARNINGS')), T(rr.concat([total('Balance at the end of the year', cy.reClose, py.reClose)])));
     } else if (key === 'ca'){
       grp.push(head(key, NT('ca', 'SHAREHOLDER’S CURRENT ACCOUNT')), T([row('Balance at the beginning of the year', '', cy.caOpen, py.caOpen), row('Net movement during the year', '', cy.caMove - cy.caItems, py.caMove - py.caItems)].concat(eqNoteRows('ca'), [total('Balance at the end of the year', cy.caClose, py.caClose)])),
@@ -2706,7 +2761,7 @@ function vAdjust(){
     ${field('ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
     ${S.ctMode === 'manual' ? field('ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}
     <div class="field"><label>Corporate tax for the year</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:cy}`)}>${fmtN(r.cy.ct)}</div></div>
-    ${field('lr-tr', 'Transfer to legal reserve', S.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true, hint: `Suggested: ${fmtN(r.cy.lrSuggest)} (5% of profit until reserve = 50% of capital) <button class="linkish" data-act="lr-suggest">Use</button>`})}
+    ${(r.cy.eqModes || {}).lr === 'close' ? `<div class="field"><label>Transfer to legal reserve</label><div class="static">${fmtN(r.cy.lrTransfer)} <span class="muted small">(legal reserve line holds the closing balance)</span></div></div>` : field('lr-tr', 'Transfer to legal reserve', S.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true, hint: `Suggested: ${fmtN(r.cy.lrSuggest)} (5% of profit until reserve = 50% of capital) <button class="linkish" data-act="lr-suggest">Use</button>`})}
     ${field('disp-pr', 'Proceeds from disposal of PPE', S.disposalProceeds, {bind: 'eng.settings.disposalProceeds', num: true})}
     ${r.ppe.length ? '' : field('ppe-add', 'Additions to PPE (no PPE schedule)', S.ppeAdditions, {bind: 'eng.settings.ppeAdditions', num: true})}
     ${field('dep-m', 'Depreciation method', S.deprMethod, {bind: 'eng.settings.deprMethod', select: [['straight-line', 'Straight-line'], ['reducing balance', 'Reducing balance']]})}
@@ -2716,8 +2771,9 @@ function vAdjust(){
     ${field('py-ct-mode', `Corporate tax FY${en.year - 1}`, P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
     ${P.ctMode === 'manual' ? field('py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}
     <div class="field"><label>Corporate tax FY${en.year - 1}</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:py}`)}>${fmtN(r.py.ct)}</div></div>
-    ${field('py-lr', `Transfer to legal reserve in FY${en.year - 1}`, P.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}
-    ${field('py-ca', `Shareholder current account at start of FY${en.year - 1}`, P.caOpen, {bind: 'eng.pyInfo.caOpen', num: true})}
+    ${eqModeFields(en, r, 'adj-eq')}
+    ${(r.cy.eqModes || {}).firstPy ? `<div class="field"><label>Transfer to legal reserve in FY${en.year - 1}</label><div class="static">${fmtN(r.py.lrTransfer)} <span class="muted small">(first year)</span></div></div>` : field('py-lr', `Transfer to legal reserve in FY${en.year - 1}`, P.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}
+    ${(r.cy.eqModes || {}).firstPy ? '' : field('py-ca', `Shareholder current account at start of FY${en.year - 1}`, P.caOpen, {bind: 'eng.pyInfo.caOpen', num: true})}
     <div class="field"><label>Retained earnings at start of FY${en.year - 1} (calculated)</label><div class="static"${fxRefAttr(`{${en.year}:C:reOpen:py}`)}>${fmtN(r.py.reOpen)}</div></div>
   </div>
   ${pyCfFields}</section>`;
@@ -3138,7 +3194,7 @@ function drillBody(key, yr){
   const num = (l, f) => `<input class="numi${R(l[f]) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':' + f)}" id="q-${f}-${l.id}" data-line="${l.id}" data-field="${f}"${fxAttrs(en, 'L:' + l.id + ':' + f, `{${Y}:L:${l.id}:${f}}`)} value="${fmtSigned(l[f])}" inputmode="decimal" aria-label="${f === 'amt' ? 'FY' + Y : 'FY' + PY}">`;
   const isRes = k === 're' || k === 'lr';
   const linesTable = `<div class="table-wrap"><table class="ui compact q-tab"><colgroup><col><col><col style="width:130px"><col style="width:130px"><col style="width:110px"><col style="width:40px"></colgroup>
-    <thead><tr><th>Ledger</th><th>Wording in notes</th><th class="r${hl('cy')}">FY${Y}${isRes ? ' opening' : ''}</th><th class="r${hl('py')}">FY${PY}${isRes ? ' closing' : ''}</th><th>Proof</th><th></th></tr></thead>
+    <thead><tr><th>Ledger</th><th>Wording in notes</th><th class="r${hl('cy')}">FY${Y}${isRes ? ((r.cy.eqModes || {})[k] === 'close' ? ' closing' : ' opening') : ''}</th><th class="r${hl('py')}">FY${PY}${isRes ? ' closing' : ''}</th><th>Proof</th><th></th></tr></thead>
     <tbody>${lines.map(l => `<tr><td><input id="q-led-${l.id}" data-line="${l.id}" data-field="ledger" value="${e_(l.ledger)}" placeholder="Ledger name" aria-label="Ledger"></td><td><input id="q-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td><td class="${hl('cy')}">${num(l, 'amt')}</td><td class="${hl('py')}">${num(l, 'py')}</td><td>${docCell('line', l)}</td><td><button class="icon-btn" data-act="del-line" data-id="${l.id}" title="Delete line">${IC.trash}</button></td></tr>`).join('') || `<tr><td colspan="6" class="empty">No ledger lines yet.</td></tr>`}</tbody>
     ${lines.length ? `<tfoot><tr><td colspan="2">Total of the lines</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.amt), 0))}</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.py), 0))}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>
     <div class="row"><button class="btn small" data-act="q-add-line" data-key="${k}">${IC.plus}Add line</button></div>`;
@@ -3162,17 +3218,23 @@ function drillBody(key, yr){
         + fig('Closing written down value', fmtN(T.nbv), fmtN(T.nbvPy), 'tot')
         + (T.pyDiff ? fig(`<span class="bad-t">FY${PY} figures add up to ${fmtN(T.pyCloseCalc)} – difference</span>`, '', `<b class="bad-t">${fmtN(T.pyDiff)}</b>`) : ''))}`;
   } else if (k === 're' || k === 'lr' || k === 'ca' || k === 'cap'){
-    const trIn = `${bind('q-lr-cy', 'settings.lrTransfer', en.settings.lrTransfer, 'Transfer to legal reserve FY' + Y)}`, trInPy = bind('q-lr-py', 'pyInfo.lrTransfer', en.pyInfo.lrTransfer, 'Transfer to legal reserve FY' + PY);
+    const E = r.cy.eqModes || {}, muted = t => ` <span class="muted small">(${t})</span>`;
+    const trIn = E.lr === 'close' ? fmtN(r.cy.lrTransfer) + muted('closing − opening') : bind('q-lr-cy', 'settings.lrTransfer', en.settings.lrTransfer, 'Transfer to legal reserve FY' + Y);
+    const trInPy = E.firstPy ? fmtN(r.py.lrTransfer) + muted('first year') : bind('q-lr-py', 'pyInfo.lrTransfer', en.pyInfo.lrTransfer, 'Transfer to legal reserve FY' + PY);
+    const pyOpenTag = muted(E.firstPy ? 'first year' : 'worked back');
     const itemsBtn = `<button class="linkish" data-act="soce-open">items in changes in equity</button>`;
-    if (k === 're') extra = `<h3 class="h3">How retained earnings are worked out</h3>${figT(fig('Balance at the beginning of the year', fmtN(r.cy.reOpen), fmtN(r.py.reOpen) + ' <span class="muted small">(worked back)</span>') + fig('Total comprehensive income for the year', fmtN(r.cy.pat), fmtN(r.py.pat)) + fig('Dividend paid', fmtN(-r.cy.div), fmtN(-r.py.div)) + fig('Transfer to legal reserve', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.reItems), fmtN(r.py.reItems)) + fig('Balance at the end of the year', fmtN(r.cy.reClose), fmtN(r.py.reClose), 'tot'))}`;
-    if (k === 'lr') extra = `<h3 class="h3">How the legal reserve is worked out</h3>${figT(fig('Balance at the beginning of the year', fmtN(r.cy.lrOpen), fmtN(r.py.lrOpen) + ' <span class="muted small">(worked back)</span>') + fig('Transfer for the year', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.lrItems), fmtN(r.py.lrItems)) + fig('Balance at the end of the year', fmtN(r.cy.lrClose), fmtN(r.py.lrClose), 'tot'))}`;
-    if (k === 'ca') extra = `<h3 class="h3">Current account movement</h3>${figT(fig('Balance at the beginning of the year', fmtN(r.cy.caOpen), bind('q-ca-open', 'pyInfo.caOpen', en.pyInfo.caOpen, 'Current account at start of FY' + PY)) + fig('Net movement during the year', fmtN(r.cy.caMove - r.cy.caItems), fmtN(r.py.caMove - r.py.caItems)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.caItems), fmtN(r.py.caItems)) + fig('Balance at the end of the year', fmtN(r.cy.caClose), fmtN(r.py.caClose), 'tot'))}`;
-    if (k === 'cap') extra = `<h3 class="h3">Share capital</h3>${figT(fig('Balance at the beginning of the year', fmtN(r.py.cap), fmtN(r.py.capOpen) + ' <span class="muted small">(worked back)</span>') + fig(`Share capital introduced (${itemsBtn})`, fmtN(r.cy.cap - r.py.cap), fmtN(r.py.capItems)) + fig('Balance at the end of the year', fmtN(r.cy.cap), fmtN(r.py.cap), 'tot'))}
-      <p class="small muted">If share capital was introduced in FY${PY}, add it as an item for FY${PY} so the FY${PY} opening balance is right.</p>`;
+    const modes = `<div class="form-grid">${eqModeFields(en, r, 'q-eq')}</div>`;
+    const reDiff = r.cy.reAdj || r.py.reAdj ? fig(eqDiffLabel(Math.abs(r.cy.reAdj) + Math.abs(r.py.reAdj)), fmtN(r.cy.reAdj), fmtN(r.py.reAdj)) : '';
+    const openChk = (d, pyClose) => d ? fig(`<span class="bad-t">FY${Y} opening differs from FY${PY} closing ${fmtN(pyClose)} by</span>`, `<b class="bad-t">${fmtN(d)}</b>`, '') : '';
+    if (k === 're') extra = `<h3 class="h3">How retained earnings are worked out</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.reOpen) + (E.re === 'close' ? muted('FY' + PY + ' closing') : ''), fmtN(r.py.reOpen) + pyOpenTag) + fig('Total comprehensive income for the year', fmtN(r.cy.pat), fmtN(r.py.pat)) + fig('Dividend paid', fmtN(-r.cy.div), fmtN(-r.py.div)) + fig('Transfer to legal reserve', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.reItems), fmtN(r.py.reItems)) + reDiff + fig('Balance at the end of the year', fmtN(r.cy.reClose), fmtN(r.py.reClose), 'tot') + openChk(r.cy.reOpenDiff, r.py.reClose))}`;
+    if (k === 'lr') extra = `<h3 class="h3">How the legal reserve is worked out</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.lrOpen) + (E.lr === 'close' ? muted('FY' + PY + ' closing') : ''), fmtN(r.py.lrOpen) + pyOpenTag) + fig('Transfer for the year', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.lrItems), fmtN(r.py.lrItems)) + fig('Balance at the end of the year', fmtN(r.cy.lrClose), fmtN(r.py.lrClose), 'tot') + openChk(r.cy.lrOpenDiff, r.py.lrClose))}`;
+    if (k === 'ca') extra = `<h3 class="h3">Current account movement</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.caOpen), E.firstPy ? fmtN(0) + muted('first year') : bind('q-ca-open', 'pyInfo.caOpen', en.pyInfo.caOpen, 'Current account at start of FY' + PY)) + fig('Net movement during the year', fmtN(r.cy.caMove - r.cy.caItems), fmtN(r.py.caMove - r.py.caItems)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.caItems), fmtN(r.py.caItems)) + fig('Balance at the end of the year', fmtN(r.cy.caClose), fmtN(r.py.caClose), 'tot'))}`;
+    if (k === 'cap') extra = `<h3 class="h3">Share capital</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.py.cap), fmtN(r.py.capOpen) + pyOpenTag) + fig(`Share capital introduced`, fmtN(r.cy.capIntro), fmtN(r.py.capIntro)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.capItems), fmtN(r.py.capItems)) + fig('Balance at the end of the year', fmtN(r.cy.cap), fmtN(r.py.cap), 'tot'))}
+      <p class="small muted">${E.firstPy ? `FY${PY} is the first year, so all FY${PY} share capital shows as introduced.` : `If the company started in FY${PY}, choose “Yes” for the first year above. If an existing company introduced capital in FY${PY}, add it as an item for FY${PY}.`}</p>`;
   } else if (k === 'pay' && (r.cy.ct || r.py.ct)){
     extra = `<h3 class="h3">Corporate tax included in payables</h3>${figT(fig('Provision for corporate tax', fmtN(r.cy.ct), fmtN(r.py.ct)) + fig('Total payables in the statement', fmtN(r.cy.payTot), fmtN(r.py.payTot), 'tot'))}<div class="row"><button class="btn small" data-drill="ct">Change corporate tax</button></div>`;
   }
-  const lineNote = isRes ? `<p class="small muted">${e_(s.label)} lines: FY${Y} = <b>opening</b> balance, FY${PY} = <b>closing</b> balance.</p>` : '';
+  const lineNote = isRes ? `<p class="small muted">${e_(s.label)} lines: FY${Y} = <b>${(r.cy.eqModes || {})[k] === 'close' ? 'closing' : 'opening'}</b> balance, FY${PY} = <b>closing</b> balance.</p>` : '';
   modal(`<div class="qd"><div class="row between"><h2>${e_(s.label)}${noteNo ? ` <span class="chip neutral">Note ${noteNo}</span>` : ''}</h2>
       <div class="q-tot"><span>FY${Y} <b>${fmtN(r.cy[k])}</b></span><span>FY${PY} <b>${fmtN(r.py[k])}</b></span></div></div>
     <p class="sub">Change any figure, wording or line here – the financial statements behind this window update at once. Type = in an amount for a formula.</p>
@@ -3227,18 +3289,22 @@ function soceBody(){
   const custom = yr => items.filter(x => x.yr === yr).map(x => `<tr><th scope="row"><input id="q-soce-label-${x.id}" data-soce="${x.id}" data-f="label" value="${e_(x.label || '')}" placeholder="e.g. Share capital introduced" aria-label="Item"></th>${cols.map(([c, l]) => `<td><input class="numi" id="q-soce-${c}-${x.id}" data-soce="${x.id}" data-f="${c}" value="${fmtSigned(x[c])}" inputmode="decimal" aria-label="${l}"></td>`).join('')}<td class="r b">${fmtN(cols.reduce((a, [c]) => a + R(x[c]), 0))}</td><td><button class="icon-btn" data-act="soce-del" data-id="${x.id}" title="Delete item">${IC.trash}</button></td></tr>`).join('');
   const addBtn = yr => `<tr class="q-add"><td colspan="${cols.length + 3}"><button class="btn small" data-act="soce-add" data-yr="${yr}">${IC.plus}Add item for FY${yr === 'py' ? PY : Y}</button></td></tr>`;
   const head = `<thead><tr><th></th>${cols.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th><th></th></tr></thead>`;
-  const body = auto(`At the beginning of FY${PY} <span class="muted small">(worked back)</span>`, {cap: r.py.capOpen, lr: r.py.lrOpen, re: r.py.reOpen, ca: r.py.caOpen, oth: r.py.xeq - r.py.othItems}, 'bold')
+  const E = r.cy.eqModes || {}, capL = v => v > 0 ? 'Share capital introduced' : 'Movement in share capital';
+  const cyDiff = r.cy.reAdj + r.cy.reOpenDiff;
+  const body = auto(`At the beginning of FY${PY} <span class="muted small">(${E.firstPy ? 'first year – nothing brought forward' : 'worked back'})</span>`, {cap: r.py.capOpen, lr: r.py.lrOpen, re: r.py.reOpen, ca: r.py.caOpen, oth: r.py.othOpen}, 'bold')
     + auto('Total comprehensive income', {re: r.py.pat}) + (r.py.div ? auto('Dividend paid', {re: -r.py.div}) : '') + (r.py.lrTransfer ? auto('Transfer to legal reserve', {lr: r.py.lrTransfer, re: -r.py.lrTransfer}) : '')
-    + custom('py') + addBtn('py') + (r.py.caMove - r.py.caItems ? auto('Net movement in current account', {ca: r.py.caMove - r.py.caItems}) : '')
+    + custom('py') + addBtn('py') + (r.py.capIntro ? auto(capL(r.py.capIntro), {cap: r.py.capIntro}) : '') + (r.py.caMove - r.py.caItems ? auto('Net movement in current account', {ca: r.py.caMove - r.py.caItems}) : '')
+    + (hasOR && r.py.othMove ? auto('Movement in other reserves', {oth: r.py.othMove}) : '') + (r.py.reAdj ? auto(eqDiffLabel(r.py.reAdj), {re: r.py.reAdj}, 'q-hlr') : '')
     + auto(`At the end of FY${PY}`, {cap: r.py.cap, lr: r.py.lrClose, re: r.py.reClose, ca: r.py.caClose, oth: r.py.xeq}, 'tot')
     + auto('Total comprehensive income', {re: r.cy.pat}) + (r.cy.div ? auto('Dividend paid', {re: -r.cy.div}) : '') + (r.cy.lrTransfer ? auto('Transfer to legal reserve', {lr: r.cy.lrTransfer, re: -r.cy.lrTransfer}) : '')
-    + custom('cy') + addBtn('cy') + (r.cy.caMove - r.cy.caItems ? auto('Net movement in current account', {ca: r.cy.caMove - r.cy.caItems}) : '') + (r.cy.cap - r.py.cap - r.cy.capItems ? auto('Movement in share capital', {cap: r.cy.cap - r.py.cap - r.cy.capItems}) : '')
-    + (hasOR && r.cy.xeq - r.py.xeq - r.cy.othItems ? auto('Movement in other reserves', {oth: r.cy.xeq - r.py.xeq - r.cy.othItems}) : '')
+    + custom('cy') + addBtn('cy') + (r.cy.caMove - r.cy.caItems ? auto('Net movement in current account', {ca: r.cy.caMove - r.cy.caItems}) : '') + (r.cy.capIntro ? auto(capL(r.cy.capIntro), {cap: r.cy.capIntro}) : '')
+    + (hasOR && r.cy.othMove ? auto('Movement in other reserves', {oth: r.cy.othMove}) : '') + (cyDiff || r.cy.lrOpenDiff ? auto(eqDiffLabel(Math.abs(cyDiff) + Math.abs(r.cy.lrOpenDiff)), {lr: r.cy.lrOpenDiff, re: cyDiff}, 'q-hlr') : '')
     + auto(`At the end of FY${Y}`, {cap: r.cy.cap, lr: r.cy.lrClose, re: r.cy.reClose, ca: r.cy.caClose, oth: r.cy.xeq}, 'grand');
   modal(`<div class="qd"><h2>Items in the statement of changes in equity</h2>
-    <p class="sub">Grey rows come from the schedules. <b>Add an item</b> for any other movement – for example share capital introduced in FY${PY}. Increases are <b>+</b>, decreases <b>−</b>. The FY${PY} opening balances are worked back from the FY${PY} closing balances less the FY${PY} movements, so every FY${PY} movement must be here.</p>
+    <p class="sub">Grey rows come from the schedules. <b>Add an item</b> for any other movement. Increases are <b>+</b>, decreases <b>−</b>. ${E.firstPy ? `FY${PY} is the company’s first year: every FY${PY} balance starts from nothing and share capital, the legal reserve transfer and the current account are worked out from the FY${PY} closing balances.` : `The FY${PY} opening balances are worked back from the FY${PY} closing balances less the FY${PY} movements – if the company started in FY${PY}, choose “Yes” below.`}</p>
+    <div class="form-grid">${eqModeFields(en, r, 'q-soce')}</div>
     <div class="table-wrap"><table class="ui compact q-tab q-soce">${head}<tbody>${body}</tbody></table></div>
-    <div class="form-grid three">${field('q-soce-lr-py', `Transfer to legal reserve FY${PY}`, en.pyInfo.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}${field('q-soce-lr-cy', `Transfer to legal reserve FY${Y}`, en.settings.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true})}${field('q-soce-ca', `Current account at start of FY${PY}`, en.pyInfo.caOpen, {bind: 'eng.pyInfo.caOpen', num: true})}</div>
+    <div class="form-grid three">${E.firstPy ? `<div class="field"><label>Transfer to legal reserve FY${PY}</label><div class="static">${fmtN(r.py.lrTransfer)} <span class="muted small">(first year)</span></div></div>` : field('q-soce-lr-py', `Transfer to legal reserve FY${PY}`, en.pyInfo.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}${E.lr === 'close' ? `<div class="field"><label>Transfer to legal reserve FY${Y}</label><div class="static">${fmtN(r.cy.lrTransfer)} <span class="muted small">(closing − opening)</span></div></div>` : field('q-soce-lr-cy', `Transfer to legal reserve FY${Y}`, en.settings.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true})}${E.firstPy ? '' : field('q-soce-ca', `Current account at start of FY${PY}`, en.pyInfo.caOpen, {bind: 'eng.pyInfo.caOpen', num: true})}</div>
     <p class="small muted">Items for FY${Y} in share capital, current account or other reserves only split the movement (closing balances come from the schedules). Items in legal reserve or retained earnings change the FY${Y} closing balance.</p>
     <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
   const m = document.querySelector('.modal'); if (m) m.classList.add('xwide');
@@ -3876,10 +3942,10 @@ function yearFromNext(c, next, year, type){
   const n = newEngagement(year, type); copyStructure(next, n);
   const rn = compute(next, prevOf(c, next));
   n.tb = next.tb.filter(l => R(l.py) || !['re', 'lr'].includes(l.fs)).map(l => ({id: uid(), ledger: l.ledger, fs: l.fs, caption: l.caption, amt: R(l.py), py: 0, docs: []}));
-  n.settings.lrTransfer = R(next.pyInfo.lrTransfer);
+  n.settings.lrTransfer = R(rn.py.lrTransfer);
   n.settings.ctMode = 'manual'; n.settings.ctAmount = R(rn.py.ct);
   n.pyInfo.caOpen = 0;
-  const caL = n.tb.filter(l => l.fs === 'ca'); if (caL.length) caL[0].py = R(next.pyInfo.caOpen);
+  const caL = n.tb.filter(l => l.fs === 'ca'); if (caL.length) caL[0].py = R(rn.py.caOpen);
   // PPE: closing = next year's opening; last year's movements go into the first class (split them by class if needed)
   n.ppe = (next.ppe || []).map(p => ({id: uid(), name: p.name, life: p.life, costOpen: R(p.costOpen), add: 0, disp: 0, depOpen: R(p.depOpen), charge: 0, depDisp: 0, docs: []}));
   if (n.ppe.length){ const P = next.ppePy || {}, f = n.ppe[0]; f.add = R(P.add); f.charge = R(P.charge); f.disp = R(P.disp); f.costOpen += f.disp - f.add; f.depOpen -= f.charge; }
