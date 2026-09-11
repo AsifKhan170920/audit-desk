@@ -1,0 +1,16 @@
+{
+  "name": "Fair Tax Portal",
+  "short_name": "Fair Tax",
+  "description": "CRM, Audit Desk, reminders and AI assistant for Fair Tax International FZC",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14284b",
+  "theme_color": "#14284b",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

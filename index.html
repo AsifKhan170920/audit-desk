@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fair Tax">
+<meta name="theme-color" content="#14284b">
 <title>Fair Tax Portal</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314284b'/%3E%3Ctext x='32' y='42' font-family='Arial' font-weight='700' font-size='28' fill='%23d9a441' text-anchor='middle'%3EFT%3C/text%3E%3C/svg%3E">
 <style>
@@ -49,12 +56,17 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
 .or{display:flex;align-items:center;gap:10px;margin:20px 0 12px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
 .gbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px}
 .exp{display:flex;flex-wrap:wrap;gap:4px}.exp label{display:inline-flex;align-items:center;gap:3px;margin:0;font-size:12px;font-weight:500;color:var(--ink);background:#f1f4f9;border-radius:6px;padding:2px 6px;white-space:nowrap}
-.phone{margin-top:22px}.phone b{display:block;font-size:16px;margin-bottom:4px}
+.phone{margin-top:22px}
+.askai{margin-top:18px;background:linear-gradient(135deg,#0f9d6b,#0b5c9c);color:#fff;border:0}.askai b{font-size:17px}.askai p{margin:2px 0 12px;opacity:.9;font-size:14px}
+.askrow{display:flex;gap:8px}.askrow input{flex:1;border:0;border-radius:10px;padding:12px 14px;font-size:15px;color:#14284b}.askrow button{border:0;border-radius:10px;padding:0 14px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.18);color:#fff;font-size:15px}.askrow button.go{background:#fff;color:#0b5c9c}
+.askchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.askchips button{border:1px solid rgba(255,255,255,.45);background:transparent;color:#fff;border-radius:999px;padding:5px 10px;font-size:12.5px;cursor:pointer}.askchips button:hover{background:rgba(255,255,255,.15)}
+@media(max-width:520px){.askrow button.talk{display:none}}.phone b{display:block;font-size:16px;margin-bottom:4px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.who{display:none}}
 </style>
-<script src="shared/cloud.js"></script>
-<script src="shared/reminders.js"></script>
-<script src="shared/notify.js"></script>
+<script src="shared/cloud.js?v=5"></script>
+<script src="shared/reminders.js?v=5"></script>
+<script src="shared/notify.js?v=5"></script>
+<script src="shared/ai-launcher.js?v=5"></script>
 </head>
 <body>
 <header class="top"><div class="top-in">
@@ -80,6 +92,7 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
   /* ---------- screens ---------- */
   function login(note){
     me = null; header();
+    if (window.FTAI) FTAI.unmount();
     show('<form class="card login" id="f-login"><h1>Sign in</h1><p class="sub">Use the user ID and password given to you by the admin. There is no sign-up – ask the admin for an account.</p>' +
       '<label for="l-id">User ID</label><input type="text" id="l-id" autocomplete="username" autocapitalize="off" spellcheck="false" required>' +
       '<label for="l-pw">Password</label><input type="password" id="l-pw" autocomplete="current-password" required>' +
@@ -103,6 +116,7 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
   }
   function afterLogin(){
     header();
+    if (window.FTAI) FTAI.mount();
     var next = params.get('next');
     if (next && FT.canOpen(me, next)){ location.href = next + '/'; return; }
     dashboard();
@@ -114,11 +128,16 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
         '<div class="ic" style="background:' + color + '">' + letters + '</div><b>' + title + '</b><span>' + text + '</span>' +
         '<span class="go">' + (ok ? 'Open →' : 'No access – ask the admin') + '</span></button>';
     };
-    show('<h1>Welcome, ' + esc(me.name) + '</h1><p class="sub">Choose where to work.</p><div class="tiles">' +
+    var ask = FT.canOpen(me, 'crm') ? '<form class="card askai" id="f-ask"><b>✦ Ask the AI assistant</b><p>Type or speak – it works on the CRM for you: leads, clients, tasks, reminders, invoices.</p>' +
+      '<div class="askrow"><input id="ask-text" type="text" placeholder="e.g. What is overdue today?" autocomplete="off"><button type="button" data-ask="voice" title="Speak">🎤</button><button type="button" class="talk" data-ask="talk" title="Talk back and forth">Talk</button><button class="go" title="Ask">➤</button></div>' +
+      '<div class="askchips">' + ['What is overdue today?', 'Which clients need a check-in call?', 'I want to add a new lead', 'VAT returns due this month', 'Unpaid invoices'].map(function(x){ return '<button type="button" data-ask="chip">' + x + '</button>'; }).join('') + '</div></form>' : '';
+    show('<h1>Welcome, ' + esc(me.name) + '</h1><p class="sub">Choose where to work.</p>' + ask + '<div class="tiles">' +
       tile('crm', '#0f9d6b', 'CRM', 'CRM', 'Leads, clients, tasks, quotations, invoices and receipts – with an AI assistant you can talk to.') +
       tile('audit', '#14284b', 'FS', 'Audit Desk', 'Financial statements, audit reports, policies and proof documents.') +
       (me.role === 'admin' ? '<button class="tile" data-go="users"><div class="ic" style="background:#c9973a">👥</div><b>Users &amp; access</b><span>Add users, choose CRM / Audit access, expertise, block users.</span><span class="go">Manage →</span></button>' : '') +
       '</div>' + phoneCard());
+    var fAsk = document.getElementById('f-ask');
+    if (fAsk) fAsk.onsubmit = function(e){ e.preventDefault(); var t = document.getElementById('ask-text'); FTAI.open(t.value.trim() || null); t.value = ''; };
     if (FTNotify.native() && FT.canOpen(me, 'crm')) FTNotify.scheduleFromCloud().then(function(){ var pc = document.getElementById('phone-state'); if (pc) pc.outerHTML = phoneState(); });
   }
   var APK_URL = 'https://github.com/AsifKhan170920/audit-desk/releases/latest/download/FairTaxPortal.apk';
@@ -127,6 +146,11 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
     return '<div id="phone-state">' + (st ? '<p class="' + (st.ok ? 'note' : 'msg info') + '">' + esc(st.text) + '</p>' + (st.ok ? '' : '<button class="btn primary" data-go="notify-on">Turn on notifications</button>') : '') + '</div>';
   }
   function phoneCard(){
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    if (ios) return '<div class="card phone"><b>📱 Fair Tax on iPhone</b>' + (standalone
+      ? '<p class="note" style="margin:0">Installed ✓. Open <b>CRM → Alerts</b> for your reminders. The AI assistant, CRM and Audit Desk work here; pop-up reminder notifications are available in the Android app.</p>'
+      : '<p class="note" style="margin:0 0 8px">Install it like an app (free):</p><ol class="note" style="margin:0;padding-left:18px;line-height:1.8"><li>Open this page in <b>Safari</b></li><li>Tap the <b>Share</b> button (square with arrow ↑)</li><li>Tap <b>Add to Home Screen</b> → <b>Add</b></li><li>Open <b>Fair Tax</b> from your home screen and sign in</li></ol>') + '</div>';
     if (FTNotify.native()) return '<div class="card phone"><b>📱 Reminders on this phone</b>' + (FT.canOpen(me, 'crm') ? phoneState() : '<p class="note">Reminders come from the CRM – ask the admin for CRM access.</p>') + '</div>';
     return '<div class="card phone"><b>📱 Android app with reminders</b><p class="note" style="margin:0 0 10px">Lead follow-ups, client check-ins, meetings, VAT / Corporate Tax / audit deadlines, contract expiry and cheque reminders as phone notifications.</p>' +
       '<div class="row"><a class="btn primary" href="' + APK_URL + '">Download the app (APK)</a><span class="note">On the phone: open this page, download, then allow “Install unknown apps” for your browser when Android asks.</span></div></div>';
@@ -216,6 +240,8 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
 
   /* ---------- clicks ---------- */
   document.addEventListener('click', async function(e){
+    var a = e.target.closest('[data-ask]');
+    if (a){ var kind = a.dataset.ask; if (kind === 'chip') FTAI.open(a.textContent); else FTAI.open(null, {voice: true, talk: kind === 'talk'}); return; }
     var t = e.target.closest('[data-go],[data-open],[data-block],[data-pw],[data-del],[data-pwsave]'); if (!t) return;
     if (t.dataset.open){ location.href = t.dataset.open + '/'; return; }
     if (t.dataset.go === 'home') return dashboard();

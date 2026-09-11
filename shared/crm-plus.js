@@ -137,6 +137,8 @@
   window.handleAct = handleAct = function (act, el) {
     var id = el && el.getAttribute && el.getAttribute('data-id');
     var before = load(), countTasks = before.tasks.length, countLeads = before.leads.length;
+    var clientBefore = null;
+    if (act === 'save-edit-client' && id) { var cb = before.clients.find(function (x) { return x.id === id; }); if (cb) clientBefore = JSON.parse(JSON.stringify({vatCycle: cb.vatCycle, taxYearEnd: cb.taxYearEnd, services: cb.services})); }
     var meeting = act === 'save-task-modal' ? {time: ($('#m_time') || {}).value || '', location: ($('#m_loc') || {}).value || '', assignee: ($('#m_assignee') || {}).value || ''} : null;
     var result = origHandleAct(act, el);
     var db = load(), who = myTeamName() || me().name, changed = false;
@@ -155,6 +157,11 @@
         if (meeting.location) t.location = meeting.location;
         changed = true;
       }
+    }
+    if (clientBefore) {
+      var ca = db.clients.find(function (x) { return x.id === id; });
+      if (ca) { var ch = Object.keys(clientBefore).filter(function (k) { return JSON.stringify(clientBefore[k] || '') !== JSON.stringify(ca[k] || ''); });
+        if (ch.length && typeof replanClient === 'function') { var pl = replanClient(db, ca, ch); if (pl) { changed = true; setTimeout(function () { toast('Reminders re-planned' + (pl.next ? ' – next: ' + pl.next.title.replace(' — ' + ca.name, '') + ' ' + fmtDate(pl.next.due) : '')); }, 400); } } }
     }
     if (LEAD_TOUCH_ACTS.indexOf(act) >= 0 && id) { var l = db.leads.find(function (x) { return x.id === id; }); if (l) { l.lastActivity = TODAY(); changed = true; } }
     if (changed) { save(); if (act === 'save-task-modal' || act === 'post-lead-note' || act === 'post-client-note' || act === 'post-comment') route(); }
@@ -279,7 +286,12 @@
     app.innerHTML = '<div class="page-head"><div><h1>Reminders</h1><p class="sub">Everything the system will remind ' + (remScope === 'all' ? 'the team' : 'you') + ' about in the next 14 days</p></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (m.admin ? '<button class="btn btn-sm ' + (remScope === 'mine' ? 'btn-primary' : '') + '" data-cp="rem-scope" data-v="mine">Mine</button><button class="btn btn-sm ' + (remScope === 'all' ? 'btn-primary' : '') + '" data-cp="rem-scope" data-v="all">Everyone</button>' : '') +
       '<a class="btn btn-sm" href="#/settings">⚙ Policies</a></div></div>' +
-      (phone ? '<div class="card card-p" style="margin-bottom:14px;border-left:4px solid ' + (phone.ok ? 'var(--brand)' : 'var(--amber)') + '">📱 ' + esc2(phone.text) + (phone.ok ? '' : ' <span class="link" data-cp="phone-enable">Turn on</span>') + '</div>' : '') +
+      (phone ? '<div class="card card-p" style="margin-bottom:14px;border-left:4px solid ' + (phone.ok ? 'var(--brand)' : 'var(--amber)') + '">📱 <span id="cp-phone-text">' + esc2(phone.text) + '</span>' + (phone.ok ? '' : ' <span class="link" data-cp="phone-enable">Turn on</span>') +
+        '<div class="rc-act"><button class="btn" data-cp="phone-test">🔔 Send a test notification</button>' +
+        (phone.hasSystem ? '<button class="btn" data-cp="phone-sound">🔊 Sound & pop-up settings</button>' + (phone.battery === false ? '<button class="btn btn-primary" data-cp="phone-battery">🔋 Allow reminders in background</button>' : '') : '') + '</div>' +
+        (phone.battery === false ? '<div class="q-hint">Samsung: also open Settings → Apps → Fair Tax → Battery → <b>Unrestricted</b>, otherwise reminders may stop when the app is closed.</div>' : '') +
+        (phone.ok && !phone.loud ? '<div class="q-hint">Install the latest app version for the louder Fair Tax reminder sound.</div>' : '') + '</div>' : '') +
+      '<div style="display:flex;justify-content:flex-end;margin:-4px 0 10px"><button class="btn btn-primary btn-sm" data-cp="quick-add">＋ Quick add</button></div>' +
       '<div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">' +
       statCard('bg-blue', '📞', 'Open leads', db.leads.filter(function (l) { return l.stage !== 'Closed'; }).length, 'nudged every ' + P.leadEveryHours + 'h') +
       statCard('bg-green', '🤝', 'Check-ins due', db.clients.filter(function (c) { if (c.status !== 'Active') return false; var pl = R.planOf(c, P); return !c.lastContact || addDaysY(c.lastContact, pl.healthDays) <= TODAY(); }).length, 'call · message · feedback') +
@@ -291,9 +303,7 @@
       (Object.keys(byDay).length ? Object.keys(byDay).sort().map(function (d) {
         var dt = new Date(d + 'T00:00:00');
         return '<div class="card card-p" style="margin-bottom:12px"><div class="sec-title">' + (d === TODAY() ? 'Today' : dt.toLocaleDateString('en-GB', {weekday: 'long', day: 'numeric', month: 'short'})) + '</div>' +
-          byDay[d].map(function (r) {
-            return '<div class="rel-task" style="cursor:pointer" data-goto="' + esc2(r.route) + '"><div class="ic" style="min-width:48px;font-weight:700;font-size:12px">' + r.at.toTimeString().slice(0, 5) + '</div><div style="flex:1"><b style="font-size:13px">' + esc2(r.title) + '</b><div style="color:var(--muted);font-size:12px">' + esc2(r.body) + '</div></div></div>';
-          }).join('') + '</div>';
+          byDay[d].map(function (r) { return reminderCard(r, false); }).join('') + '</div>';
       }).join('') : '<div class="empty">No reminders in the next 14 days.</div>');
   }
   function countToday() {
@@ -306,7 +316,7 @@
     origNav(active);
     var links = $('#navLinks'); if (!links) return;
     var page = (location.hash || '#/dashboard').slice(2).split('/')[0];
-    links.insertAdjacentHTML('beforeend', '<a href="#/reminders" class="' + (page === 'reminders' ? 'active' : '') + '">🔔 Reminders <span id="cp-bell-n" style="background:var(--red);color:#fff;border-radius:999px;font-size:11px;padding:1px 6px;display:none"></span></a>');
+    links.insertAdjacentHTML('beforeend', '<a href="#/reminders" class="' + (page === 'reminders' ? 'active' : '') + '">🔔 Reminders <span id="cp-bell-n" style="background:var(--red);color:#fff;border-radius:999px;font-size:11px;padding:1px 6px;display:none"></span></a><a data-cp="quick-add" class="qa-btn">＋ Quick add</a>');
     updateBell(); mobileNav(page);
   };
 
@@ -351,7 +361,39 @@
       case 'assign-all': { var k = 0; db.clients.forEach(function (x) { if (x.status === 'Active' && !(x.staff || []).length && autoAssign(db, x, true)) k++; }); save(); toast(k ? k + ' client(s) assigned' : 'No staff with matching expertise – add expertise in Users & access'); renderReminders(); break; }
       case 'lead-touch': { var l = db.leads.find(function (x) { return x.id === id; }); if (l) { l.lastActivity = TODAY(); l.notes = l.notes || []; l.notes.unshift({by: myTeamName() || me().name, at: new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'short'}), text: b.getAttribute('data-note')}); if (l.stage === 'New') l.stage = 'Contacted'; save(); toast('Logged – reminders for this lead paused today'); route(); } break; }
       case 'rem-scope': remScope = b.getAttribute('data-v'); renderReminders(); break;
-      case 'rem-kind': remKind = b.getAttribute('data-v'); renderReminders(); break;
+      case 'rem-kind': remKind = b.getAttribute('data-v'); if ((location.hash || '').indexOf('#/reminders') !== 0) location.hash = '#/reminders'; else renderReminders(); break;
+      case 'q': quickDo(b.getAttribute('data-do'), {task: b.getAttribute('data-task'), client: b.getAttribute('data-client'), lead: b.getAttribute('data-lead'), invoice: b.getAttribute('data-invoice'), code: b.getAttribute('data-code')}); break;
+      case 'tick': { var tt = taskById(db, b.getAttribute('data-task')); if (tt) { tickStep(db, tt, +b.getAttribute('data-i')); save(); var ss = R.stageOf(tt); if (ss.total && ss.done >= ss.total && tt.status !== 'Completed') toast('All steps done – tap ✓ Mark done to finish'); route(); } break; }
+      case 'step-add': { var ta = taskById(db, b.getAttribute('data-task')), val = ($('#ck_new') || {}).value; if (ta && val && val.trim()) { ta.checklist = (ta.checklist || []).concat([val.trim()]); save(); route(); } break; }
+      case 'qe-save': saveQuickEdit(id); break;
+      case 'quick-add': quickAdd(); break;
+      case 'qa': {
+        var v = b.getAttribute('data-v'); closeModal();
+        if (v === 'task') openNewTask();
+        if (v === 'meeting') { openNewTask(); var mt = $('#m_type'); if (mt) mt.value = 'Meeting'; var mti = $('#m_title'); if (mti) mti.placeholder = 'e.g. Meeting with Gill Transport'; }
+        if (v === 'lead') openAddLead();
+        if (v === 'client') quickClient();
+        if (v === 'log') pickClientModal('🤝 Log call / message', 'qp-log', '<div class="field"><label>Type</label><select id="qp_type">' + ['call', 'message', 'feedback', 'meeting'].map(function (k) { return '<option value="' + k + '">' + CONTACT[k] + '</option>'; }).join('') + '</select></div><div class="field"><label>What happened</label><textarea id="qp_note"></textarea></div>');
+        if (v === 'note') pickClientModal('📝 Note on client', 'qp-note', '<div class="field"><label>Note</label><textarea id="qp_note"></textarea></div>');
+        if (v === 'fix') pickClientModal('⚡ Update client details', 'qp-fix', '<p class="q-hint">Fix a wrong VAT period, year end, services, TRN, contract expiry and more – reminders are re-planned automatically.</p>');
+        if (v === 'ai' && window.CRMAI) CRMAI.open();
+        break;
+      }
+      case 'qp-log': { var cl1 = db.clients.find(function (x) { return x.id === $('#qp_client').value; }); if (cl1) { logContact(db, cl1, $('#qp_type').value, $('#qp_note').value.trim()); save(); closeModal(); toast('Logged for ' + cl1.name); route(); onRoute(); } break; }
+      case 'qp-note': { var cl2 = db.clients.find(function (x) { return x.id === $('#qp_client').value; }), nt = $('#qp_note').value.trim(); if (cl2 && nt) { cl2.notes = cl2.notes || []; cl2.notes.unshift({by: myTeamName() || me().name, text: nt}); save(); closeModal(); toast('Note added to ' + cl2.name); route(); } break; }
+      case 'qp-fix': { var cid = $('#qp_client').value; closeModal(); quickEdit(cid); break; }
+      case 'qn-save': { var tn = taskById(db, b.getAttribute('data-task')), txt = $('#qn_text').value.trim(); if (tn && txt) { tn.comments = tn.comments || []; tn.comments.unshift({by: myTeamName() || me().name, at: new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'short'}), text: txt}); if (tn.status === 'Not Started') tn.status = 'In Progress'; save(); closeModal(); toast('Note added'); route(); onRoute(); } break; }
+      case 'qc-save': {
+        var nm = $('#qc_name').value.trim(); if (!nm) { toast('Enter the company name'); break; }
+        if (db.clients.some(function (x) { return x.name.toLowerCase() === nm.toLowerCase(); })) { toast('A client with this name already exists'); break; }
+        var nc = {id: uid('c'), name: nm, status: 'Active', partnerId: 'p_un', email: $('#qc_email').value.trim(), phone: $('#qc_phone').value.trim() || '-', services: [].slice.call(document.querySelectorAll('.qc-svc')).filter(function (x) { return x.checked; }).map(function (x) { return x.value; }),
+          vatCycle: $('#qc_vat').value, taxYearEnd: $('#qc_ye').value, trn: '-', tradeLicence: '', portalId: '', portalPassword: '', contractExpiry: '', address: '-', staff: [], invoiced: 0, received: 0, ledger: [], notes: [], createdAt: TODAY()};
+        db.clients.unshift(nc); save(); closeModal(); toast('Client created – assigning staff and planning reminders…');
+        setTimeout(function () { location.hash = '#/client/' + nc.id; }, 900); break;
+      }
+      case 'phone-test': if (window.FTNotify) FTNotify.test().then(function (ok) { toast(ok ? 'Test notification in 8 seconds – close the app now to check the sound' : 'Turn on notifications first'); }); break;
+      case 'phone-battery': if (window.FTNotify) FTNotify.allowBackground(); break;
+      case 'phone-sound': if (window.FTNotify) FTNotify.openNotificationSettings(); break;
       case 'phone-enable': if (window.FTNotify) FTNotify.enable().then(function () { renderReminders(); }); break;
       case 'more': document.getElementById('cp-more').classList.toggle('open'); break;
     }
@@ -375,6 +417,11 @@
       cl.staff = (cl.staff || []).concat([t.value]); cl.assignedBy = 'manual';
       db.tasks.forEach(function (x) { if (x.clientId === cl.id && x.status !== 'Completed' && !(x.assignees || []).length) x.assignees = [t.value]; });
       save(); toast('Assigned ' + t.value); route(); return;
+    }
+    if (t.hasAttribute('data-cp-status')) {
+      var ts = taskById(db, t.getAttribute('data-cp-status')); if (!ts) return;
+      if (t.value === 'Completed') completeTask(db, ts); else ts.status = t.value;
+      save(); toast('Status: ' + t.value); route(); onRoute(); return;
     }
     if (t.hasAttribute('data-cp-task-assign')) {
       var tk = db.tasks.find(function (x) { return x.id === t.getAttribute('data-cp-task-assign'); }); if (!tk) return;
@@ -409,7 +456,8 @@
       document.body.appendChild(more);
     }
     var n = countToday();
-    nav.innerHTML = [['dashboard', '🏠', 'Home'], ['leads', '📞', 'Leads'], ['clients', '🏢', 'Clients'], ['tasks', '✔', 'Tasks'], ['reminders', '🔔', 'Reminders']].map(function (x) {
+    nav.innerHTML = [['dashboard', '🏠', 'Home'], ['leads', '📞', 'Leads'], ['clients', '🏢', 'Clients'], ['+'], ['tasks', '✔', 'Tasks'], ['reminders', '🔔', 'Alerts']].map(function (x) {
+      if (x[0] === '+') return '<button data-cp="quick-add" class="qa" aria-label="Quick add">＋</button>';
       var on = page === x[0] || (x[0] === 'leads' && page === 'lead') || (x[0] === 'clients' && page === 'client') || (x[0] === 'tasks' && page === 'task');
       return '<a href="#/' + x[0] + '" class="' + (on ? 'on' : '') + '"><span class="i">' + x[1] + '</span>' + x[2] + (x[0] === 'reminders' && n ? '<span class="n">' + n + '</span>' : '') + '</a>';
     }).join('') + '<button data-cp="more"><span class="i">☰</span>More</button>';
@@ -424,7 +472,241 @@
     var list = reminderList(me().admin, 1).filter(function (r) { return ymd(r.at) === TODAY() && r.kind !== 'agenda'; });
     var head = document.querySelector('#app .page-head');
     if (head) head.insertAdjacentHTML('afterend', '<div class="card card-p" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center"><b>🔔 Today’s reminders (' + list.length + ')</b><a class="link" href="#/reminders">All reminders →</a></div>' +
-      (list.length ? list.slice(0, 6).map(function (r) { return '<div class="rel-task" style="cursor:pointer" data-goto="' + esc2(r.route) + '"><div class="ic" style="min-width:44px;font-size:12px;font-weight:700">' + r.at.toTimeString().slice(0, 5) + '</div><div style="flex:1"><b style="font-size:13px">' + esc2(r.title) + '</b><div style="color:var(--muted);font-size:12px">' + esc2(r.body) + '</div></div></div>'; }).join('') : '<div style="color:var(--muted);font-size:13px;margin-top:6px">Nothing else for today.</div>') + '</div>');
+      (list.length ? list.slice(0, 6).map(function (r) { return reminderCard(r, true); }).join('') : '<div style="color:var(--muted);font-size:13px;margin-top:6px">Nothing else for today.</div>') + '</div>');
+    if (head) head.insertAdjacentHTML('beforeend', '<button class="btn btn-primary" data-cp="quick-add">＋ Quick add</button>');
+  };
+
+  /* ================= QUICK ACTIONS: stages, status, quick edit, quick add ================= */
+  var QCSS = '.rc{display:flex;gap:12px;padding:12px 4px;border-top:1px solid var(--line)}.rc:first-of-type{border-top:0}.rc-time{min-width:46px;font-weight:800;font-size:12px;color:#374151;padding-top:2px}' +
+    '.rc-main{flex:1;min-width:0}.rc-title{font-weight:700;font-size:13.5px;cursor:pointer}.rc-title:hover{color:var(--brand-d)}.rc-body{color:var(--muted);font-size:12.5px;margin-top:2px}' +
+    '.rc-det{font-size:12px;color:#4b5563;margin-top:6px;line-height:1.5}.rc-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}' +
+    '.rc-bar{flex:0 0 120px;height:6px;background:#e5e7eb;border-radius:9px;overflow:hidden}.rc-bar i{display:block;height:100%;background:var(--brand)}' +
+    '.rc-act{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.rc-act .btn{padding:5px 10px;font-size:12px;border-radius:8px}.rc-act select{padding:5px 8px;font-size:12px;border:1px solid var(--line);border-radius:8px;background:#fff}' +
+    '.q-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.q-grid button{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:14px;font-weight:700;font-size:14px;display:flex;gap:10px;align-items:center}.q-grid button:hover{border-color:var(--brand);background:var(--brand-soft)}' +
+    '.q-grid button span{font-size:22px}.q-hint{font-size:12px;color:var(--muted);margin-top:4px}.q-focus input,.q-focus select{border-color:#f59e0b!important;background:#fffbeb!important}' +
+    '.qe-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}@media(max-width:600px){.qe-grid{grid-template-columns:1fr}.q-grid{grid-template-columns:1fr}.rc-bar{flex-basis:80px}}' +
+    '.ck{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed var(--line);cursor:pointer}.ck b{font-weight:500}.ck.done b{text-decoration:line-through;color:var(--faint)}.ck .box{width:20px;height:20px;border:2px solid #cbd5e1;border-radius:6px;display:grid;place-items:center;flex:none;font-size:13px;color:#fff}.ck.done .box{background:var(--brand);border-color:var(--brand)}' +
+    '.qa-btn{background:var(--brand);color:#fff!important;border-radius:9px;padding:6px 12px!important;height:auto!important}.qa-btn:hover{background:var(--brand-d)!important}' +
+    '#cp-mnav .qa{flex:none;width:52px;height:52px;margin-top:-18px;border-radius:50%;background:linear-gradient(135deg,#0f9d6b,#0b5c9c);color:#fff;font-size:28px;line-height:52px;box-shadow:0 6px 16px rgba(11,92,156,.35)}';
+  (function () { var st = document.createElement('style'); st.textContent = QCSS; document.head.appendChild(st); })();
+
+  var STATUSES = ['Not Started', 'In Progress', 'Pending to Client', 'Completed'];
+  function taskById(db, id) { return db.tasks.find(function (x) { return x.id === id; }); }
+  function stageBar(t) {
+    var s = R.stageOf(t), pill = statusPill(t.status);
+    return '<div class="rc-meta"><span class="pill ' + pill + '">' + esc2(t.status) + '</span>' +
+      (s.total ? '<span class="rc-bar" title="' + s.done + ' of ' + s.total + ' steps"><i style="width:' + s.pct + '%"></i></span><span style="font-size:12px;color:var(--muted)">' + (s.done >= s.total ? 'All ' + s.total + ' steps done' : 'Step ' + (s.done + 1) + ' of ' + s.total + (s.next ? ': ' + esc2(s.next) : '')) + '</span>' : '') + '</div>';
+  }
+  function completeTask(db, t) {
+    var old = t.status; t.status = 'Completed'; t.completedAt = TODAY();
+    if (old !== 'Completed' && ((t.recurrence && t.recurrence !== 'None') || t.source === 'auto_reminder')) nextRecurring(db, t);
+    if (t.source === 'pdc') { var rc = (db.receipts || []).find(function (r) { return r.taskId === t.id; }); if (rc) rc.deposited = true; }
+  }
+  function tickStep(db, t, i) {
+    t.checklistDone = t.checklistDone || [];
+    var at = t.checklistDone.indexOf(i);
+    if (at >= 0) t.checklistDone.splice(at, 1); else t.checklistDone.push(i);
+    if (t.checklistDone.length && t.status === 'Not Started') t.status = 'In Progress';
+  }
+  function reminderButtons(r) {
+    var b = [], d = function (x) { return 'data-cp="q" data-do="' + x + '"' + (r.taskId ? ' data-task="' + r.taskId + '"' : '') + (r.clientId ? ' data-client="' + r.clientId + '"' : '') + (r.leadId ? ' data-lead="' + r.leadId + '"' : '') + (r.invoiceId ? ' data-invoice="' + r.invoiceId + '"' : '') + (r.code ? ' data-code="' + esc2(r.code) + '"' : ''); };
+    var db = load(), t = r.taskId && taskById(db, r.taskId);
+    if (r.grouped) return '<div class="rc-act"><button class="btn" data-cp="rem-kind" data-v="' + r.kind + '">Show all ' + r.grouped + '</button></div>';
+    if (t && t.status !== 'Completed') {
+      b.push('<button class="btn btn-primary" ' + d('done') + '>✓ Done</button>');
+      var s = R.stageOf(t); if (s.total && s.next) b.push('<button class="btn" ' + d('next') + '>➜ Step done</button>');
+      b.push('<select data-cp-status="' + t.id + '">' + STATUSES.map(function (x) { return '<option' + (x === t.status ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>');
+      b.push('<button class="btn" ' + d('note') + '>＋ Note</button>');
+    }
+    if (r.kind === 'lead') { var l = db.leads.find(function (x) { return x.id === r.leadId; }) || {};
+      b.push('<button class="btn btn-primary" ' + d('called') + '>📞 Called</button>');
+      if (l.phone && !/^-?$/.test(l.phone)) b.push('<a class="btn" href="tel:' + esc2(String(l.phone).replace(/[^+\d]/g, '')) + '">☎ Call</a><a class="btn" target="_blank" href="https://wa.me/' + esc2(String(l.phone).replace(/[^\d]/g, '').replace(/^0/, '971')) + '">WhatsApp</a>');
+      b.push('<button class="btn" data-act="edit-lead" data-id="' + r.leadId + '">✎ Edit</button>'); }
+    if (r.kind === 'health') b.push('<button class="btn btn-primary" data-cp="contact" data-type="call" data-id="' + r.clientId + '">📞 Called</button><button class="btn" data-cp="contact" data-type="message" data-id="' + r.clientId + '">💬 Messaged</button><button class="btn" data-cp="contact" data-type="feedback" data-id="' + r.clientId + '">⭐ Feedback</button>');
+    if (r.kind === 'missing') b.push('<button class="btn btn-primary" ' + d('edit') + '>⚡ Fill in now</button>');
+    if (r.kind === 'contract') b.push('<button class="btn btn-primary" ' + d('edit') + '>⚡ Update expiry</button><button class="btn" data-act="agr-for-client" data-id="' + r.clientId + '">📄 New agreement</button>');
+    if (['vat', 'corporate_tax', 'financial_statements', 'audit', 'bookkeeping'].indexOf(r.kind) >= 0) {
+      if (!t) b.push('<button class="btn btn-primary" ' + d('create-task') + '>＋ Start task</button>');
+      b.push('<button class="btn" ' + d('edit') + ' title="Wrong VAT period, year end or services?">⚡ Correct client details</button>');
+    }
+    if (r.kind === 'health' || r.kind === 'meeting') b.push('<button class="btn" ' + d('edit') + '>⚡ Update client</button>');
+    if (r.kind === 'invoice') b.push('<button class="btn btn-primary" ' + d('paid') + '>✓ Mark paid</button>');
+    if (r.kind === 'assign') b.push('<button class="btn btn-primary" data-cp="assign-all">👥 Auto-assign now</button>');
+    return b.length ? '<div class="rc-act">' + b.filter(function (x, i, a) { return !(x.indexOf('⚡ Update client') >= 0 && !r.clientId) && a.indexOf(x) === i; }).join('') + '</div>' : '';
+  }
+  function reminderCard(r, compact) {
+    var db = load(), t = r.taskId && taskById(db, r.taskId);
+    var det = (r.details || []).filter(function (x) { return !/^(Status|Next step|Client): /.test(x) || !t; });
+    return '<div class="rc"><div class="rc-time">' + r.at.toTimeString().slice(0, 5) + '</div><div class="rc-main">' +
+      '<div class="rc-title" data-goto="' + esc2(r.route) + '">' + esc2(r.title) + '</div><div class="rc-body">' + esc2(r.body) + '</div>' +
+      (t ? stageBar(t) : '') +
+      (!compact && det.length ? '<div class="rc-det">' + det.slice(0, 5).map(esc2).join('<br>') + '</div>' : '') +
+      reminderButtons(r) + '</div></div>';
+  }
+
+  /* ----- quick edit of a client (fix a wrong VAT period, year end, services …) ----- */
+  var SERVICE_LIST = ['VAT', 'Corporate Tax', 'Bookkeeping', 'Audit', 'Financial Statements', 'AML'];
+  var VAT_CYCLES = [['Monthly', 'Monthly – every month'], ['Stagger 1', 'Stagger 1 – quarters end Jan, Apr, Jul, Oct'], ['Stagger 2', 'Stagger 2 – quarters end Feb, May, Aug, Nov'], ['Stagger 3', 'Stagger 3 – quarters end Mar, Jun, Sep, Dec']];
+  var REPLAN_KEYS = {vatCycle: ['vat'], services: ['vat', 'corporate_tax', 'financial_statements', 'audit', 'bookkeeping'], taxYearEnd: ['corporate_tax', 'financial_statements', 'audit'], bookkeepingStart: ['bookkeeping']};
+  var CODE_PREFIX = {vat: 'VAT|', corporate_tax: 'CT|', financial_statements: 'FS|', audit: 'AUD|', bookkeeping: 'BK|'};
+  function kindOfTask(t) {
+    return t.kind || (/^VAT Return Due/.test(t.title) ? 'vat' : /^Corporate Tax Filing Due/.test(t.title) ? 'corporate_tax' : /^Financial Statements/.test(t.title) ? 'financial_statements' : /^Audit —/.test(t.title) ? 'audit' : /^Bookkeeping Review/.test(t.title) ? 'bookkeeping' : null);
+  }
+  // after a change to VAT cycle / year end / services: future, untouched deadline tasks are rebuilt on the new schedule
+  function replanClient(db, c, changed) {
+    var kinds = [];
+    (changed || []).forEach(function (k) { (REPLAN_KEYS[k] || []).forEach(function (x) { if (kinds.indexOf(x) < 0) kinds.push(x); }); });
+    if (!kinds.length) return null;
+    var today = TODAY(), removed = 0;
+    db.tasks = db.tasks.filter(function (t) {
+      var drop = t.clientId === c.id && t.source === 'auto_reminder' && t.status === 'Not Started' && !(t.checklistDone || []).length && !(t.comments || []).length && t.dueDate >= today && kinds.indexOf(kindOfTask(t)) >= 0;
+      if (drop) removed++;
+      return !drop;
+    });
+    db.genLog = (db.genLog || []).filter(function (g) { return !(g.indexOf('|' + c.name + '|') > 0 && kinds.some(function (k) { return g.indexOf(CODE_PREFIX[k]) === 0; })); });
+    db.tasks.forEach(function (t) { if (t.clientId === c.id && t.code && db.genLog.indexOf(t.code) < 0) db.genLog.push(t.code); });
+    clientDeadlines(c, new Date(today + 'T00:00:00')).forEach(function (d) { if (kinds.indexOf(d.kind) >= 0 && d.due < today && db.genLog.indexOf(d.code) < 0) db.genLog.push(d.code); });
+    var created = runEngine();
+    var next = clientDeadlines(c, new Date(today + 'T00:00:00'), 200).filter(function (d) { return kinds.indexOf(d.kind) >= 0 && d.due >= today; })[0];
+    return {removed: removed, created: created, next: next};
+  }
+  function quickEdit(clientId, focus) {
+    var db = load(), c = db.clients.find(function (x) { return x.id === clientId; }); if (!c) { toast('Client not found'); return; }
+    var gaps = R.missing(c), want = (focus && focus.length ? focus : gaps).join('|');
+    var f = function (name) { return want.indexOf(name) >= 0 ? ' q-focus' : ''; };
+    var inp = function (id, label, val, type, cls) { return '<div class="field' + cls + '"><label>' + label + '</label><input id="qe_' + id + '" type="' + (type || 'text') + '" value="' + esc2(val || '') + '"></div>'; };
+    var svc = (c.services || []).map(function (s) { return String(s).toLowerCase(); });
+    modal('<div class="modal wide"><div class="modal-head"><h3>⚡ Update ' + esc2(c.name) + '</h3><button class="x" data-act="close">×</button></div>' +
+      (gaps.length ? '<div style="background:var(--amber-soft);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:10px">Missing: <b>' + esc2(gaps.join(', ')) + '</b> (highlighted)</div>' : '') +
+      '<div class="field"><label>Services</label><div style="display:flex;gap:10px;flex-wrap:wrap">' + SERVICE_LIST.map(function (s) { return '<label style="display:flex;gap:5px;align-items:center;font-weight:500"><input type="checkbox" class="qe-svc" value="' + s + '"' + (svc.indexOf(s.toLowerCase()) >= 0 ? ' checked' : '') + '>' + s + '</label>'; }).join('') + '</div></div>' +
+      '<div class="qe-grid">' +
+      '<div class="field' + f('VAT cycle') + '"><label>VAT period (cycle)</label><select id="qe_vatCycle">' + '<option value="">— not set —</option>' + VAT_CYCLES.map(function (v) { return '<option value="' + v[0] + '"' + (c.vatCycle === v[0] ? ' selected' : '') + '>' + v[1] + '</option>'; }).join('') + '</select></div>' +
+      inp('taxYearEnd', 'Financial year end', c.taxYearEnd, 'date', f('tax year end')) +
+      inp('trn', 'TRN', c.trn === '-' ? '' : c.trn, 'text', f('TRN')) +
+      inp('portalId', 'FTA portal ID', c.portalId, 'text', f('FTA portal ID')) +
+      inp('tradeLicence', 'Trade licence no', c.tradeLicence, 'text', f('trade licence')) +
+      inp('contractExpiry', 'Contract expiry', c.contractExpiry, 'date', f('contract expiry')) +
+      inp('phone', 'Phone', c.phone === '-' ? '' : c.phone, 'tel', f('phone')) +
+      inp('email', 'Email', /none@none/.test(c.email || '') ? '' : c.email, 'email', f('email')) +
+      inp('address', 'Address', c.address === '-' ? '' : c.address, 'text', f('address')) +
+      '<div class="field' + f('assigned staff') + '"><label>Assigned staff</label><select id="qe_staff"><option value="">— nobody —</option>' + (db.team || []).map(function (n) { return '<option' + ((c.staff || [])[0] === n ? ' selected' : '') + '>' + esc2(n) + '</option>'; }).join('') + '</select></div>' +
+      '</div><div id="qe_preview" class="q-hint" style="margin:4px 0 12px"></div>' +
+      '<button class="btn btn-primary" style="width:100%" data-cp="qe-save" data-id="' + c.id + '">Save & re-plan reminders</button></div>');
+    var preview = function () {
+      var tmp = Object.assign({}, c, readQuickEdit(c));
+      var next = clientDeadlines(tmp, new Date(TODAY() + 'T00:00:00'), 400).filter(function (d) { return d.due >= TODAY() && d.kind !== 'bookkeeping'; }).slice(0, 3);
+      var el = $('#qe_preview'); if (el) el.innerHTML = next.length ? '📅 Next deadlines with these details: ' + next.map(function (d) { return '<b>' + esc2(d.title.replace(' — ' + c.name, '')) + '</b> ' + fmtDate(d.due); }).join(' · ') : 'No statutory deadlines for these services.';
+    };
+    $('#modalRoot').addEventListener('change', preview); preview();
+    var first = document.querySelector('#modalRoot .q-focus input, #modalRoot .q-focus select'); if (first) first.focus();
+  }
+  function readQuickEdit(c) {
+    var v = function (id) { var el = $('#qe_' + id); return el ? el.value.trim() : undefined; };
+    var keep = (c.services || []).filter(function (s) { return SERVICE_LIST.map(function (x) { return x.toLowerCase(); }).indexOf(String(s).toLowerCase()) < 0; });
+    var out = {services: keep.concat([].slice.call(document.querySelectorAll('.qe-svc')).filter(function (x) { return x.checked; }).map(function (x) { return x.value; })),
+      vatCycle: v('vatCycle'), taxYearEnd: v('taxYearEnd'), trn: v('trn') || '-', portalId: v('portalId'), tradeLicence: v('tradeLicence'), contractExpiry: v('contractExpiry'),
+      phone: v('phone') || '-', email: v('email'), address: v('address') || '-'};
+    var st = v('staff'); out.staff = st ? [st].concat((c.staff || []).filter(function (n) { return n !== st; }).slice(0, 2)) : [];
+    return out;
+  }
+  function saveQuickEdit(id) {
+    var db = load(), c = db.clients.find(function (x) { return x.id === id; }); if (!c) return;
+    var next = readQuickEdit(c), changed = [];
+    var norm = function (k, v) { v = v == null ? '' : v; return k === 'services' ? JSON.stringify((v || []).map(function (x) { return String(x).toLowerCase(); }).sort()) : JSON.stringify(v); };
+    Object.keys(next).forEach(function (k) { if (norm(k, c[k]) !== norm(k, next[k])) { changed.push(k); c[k] = next[k]; } });
+    if (changed.indexOf('staff') >= 0) { c.assignedBy = 'manual'; db.tasks.forEach(function (t) { if (t.clientId === c.id && t.status !== 'Completed' && (!(t.assignees || []).length)) t.assignees = c.staff.slice(0, 1); }); }
+    var plan = replanClient(db, c, changed);
+    save(); closeModal();
+    toast(!changed.length ? 'No changes' : 'Saved' + (plan ? ' · reminders re-planned' + (plan.next ? ' – next: ' + plan.next.title.replace(' — ' + c.name, '') + ' ' + fmtDate(plan.next.due) : '') : ''));
+    route(); onRoute();
+  }
+
+  /* ----- quick add ----- */
+  function clientOptions(db) { return db.clients.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (c) { return '<option value="' + c.id + '">' + esc2(c.name) + '</option>'; }).join(''); }
+  function quickAdd() {
+    modal('<div class="modal"><div class="modal-head"><h3>＋ Quick add</h3><button class="x" data-act="close">×</button></div><div class="q-grid">' +
+      [['task', '✔', 'Task'], ['meeting', '📅', 'Meeting'], ['lead', '📞', 'Lead'], ['client', '🏢', 'Client'], ['log', '🤝', 'Log call / message'], ['note', '📝', 'Note on client'], ['fix', '⚡', 'Update client details'], ['ai', '✦', 'Ask AI assistant']]
+        .map(function (x) { return '<button data-cp="qa" data-v="' + x[0] + '"><span>' + x[1] + '</span>' + x[2] + '</button>'; }).join('') + '</div></div>');
+  }
+  function pickClientModal(title, button, extra) {
+    var db = load();
+    modal('<div class="modal"><div class="modal-head"><h3>' + title + '</h3><button class="x" data-act="close">×</button></div>' +
+      '<div class="field"><label>Client</label><select id="qp_client">' + clientOptions(db) + '</select></div>' + (extra || '') +
+      '<button class="btn btn-primary" style="width:100%" data-cp="' + button + '">Continue</button></div>');
+  }
+  function quickClient() {
+    modal('<div class="modal"><div class="modal-head"><h3>🏢 New client</h3><button class="x" data-act="close">×</button></div>' +
+      '<div class="field"><label>Company name</label><input id="qc_name" placeholder="e.g. Rio General Trading LLC"></div>' +
+      '<div class="two-col"><div class="field"><label>Phone</label><input id="qc_phone" type="tel"></div><div class="field"><label>Email</label><input id="qc_email" type="email"></div></div>' +
+      '<div class="field"><label>Services</label><div style="display:flex;gap:10px;flex-wrap:wrap">' + SERVICE_LIST.map(function (s) { return '<label style="display:flex;gap:5px;align-items:center;font-weight:500"><input type="checkbox" class="qc-svc" value="' + s + '">' + s + '</label>'; }).join('') + '</div></div>' +
+      '<div class="two-col"><div class="field"><label>VAT period (cycle)</label><select id="qc_vat"><option value="">— not registered —</option>' + VAT_CYCLES.map(function (v) { return '<option value="' + v[0] + '">' + v[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>Financial year end</label><input id="qc_ye" type="date" value="' + new Date().getFullYear() + '-12-31"></div></div>' +
+      '<p class="q-hint">Staff are assigned automatically by expertise, and reminders (VAT, CT, FS, audit, bookkeeping, check-ins) are planned automatically.</p>' +
+      '<button class="btn btn-primary" style="width:100%" data-cp="qc-save">＋ Create client</button></div>');
+    setTimeout(function () { var el = $('#qc_name'); if (el) el.focus(); }, 30);
+  }
+
+  /* ----- actions from buttons and phone notifications ----- */
+  function quickDo(what, ids) {
+    var db = load(), t = ids.task && taskById(db, ids.task), msg = '';
+    switch (what) {
+      case 'done': if (!t) return; completeTask(db, t); msg = '✓ Completed: ' + t.title; break;
+      case 'next': {
+        if (!t) return; var s = R.stageOf(t);
+        if (s.total && s.nextIndex >= 0) { tickStep(db, t, s.nextIndex); var s2 = R.stageOf(t); msg = s2.done >= s2.total ? 'All steps done – tap ✓ Done to finish' : '✓ Step done – next: ' + s2.next; }
+        else if (t.status === 'Not Started') { t.status = 'In Progress'; msg = 'Marked In Progress'; }
+        break;
+      }
+      case 'called': {
+        var l = db.leads.find(function (x) { return x.id === ids.lead; }); if (!l) return;
+        l.lastActivity = TODAY(); l.notes = l.notes || []; l.notes.unshift({by: myTeamName() || me().name, at: new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'short'}), text: 'Called (from reminder)'});
+        if (l.stage === 'New') l.stage = 'Contacted'; msg = 'Logged call with ' + l.name; break;
+      }
+      case 'checkin': { var c = db.clients.find(function (x) { return x.id === ids.client; }); if (!c) return; logContact(db, c, 'call', 'Checked in (from reminder)'); msg = 'Check-in logged for ' + c.name; break; }
+      case 'paid': { var v = (db.invoices || []).find(function (x) { return x.id === ids.invoice; }); if (!v) return; v.status = 'Paid'; msg = 'Invoice ' + (v.invoiceNo || '') + ' marked paid'; break; }
+      case 'edit': quickEdit(ids.client); return;
+      case 'create-task': {
+        var cl = db.clients.find(function (x) { return x.id === ids.client; }); if (!cl) return;
+        var d = clientDeadlines(cl, new Date(Date.now() - 60 * 864e5), 460).filter(function (x) { return x.code === ids.code; })[0];
+        if (!d) return; db.genLog = db.genLog || [];
+        var nt = makeDeadlineTask(db, cl, d); nt.status = 'In Progress'; msg = 'Task started: ' + nt.title; break;
+      }
+      case 'note': {
+        modal('<div class="modal"><div class="modal-head"><h3>＋ Note</h3><button class="x" data-act="close">×</button></div><div class="field"><label>' + esc2(t ? t.title : '') + '</label><textarea id="qn_text" placeholder="e.g. Client sent sales invoices, waiting for bank statement"></textarea></div>' +
+          '<button class="btn btn-primary" style="width:100%" data-cp="qn-save" data-task="' + (t ? t.id : '') + '">Save note</button></div>');
+        setTimeout(function () { var el = $('#qn_text'); if (el) el.focus(); }, 30); return;
+      }
+    }
+    save(); if (msg) toast(msg); route(); onRoute();
+  }
+  function runPending() {
+    var raw = null; try { raw = JSON.parse(sessionStorage.getItem(FTNotify_PENDING()) || 'null'); sessionStorage.removeItem(FTNotify_PENDING()); } catch (e) {}
+    if (!raw || Date.now() - raw.at > 10 * 60 * 1000) return;
+    var map = {done: 'done', next: 'next', called: 'called', checkin: 'checkin', edit: 'edit'};
+    if (map[raw.act]) setTimeout(function () { quickDo(map[raw.act], {task: raw.taskId, lead: raw.leadId, client: raw.clientId}); }, 300);
+  }
+  function FTNotify_PENDING() { return (window.FTNotify && FTNotify.PENDING_KEY) || 'ft-pending-action'; }
+
+  /* ----- task board shows progress; task page gets tickable steps ----- */
+  var origTaskCard = taskCard;
+  window.taskCard = taskCard = function (t, db) {
+    var html = origTaskCard(t, db), s = R.stageOf(t);
+    if (!s.total) return html;
+    return html.replace(/<div class="foot">/, '<div class="meta" style="display:flex;align-items:center;gap:6px"><span class="rc-bar" style="flex:1"><i style="width:' + s.pct + '%"></i></span>' + s.done + '/' + s.total + '</div><div class="foot">');
+  };
+  var baseTaskDetail = renderTaskDetail;
+  window.renderTaskDetail = renderTaskDetail = function (id) {
+    baseTaskDetail(id);
+    var db = load(), t = taskById(db, id); if (!t) return;
+    var s = R.stageOf(t), head = document.querySelector('#app .page-head h1');
+    if (head) head.insertAdjacentHTML('afterend', stageBar(t) + '<div class="rc-act">' + (t.status !== 'Completed' ? '<button class="btn btn-primary" data-cp="q" data-do="done" data-task="' + t.id + '">✓ Mark done</button>' + (s.next ? '<button class="btn" data-cp="q" data-do="next" data-task="' + t.id + '">➜ Step done</button>' : '') : '') +
+      (t.clientId ? '<button class="btn" data-cp="q" data-do="edit" data-client="' + t.clientId + '">⚡ Correct client details</button>' : '') + '</div>');
+    var labels = [].slice.call(document.querySelectorAll('#app .field > label')).filter(function (l) { return l.textContent.trim() === 'Checklist'; });
+    var box = labels[0] && labels[0].parentNode;
+    var html = '<label>Steps</label>' + (t.checklist || []).map(function (step, i) { var done = (t.checklistDone || []).indexOf(i) >= 0; return '<div class="ck' + (done ? ' done' : '') + '" data-cp="tick" data-task="' + t.id + '" data-i="' + i + '"><span class="box">' + (done ? '✓' : '') + '</span><b>' + esc2(step) + '</b></div>'; }).join('') +
+      '<div style="display:flex;gap:8px;margin-top:8px"><input id="ck_new" placeholder="Add a step…" style="flex:1"><button class="btn btn-sm" data-cp="step-add" data-task="' + t.id + '">＋ Add step</button></div>';
+    if (box) box.innerHTML = html;
+    else { var card = document.querySelector('#app .card.card-p'); if (card) { var div = document.createElement('div'); div.className = 'field'; div.innerHTML = html; var foot = card.lastElementChild; card.insertBefore(div, foot); } }
   };
 
   /* ---------------- routing for the new page ---------------- */
@@ -439,14 +721,18 @@
   function refreshPhone() {
     if (!window.FTNotify) return;
     clearTimeout(phoneTimer);
-    phoneTimer = setTimeout(function () { try { FTNotify.schedule(load()); } catch (e) { console.warn(e); } }, 1500);
+    phoneTimer = setTimeout(function () {
+      try { FTNotify.schedule(load()).then(function () { var el = document.getElementById('cp-phone-text'), st = FTNotify.status(); if (el && st) el.textContent = st.text; }); } catch (e) { console.warn(e); }
+    }, 1500);
   }
 
   /* ---------------- start ---------------- */
-  window.CRMPLUS = {sweep: sweep, autoAssign: autoAssign, reminders: reminderList, logContact: logContact, renderReminders: renderReminders, refreshPhone: refreshPhone};
+  window.CRMPLUS = {sweep: sweep, autoAssign: autoAssign, reminders: reminderList, logContact: logContact, renderReminders: renderReminders, refreshPhone: refreshPhone,
+    runPending: runPending, replanClient: replanClient, quickEdit: quickEdit, quickAdd: quickAdd, quickDo: quickDo};
   sweep(true);
   route();
   onRoute();
+  runPending();
   refreshPhone();
   // re-check once a day while the page stays open
   setInterval(function () { if (load().engineRunOn !== TODAY()) { sweep(false); route(); onRoute(); } updateBell(); }, 30 * 60 * 1000);

@@ -211,13 +211,16 @@
       return {ok: true, created: brief(d, 'client', c)};
     },
     update_client: function (a) {
-      var d = db(), c = findOne(d, 'client', a.ref);
+      var d = db(), c = findOne(d, 'client', a.ref), before = JSON.stringify({vatCycle: c.vatCycle, taxYearEnd: c.taxYearEnd, services: c.services});
       applyCommon(c, a, {name: 'name', email: 'email', phone: 'phone', trn: 'trn', trade_licence: 'tradeLicence', address: 'address', tax_year_end: 'taxYearEnd', contract_expiry: 'contractExpiry',
         status: ['status', function (v) { return pick(['Active', 'Inactive'], v, c.status); }], vat_cycle: ['vatCycle', function (v) { return pick(['Monthly', 'Stagger 1', 'Stagger 2', 'Stagger 3'], v, c.vatCycle); }],
         services: ['services', arr], staff: ['staff', function (v) { return teamList(d, v); }]});
       if (a.partner) { var p = (d.partners || []).find(function (x) { return lc(x.name).indexOf(lc(a.partner)) >= 0; }); if (!p) throw new Error('No partner called "' + a.partner + '". Partners: ' + d.partners.map(function (x) { return x.name; }).join(', ')); c.partnerId = p.id; }
       if (a.note) { c.notes = c.notes || []; c.notes.unshift({by: myName(), text: a.note}); }
-      changed = true; return {ok: true, client: brief(d, 'client', c)};
+      var was = JSON.parse(before), replanned = null;
+      var keys = ['vatCycle', 'taxYearEnd', 'services'].filter(function (k) { return JSON.stringify(was[k] || '') !== JSON.stringify(c[k] || ''); });
+      if (keys.length && window.CRMPLUS && CRMPLUS.replanClient) { var pl = CRMPLUS.replanClient(d, c, keys); if (pl && pl.next) replanned = pl.next.title + ' due ' + pl.next.due; }
+      changed = true; return {ok: true, client: brief(d, 'client', c), remindersReplanned: keys.length ? (replanned || true) : undefined};
     },
     create_task: function (a) {
       var d = db(), cl = a.client ? findOne(d, 'client', a.client) : null;

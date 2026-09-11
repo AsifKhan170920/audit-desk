@@ -197,6 +197,22 @@
     assign: {icon: '👥', label: 'unassigned clients', page: '#/clients'}
   };
 
+  // progress of a task's checklist: "Step 2 of 4 – next: Share summary with client"
+  function stageOf(t) {
+    var list = (t && t.checklist) || [], done = (t && t.checklistDone) || [];
+    var total = list.length, count = list.filter(function (x, i) { return done.indexOf(i) >= 0; }).length;
+    var nextIdx = -1; for (var i = 0; i < total; i++) if (done.indexOf(i) < 0) { nextIdx = i; break; }
+    return {total: total, done: count, next: nextIdx >= 0 ? list[nextIdx] : '', nextIndex: nextIdx, pct: total ? Math.round(count * 100 / total) : (t && t.status === 'Completed' ? 100 : 0)};
+  }
+  function statusLine(t) {
+    if (!t) return 'Not started';
+    var s = stageOf(t), txt = t.status || 'Not Started';
+    if (s.total) txt += s.done >= s.total ? ' · all ' + s.total + ' steps done' : ' · step ' + (s.done + 1) + ' of ' + s.total;
+    return txt;
+  }
+  function longDate(d) { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()] + ' ' + fmt(d) + ' ' + d.getFullYear(); }
+  function who(names) { return (names || []).filter(Boolean).join(', ') || 'Nobody assigned'; }
+
   function compute(db, opts) {
     opts = opts || {};
     db = db || {};
@@ -212,9 +228,11 @@
       var once = r.kind + '|' + r.ref + '|' + r.at.getTime();          // never twice for the same thing at the same moment
       if (seen[once]) return; seen[once] = true;
       r.key = r.key || (r.kind + '|' + r.ref + '|' + ymd(r.at) + ' ' + r.at.getHours() + ':' + r.at.getMinutes());
+      r.details = (r.details || []).filter(Boolean);
       list.push(r);
     }
     var staffOf = function (c) { return (c && c.staff) || []; };
+    var taskInfo = function (t) { if (!t) return {}; var s = stageOf(t); return {taskId: t.id, status: t.status, stage: s, statusText: statusLine(t)}; };
 
     // 1. leads – every N hours in working hours, oldest contact first
     var openLeads = (db.leads || []).filter(function (l) { return l.stage !== 'Closed'; });
@@ -234,23 +252,28 @@
           var waiting = q.filter(function (l) { return ymd(touched(l)) < ymd(day); });
           if (!waiting.length) continue;
           var l = waiting[slot % waiting.length]; slot++;
-          var ago = days(touched(l), day);
-          push({kind: 'lead', at: when, ref: l.id, route: '#/lead/' + l.id, who: owner === '*' ? [] : [owner],
-            key: 'lead|' + owner + '|' + ymd(day) + '|' + h,
+          var ago = days(touched(l), day), phone = l.phone && !blank(l.phone) ? l.phone : '';
+          push({kind: 'lead', at: when, ref: l.id, leadId: l.id, route: '#/lead/' + l.id, who: owner === '*' ? [] : [owner], name: l.name,
+            key: 'lead|' + owner + '|' + ymd(day) + '|' + h, status: l.stage,
             title: '📞 Contact lead: ' + l.name,
-            body: [l.phone && !blank(l.phone) ? l.phone : '', l.stage, (l.lastActivity ? 'last contact ' + ago + ' day' + (ago === 1 ? '' : 's') + ' ago' : 'no contact logged'), waiting.length > 1 ? '+' + (waiting.length - 1) + ' more waiting' : ''].filter(Boolean).join(' · ')});
+            body: [phone, l.stage, (l.lastActivity ? 'last contact ' + ago + ' day' + (ago === 1 ? '' : 's') + ' ago' : 'not contacted yet')].filter(Boolean).join(' · '),
+            details: [phone ? 'Phone: ' + phone : 'Phone: not saved', 'Stage: ' + l.stage + (l.source ? ' (' + l.source + ')' : ''), 'Last contact: ' + (l.lastActivity ? fmt(parse(l.lastActivity)) + ' – ' + ago + ' days ago' : 'not contacted yet'),
+              (l.services || []).length ? 'Interested in: ' + l.services.join(', ') : '', 'Assigned: ' + (l.assignedTo || '—'), waiting.length > 1 ? (waiting.length - 1) + ' more leads waiting' : '']});
         }
       });
     });
 
     // 2. client check-ins (call, message or feedback)
     clients.forEach(function (c) {
+      if (c.status !== 'Active') return;
       var plan = planOf(c, P), last = parse(c.lastContact), due = last ? addDays(last, plan.healthDays) : today;
+      var next = parse(c.nextContact); if (next && next > due) due = next;
       dayList.forEach(function (day) {
         if (day < due || !isWorkday(day, P)) return;
-        var ago = last ? days(last, day) : null;
-        push({kind: 'health', at: at(day, P.times.health), ref: c.id, route: '#/client/' + c.id, who: staffOf(c), name: c.name,
-          title: '🤝 Check in with ' + c.name, body: 'Call, message or ask for feedback · ' + (ago === null ? 'no contact logged yet' : 'last contact ' + ago + ' days ago') + ' · every ' + plan.healthDays + ' days'});
+        var ago = last ? days(last, day) : null, phone = c.phone && !blank(c.phone) ? c.phone : '';
+        push({kind: 'health', at: at(day, P.times.health), ref: c.id, clientId: c.id, route: '#/client/' + c.id, who: staffOf(c), name: c.name,
+          title: '🤝 Check in with ' + c.name, body: 'Call, message or ask for feedback · ' + (ago === null ? 'no contact logged yet' : 'last contact ' + ago + ' days ago'),
+          details: ['Last contact: ' + (ago === null ? 'not logged yet' : fmt(last) + ' – ' + ago + ' days ago'), 'Check-in every ' + plan.healthDays + ' days', phone ? 'Phone: ' + phone : '', 'Services: ' + ((c.services || []).join(', ') || '—'), 'Assigned: ' + who(staffOf(c))]});
       });
     });
 
@@ -258,11 +281,13 @@
     tasks.forEach(function (t) {
       if (t.type !== 'Meeting' || t.status === 'Completed') return;
       var day = parse(t.dueDate); if (!day) return;
-      var c = clientById[t.clientId], timeTxt = t.time ? ' at ' + t.time : '', who = t.assignees || [], label = t.title + (c ? ' — ' + c.name : '');
-      push({kind: 'meeting', at: at(addDays(day, -1), P.times.meetingEve), ref: t.id, route: '#/task/' + t.id, who: who, name: t.title, title: '📅 Tomorrow' + timeTxt + ': ' + label, body: 'Meeting on ' + fmt(day) + timeTxt + (t.location ? ' · ' + t.location : '')});
+      var c = clientById[t.clientId], timeTxt = t.time ? ' at ' + t.time : '', whoM = t.assignees || [], label = t.title + (c ? ' — ' + c.name : '');
+      var det = ['When: ' + longDate(day) + (t.time ? ', ' + t.time : ''), t.location ? 'Place: ' + t.location : '', c ? 'Client: ' + c.name : '', 'Status: ' + statusLine(t), 'With: ' + who(whoM)];
+      var base = Object.assign({kind: 'meeting', ref: t.id, clientId: t.clientId, route: '#/task/' + t.id, who: whoM, name: t.title, details: det}, taskInfo(t));
+      push(Object.assign({}, base, {at: at(addDays(day, -1), P.times.meetingEve), title: '📅 Tomorrow' + timeTxt + ': ' + label, body: 'Meeting on ' + fmt(day) + timeTxt + (t.location ? ' · ' + t.location : '')}));
       var morning = at(day, P.times.meetingDay);
-      if (t.time) { var mt = at(day, t.time); if (mt <= morning) morning = new Date(mt.getTime() - 90 * 60000); push({kind: 'meeting', at: new Date(mt.getTime() - 60 * 60000), ref: t.id, route: '#/task/' + t.id, who: who, name: t.title, key: 'meeting|' + t.id + '|1h', title: '📅 In 1 hour: ' + label, body: 'Starts at ' + t.time + (t.location ? ' · ' + t.location : '')}); }
-      push({kind: 'meeting', at: morning, ref: t.id, route: '#/task/' + t.id, who: who, name: t.title, key: 'meeting|' + t.id + '|day', title: '📅 Today' + timeTxt + ': ' + label, body: 'Meeting today' + (t.location ? ' · ' + t.location : '')});
+      if (t.time) { var mt = at(day, t.time); if (mt <= morning) morning = new Date(mt.getTime() - 90 * 60000); push(Object.assign({}, base, {at: new Date(mt.getTime() - 60 * 60000), key: 'meeting|' + t.id + '|1h', title: '📅 In 1 hour: ' + label, body: 'Starts at ' + t.time + (t.location ? ' · ' + t.location : '')})); }
+      push(Object.assign({}, base, {at: morning, key: 'meeting|' + t.id + '|day', title: '📅 Today' + timeTxt + ': ' + label, body: 'Meeting today' + (t.location ? ' · ' + t.location : '')}));
     });
 
     // 4. VAT, Corporate Tax, financial statements, audit, bookkeeping
@@ -278,26 +303,32 @@
         var byTitle = dl.title + '|' + dl.due.slice(0, 7);
         if (doneCode[dl.code] || doneCode[byTitle]) return;
         var due = parse(dl.due), task = openCode[dl.code] || openCode[byTitle];
-        var route = task ? '#/task/' + task.id : '#/client/' + c.id, who = task && (task.assignees || []).length ? task.assignees : staffOf(c);
+        var route = task ? '#/task/' + task.id : '#/client/' + c.id, whoC = task && (task.assignees || []).length ? task.assignees : staffOf(c);
         var period = (dl.title.match(/\(([^)]+)\)\s*$/) || [])[1] || (dl.kind === 'bookkeeping' ? planOf(c, P).bookkeeping + ' review' : '');
+        var st = task ? stageOf(task) : null;
+        var short = task ? statusLine(task) : 'not started';
+        var basis = dl.kind === 'vat' ? 'VAT cycle: ' + (c.vatCycle || '—') + (dl.periodEnd ? ' · period ends ' + fmt(parse(dl.periodEnd)) : '') : (dl.kind === 'bookkeeping' ? 'Review: ' + planOf(c, P).bookkeeping : 'Year end: ' + (c.taxYearEnd ? fmt(parse(c.taxYearEnd)) + ' ' + c.taxYearEnd.slice(0, 4) : '—'));
+        var det = function (n) { return ['Client: ' + c.name, 'Deadline: ' + longDate(due) + (n > 0 ? ' (in ' + n + ' day' + (n > 1 ? 's' : '') + ')' : n === 0 ? ' (today)' : ' (' + (-n) + ' days late)'), period ? 'Period: ' + period : '', basis,
+          'Status: ' + (task ? statusLine(task) : 'Not started – no task yet'), st && st.next ? 'Next step: ' + st.next : '', 'Assigned: ' + who(whoC)]; };
         (BEFORE[dl.kind] || [0]).forEach(function (n) {
           var day = beforeDay(due, n, P);
-          push({kind: dl.kind, at: at(day, P.times.compliance), ref: c.id + '|' + dl.code, route: route, who: who, name: c.name,
+          push(Object.assign({kind: dl.kind, at: at(day, P.times.compliance), ref: c.id + '|' + dl.code, clientId: c.id, route: route, who: whoC, name: c.name, code: dl.code,
             key: dl.kind + '|' + dl.code + '|' + n,
-            title: KIND[dl.kind].icon + ' ' + WORD[dl.kind] + ' ' + (n === 0 ? 'due today' : 'due ' + inWords(n)) + ' — ' + c.name, body: (period ? period + ' · ' : '') + 'deadline ' + fmt(due) + (task ? ' · ' + task.status : '')});
+            title: KIND[dl.kind].icon + ' ' + WORD[dl.kind] + ' ' + (n === 0 ? 'due today' : 'due ' + inWords(n)) + ' — ' + c.name, body: [period, 'due ' + fmt(due), short].filter(Boolean).join(' · '), details: det(n)}, taskInfo(task)));
         });
         if (due < today && task && days(due, today) <= 60) dayList.forEach(function (day) {
           if (!isWorkday(day, P)) return;
-          push({kind: dl.kind, at: at(day, P.times.compliance), ref: c.id + '|' + dl.code, route: route, who: who, name: c.name, key: dl.kind + '|' + dl.code + '|late|' + ymd(day),
-            title: '⚠️ Overdue: ' + WORD[dl.kind] + ' — ' + c.name, body: (period ? period + ' · ' : '') + 'was due ' + fmt(due) + ' · ' + days(due, day) + ' days late'});
+          push(Object.assign({kind: dl.kind, at: at(day, P.times.compliance), ref: c.id + '|' + dl.code, clientId: c.id, route: route, who: whoC, name: c.name, code: dl.code, key: dl.kind + '|' + dl.code + '|late|' + ymd(day),
+            title: '⚠️ Overdue: ' + WORD[dl.kind] + ' — ' + c.name, body: [period, days(due, day) + ' days late', short].filter(Boolean).join(' · '), details: det(-days(due, day))}, taskInfo(task)));
         });
       });
       // 5. contract expiry
       var exp = parse(c.contractExpiry);
       if (exp) P.contractBefore.forEach(function (n) {
         var day = beforeDay(exp, n, P);
-        push({kind: 'contract', at: at(day, P.times.contract), ref: c.id, route: '#/client/' + c.id, who: staffOf(c), name: c.name, key: 'contract|' + c.id + '|' + n,
-          title: '📄 Contract ' + (n === 0 ? 'expires today' : 'expires ' + inWords(n)) + ' — ' + c.name, body: 'Expiry ' + fmt(exp) + ' · prepare renewal / new agreement'});
+        push({kind: 'contract', at: at(day, P.times.contract), ref: c.id, clientId: c.id, route: '#/client/' + c.id, who: staffOf(c), name: c.name, key: 'contract|' + c.id + '|' + n,
+          title: '📄 Contract ' + (n === 0 ? 'expires today' : 'expires ' + inWords(n)) + ' — ' + c.name, body: 'Expiry ' + fmt(exp) + ' · prepare renewal / new agreement',
+          details: ['Client: ' + c.name, 'Contract expiry: ' + longDate(exp), 'Services: ' + ((c.services || []).join(', ') || '—'), 'Assigned: ' + who(staffOf(c)), 'Action: send renewal quotation / agreement']});
       });
     });
 
@@ -309,8 +340,9 @@
       var cd = parse(rc.chequeDate), c = clientById[rc.clientId];
       P.pdcBefore.forEach(function (n) {
         var day = beforeDay(cd, n, P);
-        push({kind: 'pdc', at: at(day, P.times.pdc), ref: rc.id, route: t ? '#/task/' + t.id : '#/receipt/' + rc.id, who: staffOf(c), name: rc.clientName, key: 'pdc|' + rc.id + '|' + n,
-          title: '💳 PDC ' + (n === 0 ? 'due today' : 'due ' + inWords(n)) + ' — ' + (rc.clientName || ''), body: 'AED ' + money(rc.amount) + (rc.chequeNo ? ' · cheque ' + rc.chequeNo : '') + (rc.bank ? ' · ' + rc.bank : '') + ' · deposit on ' + fmt(cd)});
+        push(Object.assign({kind: 'pdc', at: at(day, P.times.pdc), ref: rc.id, receiptId: rc.id, clientId: rc.clientId, route: t ? '#/task/' + t.id : '#/receipt/' + rc.id, who: staffOf(c), name: rc.clientName, key: 'pdc|' + rc.id + '|' + n,
+          title: '💳 PDC ' + (n === 0 ? 'due today' : 'due ' + inWords(n)) + ' — ' + (rc.clientName || ''), body: 'AED ' + money(rc.amount) + (rc.chequeNo ? ' · cheque ' + rc.chequeNo : '') + ' · deposit on ' + fmt(cd),
+          details: ['Client: ' + (rc.clientName || '—'), 'Amount: AED ' + money(rc.amount), rc.chequeNo ? 'Cheque no: ' + rc.chequeNo : '', rc.bank ? 'Bank: ' + rc.bank : '', 'Cheque date: ' + longDate(cd), 'Status: ' + (t ? statusLine(t) : 'Not deposited')]}, taskInfo(t)));
       });
     });
     (db.agreements || []).forEach(function (a) {
@@ -319,8 +351,9 @@
         var cd = parse(r.dueDate), c = clientById[a.clientId];
         P.pdcBefore.forEach(function (n) {
           var day = beforeDay(cd, n, P);
-          push({kind: 'pdc', at: at(day, P.times.pdc), ref: a.id + '|' + r.id, route: '#/agreement/' + a.id, who: staffOf(c), name: a.clientName, key: 'sched|' + a.id + '|' + r.id + '|' + n,
-            title: '💳 Cheque ' + (n === 0 ? 'due today' : 'due ' + inWords(n)) + ' — ' + (a.clientName || ''), body: 'AED ' + money(r.amount) + ' · ' + (r.label || 'payment') + (r.chequeNo ? ' · cheque ' + r.chequeNo : '')});
+          push({kind: 'pdc', at: at(day, P.times.pdc), ref: a.id + '|' + r.id, agreementId: a.id, rowId: r.id, clientId: a.clientId, route: '#/agreement/' + a.id, who: staffOf(c), name: a.clientName, key: 'sched|' + a.id + '|' + r.id + '|' + n,
+            title: '💳 Cheque ' + (n === 0 ? 'due today' : 'due ' + inWords(n)) + ' — ' + (a.clientName || ''), body: 'AED ' + money(r.amount) + ' · ' + (r.label || 'payment') + (r.chequeNo ? ' · cheque ' + r.chequeNo : ''),
+            details: ['Client: ' + (a.clientName || '—'), 'Amount: AED ' + money(r.amount), 'For: ' + (r.label || 'payment') + (a.reference ? ' (' + a.reference + ')' : ''), r.chequeNo ? 'Cheque no: ' + r.chequeNo : '', 'Due: ' + longDate(cd), 'Status: ' + (r.status || 'Pending')]});
         });
       });
     });
@@ -334,8 +367,9 @@
       dayList.forEach(function (day) {
         var ed = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / DAY;
         if (!isWorkday(day, P) || ((ed - mondayRef) % plan.missingDays + plan.missingDays) % plan.missingDays !== 0) return;
-        push({kind: 'missing', at: at(day, P.times.missing), ref: c.id, route: '#/client/' + c.id, who: staffOf(c).length ? staffOf(c) : [], name: c.name,
-          title: '🧩 Missing details — ' + c.name, body: 'Please add: ' + gaps.join(', ')});
+        push({kind: 'missing', at: at(day, P.times.missing), ref: c.id, clientId: c.id, route: '#/client/' + c.id, who: staffOf(c).length ? staffOf(c) : [], name: c.name,
+          title: '🧩 Missing details — ' + c.name, body: 'Please add: ' + gaps.join(', '), missingFields: gaps,
+          details: ['Client: ' + c.name, 'Missing (' + gaps.length + '): ' + gaps.join(', '), 'Assigned: ' + who(staffOf(c)), 'Tip: tap “Update details” to fill them in']});
       });
     });
 
@@ -346,8 +380,9 @@
       if (day.getDay() !== 2) return;
       late.forEach(function (v) {
         var c = clientById[v.clientId], total = (v.items || []).reduce(function (s, i) { var amt = i.amount != null ? +i.amount : (+i.qty || 0) * (+i.unit || 0); return s + amt * (i.vat && i.vat !== 'standard' ? 1 : 1 + (+v.vatRate || 0) / 100); }, 0);
-        push({kind: 'invoice', at: at(day, P.times.invoices), ref: v.id, route: '#/invoice/' + v.id, who: staffOf(c), name: v.clientName,
-          title: '💰 Overdue invoice ' + (v.invoiceNo || '') + ' — ' + (v.clientName || ''), body: 'AED ' + money(total) + ' · due ' + fmt(parse(v.dueDate)) + ' · follow up for payment'});
+        push({kind: 'invoice', at: at(day, P.times.invoices), ref: v.id, invoiceId: v.id, clientId: v.clientId, route: '#/invoice/' + v.id, who: staffOf(c), name: v.clientName, status: v.status,
+          title: '💰 Overdue invoice ' + (v.invoiceNo || '') + ' — ' + (v.clientName || ''), body: 'AED ' + money(total) + ' · due ' + fmt(parse(v.dueDate)) + ' · ' + (v.status || 'Unpaid'),
+          details: ['Client: ' + (v.clientName || '—'), 'Invoice: ' + (v.invoiceNo || '—'), 'Amount: AED ' + money(total), 'Was due: ' + longDate(parse(v.dueDate)) + ' (' + days(parse(v.dueDate), day) + ' days late)', 'Status: ' + (v.status || 'Unpaid')]});
       });
     });
 
@@ -355,7 +390,10 @@
     tasks.forEach(function (t) {
       if (t.status === 'Completed' || t.type === 'Meeting' || t.source === 'auto_reminder' || t.source === 'pdc' || t.priority !== 'High') return;
       var day = parse(t.dueDate); if (!day) return;
-      push({kind: 'task', at: at(day, P.times.task), ref: t.id, route: '#/task/' + t.id, who: t.assignees || [], name: t.title, title: '✔ Due today: ' + t.title, body: (clientById[t.clientId] ? clientById[t.clientId].name + ' · ' : '') + t.status});
+      var c = clientById[t.clientId], s = stageOf(t);
+      push(Object.assign({kind: 'task', at: at(day, P.times.task), ref: t.id, clientId: t.clientId, route: '#/task/' + t.id, who: t.assignees || [], name: t.title, title: '✔ Due today: ' + t.title,
+        body: [c ? c.name : '', statusLine(t)].filter(Boolean).join(' · '),
+        details: [c ? 'Client: ' + c.name : '', 'Due: ' + longDate(day) + (t.time ? ', ' + t.time : ''), 'Status: ' + statusLine(t), s.next ? 'Next step: ' + s.next : '', 'Assigned: ' + who(t.assignees)]}, taskInfo(t)));
     });
 
     // 10. unassigned clients (admin)
@@ -364,7 +402,8 @@
       if (unassigned.length) dayList.forEach(function (day) {
         if (!isWorkday(day, P)) return;
         push({kind: 'assign', at: at(day, P.times.assign), ref: 'unassigned', route: '#/clients', who: [], key: 'assign|' + ymd(day),
-          title: '👥 ' + unassigned.length + ' client' + (unassigned.length > 1 ? 's have' : ' has') + ' no assigned staff', body: unassigned.slice(0, 6).map(function (c) { return c.name; }).join(', ') + (unassigned.length > 6 ? '…' : '') + ' · add staff expertise to auto-assign'});
+          title: '👥 ' + unassigned.length + ' client' + (unassigned.length > 1 ? 's have' : ' has') + ' no assigned staff', body: unassigned.slice(0, 6).map(function (c) { return c.name; }).join(', ') + (unassigned.length > 6 ? '…' : ''),
+          details: unassigned.slice(0, 8).map(function (c) { return '• ' + c.name + ' (' + ((c.services || []).join(', ') || 'no services') + ')'; }).concat(['Tip: add staff expertise in Users & access, then “Auto-assign”'])});
       });
     }
 
@@ -372,14 +411,16 @@
     dayList.forEach(function (day) {
       if (!isWorkday(day, P)) return;
       var ds = ymd(day), mine = function (t) { return forMe(t.assignees, me); };
-      var due = tasks.filter(function (t) { return t.status !== 'Completed' && t.dueDate === ds && mine(t); }).length;
+      var dueT = tasks.filter(function (t) { return t.status !== 'Completed' && t.dueDate === ds && mine(t); });
       var over = tasks.filter(function (t) { return t.status !== 'Completed' && t.dueDate && t.dueDate < ds && mine(t); }).length;
-      var meets = tasks.filter(function (t) { return t.type === 'Meeting' && t.status !== 'Completed' && t.dueDate === ds && mine(t); }).length;
+      var meets = dueT.filter(function (t) { return t.type === 'Meeting'; }).length;
       var leads = openLeads.filter(function (l) { return forMe([l.assignedTo], me); }).length;
       var parts = [];
-      if (due) parts.push(due + ' task' + (due > 1 ? 's' : '') + ' due'); if (over) parts.push(over + ' overdue'); if (meets) parts.push(meets + ' meeting' + (meets > 1 ? 's' : '')); if (leads) parts.push(leads + ' open lead' + (leads > 1 ? 's' : ''));
-      push({kind: 'agenda', at: at(day, P.times.agenda), ref: 'agenda', route: '#/dashboard', who: [], key: 'agenda|' + ds, always: true,
-        title: '☀️ ' + (day.getDay() === 1 ? 'Week start' : 'Today') + (me && me.name ? ', ' + String(me.name).split(/\s+/)[0] : ''), body: (parts.length ? parts.join(' · ') : 'Nothing urgent') + ' · tap to open and refresh reminders'});
+      if (dueT.length) parts.push(dueT.length + ' task' + (dueT.length > 1 ? 's' : '') + ' due'); if (over) parts.push(over + ' overdue'); if (meets) parts.push(meets + ' meeting' + (meets > 1 ? 's' : '')); if (leads) parts.push(leads + ' open lead' + (leads > 1 ? 's' : ''));
+      push({kind: 'agenda', at: at(day, P.times.agenda), ref: 'agenda', route: '#/reminders', who: [], key: 'agenda|' + ds, always: true,
+        title: '☀️ ' + (day.getDay() === 1 ? 'Week start' : 'Today') + (me && me.name ? ', ' + String(me.name).split(/\s+/)[0] : '') + ' – ' + (parts.length ? parts.join(' · ') : 'nothing urgent'),
+        body: 'Tap to open your reminders (this also refreshes them)',
+        details: dueT.slice(0, 6).map(function (t) { return '• ' + (t.time ? t.time + ' ' : '') + t.title + ' – ' + statusLine(t); }).concat(over ? ['⚠️ ' + over + ' overdue task' + (over > 1 ? 's' : '')] : [])});
     });
 
     // group many reminders of the same kind at the same moment into one
@@ -391,14 +432,15 @@
       if (rs.length <= 3 || rs[0].kind === 'lead' || rs[0].kind === 'agenda') { rs.forEach(function (r) { out.push(r); }); return; }
       var k = KIND[rs[0].kind] || {icon: '🔔', label: 'reminders', page: '#/reminders'};
       var names = rs.map(function (r) { return r.name || r.title; });
-      out.push({kind: rs[0].kind, at: rs[0].at, grouped: rs.length, items: rs, route: k.page, key: 'group|' + g, who: [],
-        title: k.icon + ' ' + rs.length + ' ' + k.label, body: names.slice(0, 8).join(', ') + (names.length > 8 ? ' +' + (names.length - 8) + ' more' : '')});
+      out.push({kind: rs[0].kind, at: rs[0].at, grouped: rs.length, items: rs, route: k.page === '#/clients' || k.page === '#/tasks' ? k.page : '#/reminders', key: 'group|' + g, who: [],
+        title: k.icon + ' ' + rs.length + ' ' + k.label, body: names.slice(0, 8).join(', ') + (names.length > 8 ? ' +' + (names.length - 8) + ' more' : ''),
+        details: rs.slice(0, 8).map(function (r) { return '• ' + (r.name || r.title) + (r.statusText ? ' – ' + r.statusText : ''); })});
     });
     out.sort(function (a, b) { return a.at - b.at; });
     out.forEach(function (r) { r.id = hash(r.key); });
     return out.slice(0, +opts.max || 400);
   }
 
-  root.FTReminders = {version: 1, DEFAULT_POLICY: DEFAULT_POLICY, EXPERTISE: EXPERTISE, KIND: KIND, policyOf: policyOf, planOf: planOf, deadlines: deadlines, missing: missing,
-    needs: needs, suggestAssignee: suggestAssignee, compute: compute, nameMatch: nameMatch, forMe: forMe, ymd: ymd, parse: parse};
+  root.FTReminders = {version: 2, DEFAULT_POLICY: DEFAULT_POLICY, EXPERTISE: EXPERTISE, KIND: KIND, policyOf: policyOf, planOf: planOf, deadlines: deadlines, missing: missing,
+    needs: needs, suggestAssignee: suggestAssignee, compute: compute, nameMatch: nameMatch, forMe: forMe, ymd: ymd, parse: parse, stageOf: stageOf, statusLine: statusLine};
 })(typeof window !== 'undefined' ? window : globalThis);

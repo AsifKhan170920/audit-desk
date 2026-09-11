@@ -15,7 +15,10 @@ function copyDir(src, dst) {
   for (const e of fs.readdirSync(src, {withFileTypes: true})) {
     const s = path.join(src, e.name), d = path.join(dst, e.name);
     if (e.isDirectory()) copyDir(s, d);
-    else if (!e.name.endsWith('-512.png')) { fs.mkdirSync(dst, {recursive: true}); fs.copyFileSync(s, d); }
+    else if (e.name.endsWith('-512.png')) continue;
+    // one sound per name: an older .ogg next to a newer .wav would clash in res/raw
+    else if (/\.ogg$/.test(e.name) && fs.existsSync(s.replace(/\.ogg$/, '.wav'))) continue;
+    else { fs.mkdirSync(dst, {recursive: true}); fs.copyFileSync(s, d); }
   }
 }
 
@@ -82,4 +85,11 @@ const styles = path.join(RES, 'values', 'styles.xml');
 let sy = read(styles);
 if (!/windowSplashScreenBackground/.test(sy)) sy = sy.replace(/(<style name="AppTheme.NoActionBarLaunch"[^>]*>)/, '$1\n        <item name="windowSplashScreenBackground">#14284B</item>');
 write(styles, sy);
+// 6. Our small native helper (battery / notification settings) + loud reminder sounds (res/raw copied above)
+const javaDir = path.join(APP, 'src', 'main', 'java', 'com', 'fairtax', 'portal');
+fs.mkdirSync(javaDir, {recursive: true});
+['MainActivity.java', 'FTSystemPlugin.java'].forEach(f => { fs.copyFileSync(path.join(ROOT, 'native', f), path.join(javaDir, f)); console.log('copied native/' + f); });
+let m2 = read(manifestFile);
+if (m2.indexOf('REQUEST_IGNORE_BATTERY_OPTIMIZATIONS') < 0) m2 = m2.replace('</manifest>', '    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n</manifest>');
+write(manifestFile, m2);
 console.log('Android project ready (versionCode ' + run + ')');
