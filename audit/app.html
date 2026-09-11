@@ -294,6 +294,20 @@ table.ui.sg td.cur{color:var(--muted);font-size:13px;max-width:260px}
 table.ui.sg tr.same td.cur{color:var(--ok)}
 .banner.warn ul{margin:4px 0 0 18px;padding:0}
 .banner.warn{background:var(--warn-soft);color:#7a5200}
+.ckl-list{list-style:none;margin:6px 0 0;padding:0}
+.ckl-it{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:8px 14px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
+.ckl-it:first-child{border-top:0}
+.ckl-chip{justify-content:center;margin-top:1px}
+.ckl-t{font-weight:600;font-size:14px;line-height:1.35}
+.ckl-msg{margin-top:3px;color:var(--muted)}
+.ckl-it.st-bad .ckl-msg{color:var(--bad)}.ckl-it.st-warn .ckl-msg,.warn-t{color:#7a5200}
+.ckl-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.ckl-note{margin-top:7px;width:100%;box-sizing:border-box;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--surface)}
+.ckl-mark{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+.ckl-mark .btn.on{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
+.ckl-bar{height:8px;border-radius:99px;background:var(--hover);overflow:hidden;margin:12px 0 10px}.ckl-bar span{display:block;height:100%;background:var(--ok);transition:width .3s}
+.ckl-gate{margin:8px 0 12px;padding:0;list-style:none;max-height:42vh;overflow:auto}.ckl-gate li{padding:4px 0;display:flex;gap:8px;align-items:baseline;font-size:13.5px}
+@media (max-width:760px){.ckl-it{grid-template-columns:minmax(0,1fr)}.ckl-chip{justify-self:start}.ckl-mark{justify-content:flex-start}}
 table.ui.compact .sg-sh{min-width:90px}table.ui.compact .sg-sh[data-f=name]{min-width:260px}
 /* letterhead page setup */
 .form-grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -421,7 +435,8 @@ const CATALOG = [
   {key:'ga',   label:'General and administrative expenses', sec:'exp', dr:true, note:'GENERAL AND ADMINISTRATIVE EXPENSES', folder:'07 Revenue & Expenses'},
   {key:'sell', label:'Selling and distribution expenses', sec:'exp', dr:true, note:'SELLING AND DISTRIBUTION EXPENSES', folder:'07 Revenue & Expenses'},
   {key:'dep',  label:'Depreciation', sec:'exp', dr:true, folder:'05 Fixed Assets & Inventory', hint:'Taken from the PPE schedule unless you add ledger lines here', noNote:true},
-  {key:'fin',  label:'Finance costs', sec:'exp', dr:true, note:'FINANCE COSTS', folder:'03 Bank & Loans'}
+  {key:'fin',  label:'Finance costs', sec:'exp', dr:true, note:'FINANCE COSTS', folder:'03 Bank & Loans'},
+  {key:'ctx',  label:'Corporate tax (in the ledger)', sec:'exp', dr:true, folder:'08 Tax & VAT', hint:'Only when the books already hold the corporate tax expense: it becomes the tax charge below profit before tax, and the provision already typed in payables is not added again', noNote:true}
 ];
 const CAT = Object.fromEntries(CATALOG.map(c => [c.key, c]));
 const SUBFOLDERS = ['01 Legal & Equity','02 Trial Balance','03 Bank & Loans','04 Receivables & Payables','05 Fixed Assets & Inventory','06 Payroll & EOSB','07 Revenue & Expenses','08 Tax & VAT','09 Other'];
@@ -451,7 +466,7 @@ function schedulesInOrder(eng){
 }
 
 const AUTOMAP = [
-  [/acc(umulated)?\.?\s*dep/i,'ppe'], [/opening (stock|inventor)|closing (stock|inventor)|purchase|direct (cost|exp|labour|material)|cost of (sales|revenue|goods)/i,'cor'],
+  [/(corporate|income)\s*tax\s*(expense|charge)|tax\s*expense/i,'ctx'], [/acc(umulated)?\.?\s*dep/i,'ppe'], [/opening (stock|inventor)|closing (stock|inventor)|purchase|direct (cost|exp|labour|material)|cost of (sales|revenue|goods)/i,'cor'],
   [/bank charge|interest|finance cost|loan charge/i,'fin'], [/depreciation/i,'dep'],
   [/vehicle|furniture|fixture|equipment|machinery|computer|building|plant|tools/i,'ppe'], [/inventor|stock/i,'inv'],
   [/due from|related part(y|ies).*rec/i,'rprec'], [/due to|related part(y|ies).*pay/i,'rppay'],
@@ -531,9 +546,14 @@ function eqModeFields(en, r, pre){
   return field(pre + '-first', `Was FY${PY} the company’s first year?`, en.pyInfo.firstYear || 'auto', {bind: 'eng.pyInfo.firstYear', select: [['auto', autoFirst], ['yes', `Yes – company started in FY${PY}`], ['no', `No – work back FY${PY} openings`]]})
     + field(pre + '-eqtb', `FY${Y} retained earnings and legal reserve lines hold`, en.settings.eqTb || 'auto', {bind: 'eng.settings.eqTb', select: [['auto', autoTb], ['open', `Opening balances (before FY${Y} profit)`], ['close', `Closing balances (after FY${Y} profit and transfer)`]]});
 }
+/* legal reserve rule from the MOA (company profile): % of net profit, until the reserve reaches % of share capital */
+function lrRule(en){ const c = engClient(en), p = (c && c.profile) || {}, n = (v, d) => { const x = parseFloat(String(v ?? '').replace(/[%\s]/g, '')); return isNaN(x) ? d : x; };
+  return {pct: n(p.lrPct, 5), cap: n(p.lrCap, 50), typed: String(p.lrPct ?? '').trim() !== ''}; }
 function eqDiffLabel(v){ return Math.abs(v) <= 10 ? 'Rounding difference' : 'Other movements (difference – check)'; }
 
 function ctFor(pbt, adj){ return Math.round(Math.max(0, pbt + (adj || 0) - 375000) * 0.09); }
+const CT_NAME = /corporate\s*tax|income\s*tax|\bCT\s*(payable|provision)|tax\s*(expense|charge)/i;
+function ctPayLines(eng, col){ return (eng.tb || []).filter(l => l.fs === 'pay' && CT_NAME.test(`${l.ledger || ''} ${l.caption || ''}`) && R(l[col || 'amt']) !== 0); }
 
 function compute(eng, prevEng){
   const S = eng.settings, PYI = eng.pyInfo;
@@ -571,9 +591,13 @@ function compute(eng, prevEng){
     b.pbt = b.gp - b.ga - b.sell - b.dep - b.fin - b.xexp + b.gain + b.oi + b.xinc;
   }
   cy.ctAdj = R(S.ctAdjust);
-  cy.ct = S.ctMode === 'manual' ? R(S.ctAmount) : ctFor(cy.pbt, cy.ctAdj);
+  // corporate tax already booked in the ledger ("Corporate tax (in the ledger)" schedule): that figure is the charge and the provision is not added to payables again
+  cy.ctLedger = eng.tb.some(l => l.fs === 'ctx' && R(l.amt) !== 0); py.ctLedger = eng.tb.some(l => l.fs === 'ctx' && R(l.py) !== 0);
+  cy.ctCalc = ctFor(cy.pbt, cy.ctAdj);
+  cy.ct = cy.ctLedger ? R(cy.ctx) : S.ctMode === 'manual' ? R(S.ctAmount) : cy.ctCalc;
   py.ctAdj = R(PYI.ctAdjust);
-  py.ct = PYI.ctMode === 'manual' ? R(PYI.ctAmount) : ctFor(py.pbt, py.ctAdj);
+  py.ctCalc = ctFor(py.pbt, py.ctAdj);
+  py.ct = py.ctLedger ? R(py.ctx) : PYI.ctMode === 'manual' ? R(PYI.ctAmount) : py.ctCalc;
   cy.pat = cy.pbt - cy.ct; py.pat = py.pbt - py.ct;
   const eqIt = (yr, col) => (eng.soceItems || []).filter(x => x.yr === yr).reduce((a, x) => a + R(x[col]), 0);
   ['cap', 'lr', 're', 'ca', 'oth'].forEach(col => { cy[col + 'Items'] = eqIt('cy', col); py[col + 'Items'] = eqIt('py', col); });
@@ -594,7 +618,8 @@ function compute(eng, prevEng){
   const lrIsClose = EQ.lr === 'close', reIsClose = EQ.re === 'close';
   if (lrIsClose){ cy.lrClose = cy.lr; cy.lrOpen = py.lrClose; cy.lrTransfer = cy.lrClose - cy.lrOpen - cy.lrItems; }
   else { cy.lrOpen = cy.lr; cy.lrTransfer = R(S.lrTransfer); cy.lrClose = cy.lrOpen + cy.lrTransfer + cy.lrItems; }
-  cy.lrSuggest = Math.max(0, Math.min(Math.round(cy.pat * 0.05), Math.round(cy.cap * 0.5) - cy.lrOpen));
+  const LRR = lrRule(eng); cy.lrRule = LRR;
+  cy.lrSuggest = Math.max(0, Math.min(Math.round(cy.pat * LRR.pct / 100), Math.round(cy.cap * LRR.cap / 100) - cy.lrOpen));
   if (reIsClose){ cy.reClose = cy.re; cy.reOpen = py.reClose; cy.reAdj = cy.reClose - (cy.reOpen + cy.pat - cy.div - cy.lrTransfer + cy.reItems); }
   else { cy.reOpen = cy.re; cy.reClose = cy.reOpen + cy.pat - cy.div - cy.lrTransfer + cy.reItems; cy.reAdj = 0; }
   cy.lrOpenDiff = EQ.hasPy ? cy.lrOpen - py.lrClose : 0; cy.reOpenDiff = EQ.hasPy ? cy.reOpen - py.reClose : 0;
@@ -605,7 +630,7 @@ function compute(eng, prevEng){
   // a trial balance holding closing reserves also still holds this year's profit – take the difference out for the balance check
   const eqTbAdj = (lrIsClose ? cy.lr - cy.lrOpen : 0) + (reIsClose ? cy.re - cy.reOpen : 0);
   for (const b of [cy, py]){
-    b.payTot = b.pay + b.ct;
+    b.payTot = b.pay + (b.ctLedger ? 0 : b.ct);
     b.nca = b.ppe + b.xnca; b.caTot = b.inv + b.rec + b.rprec + b.cash + b.xca; b.ta = b.nca + b.caTot;
     b.eq = b.cap + b.lrClose + b.reClose + b.caClose + b.xeq;
     b.ncl = b.ltl + b.eosb + b.xncl; b.cl = b.payTot + b.rppay + b.stb + b.xcl; b.tl = b.ncl + b.cl; b.tel = b.eq + b.tl;
@@ -644,6 +669,11 @@ function compute(eng, prevEng){
   const add = (ok, text, level) => checks.push({ok, text, level: ok ? 'ok' : (level || 'bad'), key: K});
   K = 'tb'; { const crT = cr - eqTbAdj, note = eqTbAdj ? ' (reserves taken as closing balances)' : ''; add(dr === crT, dr === crT ? 'Trial balance balances' + note : `Trial balance is out by ${fmtN(dr - crT)}${note}`); }
   K = 'unmapped'; add(unmapped === 0, unmapped ? `${unmapped} ledger line(s) not in any schedule` : 'All ledger lines are in schedules');
+  K = 'ct'; for (const [b, col, FY] of [[cy, 'amt', eng.year], [py, 'py', eng.year - 1]]){
+    const tl = ctPayLines(eng, col);
+    if (!b.ctLedger && b.ct && tl.length) add(false, `Corporate tax FY${FY} may be counted twice – the payables ledger holds “${tl[0].ledger || tl[0].caption}” ${fmtN(tl.reduce((a, l) => a + R(l[col]), 0))} and the provision ${fmtN(b.ct)} is added to payables again`);
+    else if (b.ctLedger && b.ct !== b.ctCalc && (col === 'amt' ? S.ctMode !== 'manual' : PYI.ctMode !== 'manual')) add(false, `Corporate tax FY${FY} in the ledger (${fmtN(b.ct)}) differs from 9% above AED 375,000 on the profit before tax (${fmtN(b.ctCalc)}) – check the tax adjustments`, 'warn');
+  }
   K = 'sofp-cy'; add(cy.ta === cy.tel, cy.ta === cy.tel ? `Statement of financial position ${eng.year} agrees` : `Statement of financial position ${eng.year} out by ${fmtN(cy.ta - cy.tel)}`);
   K = 'sofp-py'; add(py.ta === py.tel, py.ta === py.tel ? `Statement of financial position ${eng.year-1} agrees` : `Prior year (${eng.year-1}) figures out by ${fmtN(py.ta - py.tel)}`);
   if (ppe.length){
@@ -660,7 +690,7 @@ function compute(eng, prevEng){
   }
   K = 'cf-cy'; add(cf.diff === 0, cf.diff === 0 ? `Cash flow ${eng.year} ends at ${fmtN(cf.close)} = cash and cash equivalents ${fmtN(cf.cashBal)}` : `Cash flow ${eng.year} ends at ${fmtN(cf.close)} but cash and cash equivalents are ${fmtN(cf.cashBal)} – difference ${fmtN(cf.diff)}${eng.cfManual && !R((eng.cfCy || {}).cashBal) && !(eng.fx || {})['CFC:cashBal'] ? ' (enter the cash and cash equivalents balance in the cash flow table)' : ''}`);
   K = 'cf-py'; add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} = cash and cash equivalents ${fmtN(cfp.cashBal)}` : `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} but cash and cash equivalents are ${fmtN(cfp.cashBal)} – difference ${fmtN(cfp.diff)}${eng.cfManual && !R((eng.cfPy || {}).cashBal) && !(eng.fx || {})['CFP:cashBal'] ? ' (enter the cash and cash equivalents balance in the cash flow table)' : ''}`);
-  K = 'lr'; if (cy.lrClose < cy.cap * 0.5 && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below 50% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
+  K = 'lr'; if (cy.lrClose < Math.round(cy.cap * cy.lrRule.cap / 100) && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below ${cy.lrRule.cap}% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
   { const Y0 = eng.year, P0 = eng.year - 1;
     K = 're'; if (py.reAdj) add(false, `Retained earnings at the end of FY${P0} (${fmtN(py.reClose)}) differ from the FY${P0} profit less transfers (${fmtN(py.reClose - py.reAdj)}) by ${fmtN(py.reAdj)} – shown as ${Math.abs(py.reAdj) <= 10 ? 'a rounding difference' : 'a difference'} in changes in equity`, 'warn');
     if (cy.reAdj) add(false, `Retained earnings at the end of FY${Y0} (${fmtN(cy.reClose)}) differ from FY${P0} closing + profit − dividend − transfer (${fmtN(cy.reClose - cy.reAdj)}) by ${fmtN(cy.reAdj)}`, 'warn');
@@ -818,6 +848,13 @@ function savedStatementsList(data){
    DEFAULT REPORT TEXT – editable per engagement
    Markup:  ## Heading   - bullet   1. numbered   **bold**   {placeholder}   [[TABLE]] on its own line
    ============================================================ */
+const AR_OTHER_INFO = `## Other Information
+
+Management is responsible for the other information. The other information comprises the Management Report, but does not include the financial statements and our auditor’s report thereon.
+
+Our opinion on the financial statements does not cover the other information and we do not express any form of assurance conclusion thereon.
+
+In connection with our audit of the financial statements, our responsibility is to read the other information and, in doing so, consider whether the other information is materially inconsistent with the financial statements or our knowledge obtained in the audit, or otherwise appears to be materially misstated. If, based on the work we have performed, we conclude that there is a material misstatement of this other information, we are required to report that fact. We have nothing to report in this regard.`;
 const DEFAULT_TEXTS = {
 auditorReport:
 `To,
@@ -840,6 +877,14 @@ We conducted our audit in accordance with International Standards on Auditing (I
 We are independent of the Entity in accordance with the requirements of the International Code of Ethics for Professional Accountants (including International Independence Standards) issued by the International Ethics Standards Board for Accountants (IESBA Code) together with ethical requirements that are relevant to our audit of the financial statements in the United Arab Emirates, and we have fulfilled our other ethical responsibilities in accordance with these requirements and the IESBA Code.
 
 We believe that the audit evidence we have obtained is sufficient and appropriate to provide a basis for our opinion.
+
+## Other Information
+
+Management is responsible for the other information. The other information comprises the Management Report, but does not include the financial statements and our auditor’s report thereon.
+
+Our opinion on the financial statements does not cover the other information and we do not express any form of assurance conclusion thereon.
+
+In connection with our audit of the financial statements, our responsibility is to read the other information and, in doing so, consider whether the other information is materially inconsistent with the financial statements or our knowledge obtained in the audit, or otherwise appears to be materially misstated. If, based on the work we have performed, we conclude that there is a material misstatement of this other information, we are required to report that fact. We have nothing to report in this regard.
 
 ## Responsibilities of Management and Those Charged With Governance for the Financial Statements
 
@@ -967,7 +1012,7 @@ policies: [
   {id:'rev', title:'Revenue recognition', mode:'on', text:'Revenue is recognised under the five-step model of IFRS 15 when (or as) control of goods or services transfers to the customer, at the amount of consideration to which the Entity expects to be entitled, net of discounts and Value Added Tax. Revenue from services is recognised over time as the services are rendered; revenue from the sale of goods is recognised at a point in time on delivery.'},
   {id:'vat', title:'Value Added Tax', mode:'on', text:'Revenue, expenses and assets are recognised net of VAT. The net amount payable to or recoverable from the Federal Tax Authority is included in payables or receivables.'},
   {id:'ct', title:'Income tax (corporate tax)', mode:'on', text:'Under Federal Decree-Law No. 47 of 2022 on the Taxation of Corporations and Businesses, corporate tax is levied at 9% on taxable income exceeding AED 375,000 (0% up to AED 375,000). Current tax is the expected tax payable on the taxable income for the year; deferred tax is recognised on temporary differences, in accordance with IAS 12.'},
-  {id:'lr', title:'Legal reserve', mode:'auto', auto:'lr', text:'In accordance with Article 103 of Federal Decree-Law No. 32 of 2021 and the Memorandum of Association, 5% of the net profit for the year is transferred to a legal reserve until it equals 50% of the share capital. The reserve is not available for distribution.'},
+  {id:'lr', title:'Legal reserve', mode:'auto', auto:'lr', text:'In accordance with Article 103 of Federal Decree-Law No. 32 of 2021 and the Memorandum of Association, {lrPct}% of the net profit for the year is transferred to a legal reserve until it equals {lrCap}% of the share capital. The reserve is not available for distribution.'},
   {id:'rp', title:'Related parties', mode:'on', text:'Related parties comprise the shareholders, key management personnel and entities under their common control. Balances with the shareholder are presented within equity as the shareholder’s current account where applicable.'},
   {id:'fx', title:'Foreign currencies', mode:'on', text:'Transactions in foreign currencies are recorded at the exchange rates prevailing on the transaction dates. Monetary balances are retranslated at the reporting date and exchange differences are recognised in profit or loss.'}
 ],
@@ -1019,10 +1064,16 @@ function reportVars(client, eng, r){
     capital: nfmt(cap), shares: nfmt(shares), shareValue: sh.length ? nfmt(sh[0].value) : '',
     revenue: nfmt(r.cy.rev), revenuePY: nfmt(r.py.rev), profit: nfmt(r.cy.pat), profitPY: nfmt(r.py.pat),
     deprMethod: eng.settings.deprMethod || 'straight-line', auditedWord: eng.type === 'Audit' ? 'audited' : '',
-    sens: nfmt(borrow(r.cy) * 0.005), sensPY: nfmt(borrow(r.py) * 0.005)
+    sens: nfmt(borrow(r.cy) * 0.005), sensPY: nfmt(borrow(r.py) * 0.005),
+    lrPct: lrRule(eng).pct, lrCap: lrRule(eng).cap
   };
 }
-function fillVars(text, v){ return String(text || '').replace(/\{(\w+)\}/g, (m, k) => (v[k] !== undefined ? v[k] : m)); }
+/* “an Individual Company”, “an L.L.C”, but “a One Person Company”, “a Sole Establishment” */
+function articleAn(w){ w = String(w || '').trim(); return !!w && ((/^[aeiou]/i.test(w) && !/^(one\b|onc|uni|use|usu|eu|ure)/i.test(w)) || /^(hour|honest|honou?r)/i.test(w) || /^[FHLMNRSX](?:\.|[A-Z]*\b)(?![a-z])/.test(w)); }
+function fillVars(text, v){
+  // “registered as a {legalForm}” reads “an Individual Company …” when the legal form starts with a vowel
+  return String(text || '').replace(/\b([Aa]) \{legalForm\}/g, (m, a) => (articleAn(v.legalForm) ? a + 'n' : a) + ' {legalForm}').replace(/\{(\w+)\}/g, (m, k) => (v[k] !== undefined ? v[k] : m));
+}
 
 /* markup -> blocks */
 function parseMarkup(text){
@@ -1271,7 +1322,8 @@ function buildReport(client, eng, prevEng){
       grp.push(head(key, NT('ca', 'SHAREHOLDER’S CURRENT ACCOUNT')), T([row('Balance at the beginning of the year', '', cy.caOpen, py.caOpen), row('Net movement during the year', '', cy.caMove - cy.caItems, py.caMove - py.caItems)].concat(eqNoteRows('ca'), [total('Balance at the end of the year', cy.caClose, py.caClose)])),
         {k: 'small', text: 'The current account is unsecured, interest-free and has no fixed repayment terms.'});
     } else if (key === 'pay'){
-      const extra = nz(cy.ct, py.ct) ? [row('Provision for corporate tax', '', cy.ct, py.ct)] : [];
+      const pc = cy.ctLedger ? 0 : cy.ct, pp = py.ctLedger ? 0 : py.ct;
+      const extra = nz(pc, pp) ? [row('Provision for corporate tax', '', pc, pp)] : [];
       grp.push(head(key, NT('pay')), T(subRows('pay', extra).concat([total('', cy.payTot, py.payTot)])));
     } else if (key === 'ct'){
       const rr = [row('Profit before tax', '', cy.pbt, py.pbt)];
@@ -1353,7 +1405,14 @@ const PDF_FONTS = {
 const nf = v => { if (v === '' || v === null || v === undefined) return ''; if (typeof v === 'string') return v; const x = Math.round(v); if (x === 0) return '-'; const s = Math.abs(x).toLocaleString('en-US'); return x < 0 ? `(${s})` : s; };
 
 /* ---------------- PDF ---------------- */
-function pdfRuns(text){ return inlineRuns(text).map(r => r.bold ? {text: r.text, bold: true} : {text: r.text}); }
+function pdfRuns(text){
+  // pdfmake justifies by widening the gap between the pieces it may break at, so “A/C” printed as “A/ C” and “Decree-Law” as “Decree- Law”:
+  // short words holding a slash or hyphen are kept as one unbreakable piece (with the space after them)
+  const out = [];
+  inlineRuns(text).forEach(r => String(r.text).split(/(\S*[^\s\/\-][\/\-]\S+[ \t]*)/).forEach(part => { if (!part) return;
+    const o = {text: part}; if (r.bold) o.bold = true; if (/[^\s\/\-][\/\-]\S/.test(part) && part.trim().length <= 32) o.noWrap = true; out.push(o); }));
+  return out;
+}
 /* a heading directly above a block that must not split (table, signature) is joined to that block,
    so the two always move to a new page together */
 const isHeadNode = n => !!(n && (n._head || (n.headlineLevel === 1) || (n.stack && n.stack.length === 1 && (n.stack[0]._head || n.stack[0].headlineLevel === 1))));
@@ -2340,6 +2399,7 @@ const IC = {
   spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
   handle: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M7.5 8.5l1.5 1.5 3-3M7.5 15l1.5 1.5 3-3M14.5 9h2.5M14.5 15.5h2.5"/></svg>',
   move: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4 3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/></svg>'
 };
 
@@ -2387,7 +2447,7 @@ function renderNav(){
     h += `<div class="side-label">Current client</div><div class="side-client">${e_(c.name)}</div>
       <div class="side-year"><select id="year-select" aria-label="Financial year">${c.engagements.slice().sort((a, b) => b.year - a.year).map(x => `<option value="${x.id}"${x.id === en.id ? ' selected' : ''}>FY${x.year} · ${e_(x.type)}</option>`).join('')}</select>
       <button class="linkish" data-act="add-year" title="Next year, an earlier year, or last year’s statements from Excel">+ Add financial year</button></div>`;
-    [['profile', 'Company profile', IC.id], ['tb', 'Schedules', IC.grid], ['adjust', 'Tax, reserve & prior year', IC.sliders], ['statements', 'Financial statements', IC.chart], ['texts', 'Policies & report text', IC.doc], ['layout', 'Report layout & print', IC.print], ['export', 'Download reports', IC.down]]
+    [['profile', 'Company profile', IC.id], ['tb', 'Schedules', IC.grid], ['adjust', 'Tax, reserve & prior year', IC.sliders], ['statements', 'Financial statements', IC.chart], ['texts', 'Policies & report text', IC.doc], ['layout', 'Report layout & print', IC.print], ['checklist', 'Pre-issue checklist', IC.check], ['export', 'Download reports', IC.down]]
       .forEach(([k, l, i]) => { h += `<button class="nav-btn" data-nav="${k}" aria-current="${UI.view === k}">${i}${l}</button>`; });
   }
   document.getElementById('nav').innerHTML = h;
@@ -2401,7 +2461,7 @@ function render(){
   const scrollY = window.scrollY;
   if (!client() && !['clients', 'settings'].includes(UI.view)) UI.view = 'clients';
   renderNav();
-  const views = {clients: vClients, settings: vSettings, profile: vProfile, tb: vTB, adjust: vAdjust, statements: vStatements, texts: vTexts, layout: vLayout, export: vExport};
+  const views = {clients: vClients, settings: vSettings, profile: vProfile, tb: vTB, adjust: vAdjust, statements: vStatements, texts: vTexts, layout: vLayout, checklist: vChecklist, export: vExport};
   document.getElementById('main').innerHTML = (views[UI.view] || vClients)();
   refreshModal();
   if (aid){ const el = document.getElementById(aid); if (el){ el.focus({preventScroll: true}); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
@@ -2471,6 +2531,8 @@ function vProfile(){
     ${field('pf-ye', 'Financial year end', p.yearEndText || 'December 31', {bind: b('yearEndText')})}
     ${field('pf-moa', 'MOA contract no. (optional)', p.moaNo, {bind: b('moaNo')})}
     ${field('pf-moad', 'MOA attested on (optional)', p.moaDate, {bind: b('moaDate')})}
+    ${field('pf-lrp', 'Legal reserve – % of net profit (per MOA)', p.lrPct ?? '', {bind: b('lrPct'), ph: '5', hint: 'Read the MOA article on reserves, e.g. “not less than 10%”'})}
+    ${field('pf-lrc', 'Legal reserve – stop when it reaches % of capital', p.lrCap ?? '', {bind: b('lrCap'), ph: '50'})}
     ${field('pf-law', 'Local law reference (optional)', p.localLaw, {bind: b('localLaw'), wide: true})}
     ${field('pf-act', 'Principal activities (completes “The principal activities of the Entity comprise …”)', p.activity, {bind: b('activity'), wide: true, area: true})}
     ${field('pf-off', 'Registered office', p.office, {bind: b('office'), wide: true})}
@@ -2771,18 +2833,18 @@ function vAdjust(){
   const pyCfFields = `<h3 class="h3" id="py-cf">Statement of cash flows</h3><p class="small">Cash flow figures and formulas for FY${en.year} and FY${en.year - 1} are typed on <button class="linkish" data-act="edit-cfpy">Financial statements → Cash flows</button>.</p>`;
   return `<section class="panel"><div class="head"><div><h1>Tax, reserve &amp; prior year</h1><p class="sub">Items the schedules alone cannot give. Copy prior year details from last year’s audited report. The PPE movement schedule is on the Schedules screen.</p></div></div></section>
   <section class="panel"><h2>Current year FY${en.year}</h2><div class="form-grid three">
-    ${field('ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
-    ${S.ctMode === 'manual' ? field('ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}
+    ${r.cy.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.cy.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>` : `${field('ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
+    ${S.ctMode === 'manual' ? field('ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}`}
     <div class="field"><label>Corporate tax for the year</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:cy}`)}>${fmtN(r.cy.ct)}</div></div>
-    ${(r.cy.eqModes || {}).lr === 'close' ? `<div class="field"><label>Transfer to legal reserve</label><div class="static">${fmtN(r.cy.lrTransfer)} <span class="muted small">(legal reserve line holds the closing balance)</span></div></div>` : field('lr-tr', 'Transfer to legal reserve', S.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true, hint: `Suggested: ${fmtN(r.cy.lrSuggest)} (5% of profit until reserve = 50% of capital) <button class="linkish" data-act="lr-suggest">Use</button>`})}
+    ${(r.cy.eqModes || {}).lr === 'close' ? `<div class="field"><label>Transfer to legal reserve</label><div class="static">${fmtN(r.cy.lrTransfer)} <span class="muted small">(legal reserve line holds the closing balance)</span></div></div>` : field('lr-tr', 'Transfer to legal reserve', S.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true, hint: `Suggested: ${fmtN(r.cy.lrSuggest)} (${r.cy.lrRule.pct}% of profit until reserve = ${r.cy.lrRule.cap}% of capital, per company profile) <button class="linkish" data-act="lr-suggest">Use</button>`})}
     ${field('disp-pr', 'Proceeds from disposal of PPE', S.disposalProceeds, {bind: 'eng.settings.disposalProceeds', num: true})}
     ${r.ppe.length ? '' : field('ppe-add', 'Additions to PPE (no PPE schedule)', S.ppeAdditions, {bind: 'eng.settings.ppeAdditions', num: true})}
     ${field('dep-m', 'Depreciation method', S.deprMethod, {bind: 'eng.settings.deprMethod', select: [['straight-line', 'Straight-line'], ['reducing balance', 'Reducing balance']]})}
     ${field('draft', 'Footer on report pages', S.draft ? '1' : '0', {bind: 'eng.settings.draftSel', select: [['1', 'Show “Draft for review”'], ['0', 'Final – no draft label']]})}
   </div></section>
   <section class="panel"><h2>Prior year FY${en.year - 1} details</h2><div class="form-grid three">
-    ${field('py-ct-mode', `Corporate tax FY${en.year - 1}`, P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
-    ${P.ctMode === 'manual' ? field('py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}
+    ${r.py.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.py.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>` : `${field('py-ct-mode', `Corporate tax FY${en.year - 1}`, P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
+    ${P.ctMode === 'manual' ? field('py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}`}
     <div class="field"><label>Corporate tax FY${en.year - 1}</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:py}`)}>${fmtN(r.py.ct)}</div></div>
     ${eqModeFields(en, r, 'adj-eq')}
     ${(r.cy.eqModes || {}).firstPy ? `<div class="field"><label>Transfer to legal reserve in FY${en.year - 1}</label><div class="static">${fmtN(r.py.lrTransfer)} <span class="muted small">(first year)</span></div></div>` : field('py-lr', `Transfer to legal reserve in FY${en.year - 1}`, P.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}
@@ -2826,7 +2888,7 @@ function vTexts(){
       <div class="row between"><span class="muted small">## heading · - bullet · 1. numbered · **bold** · {placeholders} fill from profile</span><button class="btn small" data-act="reset-text" data-key="${key}">Reset to standard wording</button></div>`;
   };
   return `<section class="panel"><div class="head"><div><h1>Policies &amp; report text</h1><p class="sub">Standard wording is filled in for you. Change anything for this client — edits apply to PDF, Word and Excel.</p></div></div>
-    <details class="ph"><summary>Placeholders you can use</summary><p class="small">{name} {emirate} {year} {prevYear} {yearEnd} {licence} {licenceIssue} {licenceExpiry} {licenceValidity} {registrationNo} {authority} {estDate} {estOn} {legalForm} {moaText} {localLawText} {activity} {office} {manager} {owners} {auditor} {partner} {auditorReg} {auditorCity} {reportDate} {capital} {shares} {shareValue} {revenue} {revenuePY} {profit} {profitPY} {deprMethod}</p></details></section>
+    <details class="ph"><summary>Placeholders you can use</summary><p class="small">{name} {emirate} {year} {prevYear} {yearEnd} {licence} {licenceIssue} {licenceExpiry} {licenceValidity} {registrationNo} {authority} {estDate} {estOn} {legalForm} {moaText} {localLawText} {activity} {office} {manager} {owners} {auditor} {partner} {auditorReg} {auditorCity} {reportDate} {lrPct} {lrCap} {capital} {shares} {shareValue} {revenue} {revenuePY} {profit} {profitPY} {deprMethod}</p></details></section>
   ${TEXT_SECTIONS.filter(s => !s[2] || en.type === 'Audit').map(([k, l]) => `<section class="panel acc ${open === k ? 'open' : ''}"><button class="acc-head" data-textopen="${k}"><span>${l}</span><span class="muted">${open === k ? '▾' : '▸'}</span></button>${open === k ? `<div class="acc-body">${body(k)}</div>` : ''}</section>`).join('')}`;
 }
 
@@ -2836,6 +2898,7 @@ function vExport(){
   const bad = M.r.checks.filter(x => x.level === 'bad');
   const warn = M.r.checks.filter(x => x.level === 'warn');
   return `<section class="panel"><div class="head"><div><h1>Download reports</h1><p class="sub">${e_(c.name)} · FY${en.year} · ${e_(en.type)}</p></div></div>
+    ${(() => { const op = cklOpen(cklEval(c, en)), nb = op.filter(i => i.st === 'bad').length; return `<div class="banner ${op.length ? (nb ? 'bad' : 'warn') : 'ok'}">Pre-issue checklist: ${op.length ? `${op.length} item${op.length > 1 ? 's' : ''} open${nb ? ` (${nb} issue${nb > 1 ? 's' : ''})` : ''}${en.settings.draft ? ' – fine for a draft, clear them before the final copy' : ' – you will be asked for a reason if you issue now'}` : 'all cleared'} <button class="linkish" data-nav="checklist">Open the checklist</button></div>`; })()}
     ${bad.length ? `<div class="banner bad">${bad.length} check(s) need attention before the report is final – click one to see why:<ul>${bad.map(x => `<li>${x.key ? `<button class="linkish" data-act="check-why" data-key="${x.key}">${e_(x.text)}</button>` : e_(x.text)}</li>`).join('')}</ul></div>` : `<div class="banner ok">All key checks pass. ${warn.length ? warn.map(x => e_(x.text)).join(' · ') : ''}</div>`}
     <div class="dl-grid">
       <button class="dl" data-act="dl-pdf">${IC.down}<b>PDF report</b><span>Full report, house format, numbered pages</span></button>
@@ -3324,7 +3387,9 @@ function drillBody(key, yr){
     if (k === 'cap') extra = `<h3 class="h3">Share capital</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.py.cap), fmtN(r.py.capOpen) + pyOpenTag) + fig(`Share capital introduced`, fmtN(r.cy.capIntro), fmtN(r.py.capIntro)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.capItems), fmtN(r.py.capItems)) + fig('Balance at the end of the year', fmtN(r.cy.cap), fmtN(r.py.cap), 'tot'))}
       <p class="small muted">${E.firstPy ? `FY${PY} is the first year, so all FY${PY} share capital shows as introduced.` : `If the company started in FY${PY}, choose “Yes” for the first year above. If an existing company introduced capital in FY${PY}, add it as an item for FY${PY}.`}</p>`;
   } else if (k === 'pay' && (r.cy.ct || r.py.ct)){
-    extra = `<h3 class="h3">Corporate tax included in payables</h3>${figT(fig('Provision for corporate tax', fmtN(r.cy.ct), fmtN(r.py.ct)) + fig('Total payables in the statement', fmtN(r.cy.payTot), fmtN(r.py.payTot), 'tot'))}<div class="row"><button class="btn small" data-drill="ct">Change corporate tax</button></div>`;
+    const led = b => b.ctLedger ? muted('already in the ledger lines above') : '';
+    extra = `<h3 class="h3">Corporate tax included in payables</h3>${figT(fig('Provision for corporate tax added', fmtN(r.cy.ctLedger ? 0 : r.cy.ct) + led(r.cy), fmtN(r.py.ctLedger ? 0 : r.py.ct) + led(r.py)) + fig('Total payables in the statement', fmtN(r.cy.payTot), fmtN(r.py.payTot), 'tot'))}
+      ${r.checks.some(x => x.key === 'ct' && x.level === 'bad') ? `<div class="banner bad">A corporate tax line is typed in these payables and the provision is added again. <button class="linkish" data-act="check-why" data-key="ct">See how to fix</button></div>` : ''}<div class="row"><button class="btn small" data-drill="ct">Change corporate tax</button></div>`;
   }
   const lineNote = isRes ? `<p class="small muted">${e_(s.label)} lines: FY${Y} = <b>${(r.cy.eqModes || {})[k] === 'close' ? 'closing' : 'opening'}</b> balance, FY${PY} = <b>closing</b> balance.</p>` : '';
   modal(`<div class="qd"><div class="row between"><h2>${e_(s.label)}${noteNo ? ` <span class="chip neutral">Note ${noteNo}</span>` : ''}</h2>
@@ -3338,14 +3403,14 @@ function taxModal(){ liveModal(taxBody); }
 function taxBody(){
   const en = eng(); if (!en) return;
   const r = compute(en, prev()), S = en.settings, P = en.pyInfo, Y = en.year, PY = Y - 1;
-  modal(`<div class="qd"><h2>Corporate tax</h2><p class="sub">Changes show in the statement of profit or loss, payables and the tax note at once.</p>
+  modal(`<div class="qd"><h2>Corporate tax</h2><p class="sub">Changes show in the statement of profit or loss, payables and the tax note at once. If the books already hold the tax, put the tax expense ledger line in the “Corporate tax (in the ledger)” schedule – the provision is then not added to payables again.</p>${r.checks.filter(x => x.key === 'ct').map(x => `<div class="banner ${x.level === 'bad' ? 'bad' : 'warn'}">${e_(x.text)} <button class="linkish" data-act="check-why" data-key="ct">How to fix</button></div>`).join('')}
     <div class="form-grid"><div class="box"><h3 class="h3">FY${Y}</h3>
-      ${field('q-ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
-      ${S.ctMode === 'manual' ? field('q-ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('q-ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}
+      ${r.cy.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.cy.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>${field('q-ct-adj', 'Tax adjustments for the 9% check', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}` : `${field('q-ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
+      ${S.ctMode === 'manual' ? field('q-ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('q-ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}`}
       <p class="small">Profit before tax ${fmtN(r.cy.pbt)} · corporate tax <b>${fmtN(r.cy.ct)}</b></p></div>
     <div class="box"><h3 class="h3">FY${PY}</h3>
-      ${field('q-py-ct-mode', 'Corporate tax', P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
-      ${P.ctMode === 'manual' ? field('q-py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('q-py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}
+      ${r.py.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.py.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>` : `${field('q-py-ct-mode', 'Corporate tax', P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
+      ${P.ctMode === 'manual' ? field('q-py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('q-py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}`}
       <p class="small">Profit before tax ${fmtN(r.py.pbt)} · corporate tax <b>${fmtN(r.py.ct)}</b></p></div></div>
     <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
 }
@@ -3399,6 +3464,299 @@ function soceBody(){
 }
 
 /* ---------- checks: click one to see what causes it ---------- */
+/* ============================================================
+   PRE-ISSUE CHECKLIST – automatic checks + review sign-offs, saved per engagement
+   ============================================================ */
+const CKL_GROUPS = [
+  ['docs', 'Company documents – trade licence & MOA'],
+  ['books', 'Trial balance & schedules'],
+  ['tax', 'Corporate tax & VAT'],
+  ['eq', 'Equity & comparative figures'],
+  ['disc', 'Presentation & disclosures'],
+  ['ar', 'Auditor’s report & sign-off']
+];
+/* what each built-in schedule must still mean after it is renamed */
+const CKL_MEANING = {ppe: /propert|plant|equipment|fixed asset|asset/i, inv: /inventor|stock/i, rec: /receiv|debtor|prepa|deposit|advance/i, rprec: /related|due from|sister|group/i,
+  cash: /cash|bank/i, cap: /capital/i, lr: /reserve/i, re: /retained|accumulated|earnings|profit/i, ca: /current account|shareholder|owner|partner|director/i,
+  ltl: /loan|borrow|financ|lease/i, eosb: /service|gratuity|benefit|employee/i, pay: /payab|accru|creditor|other liabilit/i, rppay: /related|due to|sister|group/i,
+  stb: /loan|borrow|overdraft|financ|current portion/i, rev: /revenue|sales|income|turnover/i, gain: /gain|disposal/i, oi: /income|gain/i, cor: /cost/i,
+  ga: /admin|general|expense|overhead/i, sell: /sell|distribut|marketing/i, fin: /financ|bank|interest/i};
+const CKL_INDUSTRY = [
+  [/transport (services|of general|of goods)|heavy trucks|haulage/, 'transport services', /transport|truck|haulage|logistic|cargo|freight|moving/],
+  [/renting of (construction|building|machinery)|rental of (machinery|equipment)/, 'machinery rental', /rent|leas|hire/],
+  [/limousine|chauffeur/, 'limousine services', /limousine|chauffeur|passenger/],
+  [/garment|embroider/, 'garments / embroidery', /garment|embroider|tailor|textile|fashion/],
+  [/travel agen|tour package|air ticket/, 'travel services', /travel|tour/],
+  [/marble|granite/, 'marble / stone', /marble|granite|stone/],
+  [/restaurant|food and beverage|catering/, 'food services', /restaurant|food|cater|cafe|kitchen/],
+  [/wedding card|printing press/, 'printing', /print|card/],
+  [/air[- ]?condition|hvac/, 'air-conditioning works', /air|a\/c|hvac|condition|cool|ventilat/]
+];
+const CKL_GENERIC = /^(al|el|the|and|of|llc|l\.?l\.?c\.?|sp|s\.?p|opc|fzc|fze|fz|llp|co|company|est|establishment|trading|general|contracting|cont|services?|technical|tech|industry|industries|group|international|intl|a\/c|ac|unit|fix|fixing|works?|dmcc|branch|holding|enterprises?|one|person)$/i;
+function cklCore(name){ return String(name || '').toLowerCase().replace(/[–—\-.,()]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !CKL_GENERIC.test(w)).join(' ').trim(); }
+function parseDateText(t){
+  t = String(t || '').trim().replace(/\s+/g, ' '); if (!t) return null; let m;
+  const mon = s => MONTHS.findIndex(x => x.slice(0, 3).toLowerCase() === String(s).slice(0, 3).toLowerCase());
+  if ((m = t.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/))) return new Date(+m[1], +m[2] - 1, +m[3]);
+  if ((m = t.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/))) return new Date(+m[3], +m[2] - 1, +m[1]);
+  if ((m = t.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s\-\/.,]+([A-Za-z]{3,})\.?[\s\-\/.,]+(\d{4})$/)) && mon(m[2]) >= 0) return new Date(+m[3], mon(m[2]), +m[1]);
+  if ((m = t.match(/^([A-Za-z]{3,})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/)) && mon(m[1]) >= 0) return new Date(+m[3], mon(m[1]), +m[2]);
+  return null;
+}
+const fmtStamp = iso => { try { return new Date(iso).toLocaleString('en-GB', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}); } catch (e) { return String(iso || ''); } };
+const nz0 = (...a) => a.some(v => R(v) !== 0);
+const cap1 = s => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1);
+const cklNav = (k, l) => `<button class="btn small" data-nav="${k}">${l}</button>`;
+const cklDrill = (k, l) => `<button class="btn small" data-drill="${e_(k)}">${e_(l)}</button>`;
+const cklText = (k, l) => `<button class="btn small" data-act="ckl-text" data-k="${k}">${l}</button>`;
+const RP_NOTE_TEXT = `Related parties comprise the shareholder(s), key management personnel and entities under common ownership or management. Transactions with related parties are carried out on terms agreed by management.
+
+**Balances with related parties**
+- [Name of related party] – [relationship, e.g. under common ownership]: due from / (to) AED … ({prevYear}: AED …)
+
+The balances are unsecured, interest-free and have no fixed repayment terms. Management has assessed the balances for expected credit losses and considers them recoverable.
+
+**Transactions with related parties**
+- [Nature of transaction, e.g. advances given / repaid, purchases, expenses paid on behalf]: AED … ({prevYear}: AED …)
+
+**Key management compensation**
+Salaries and benefits of key management personnel: AED … ({prevYear}: AED …).`;
+
+function cklCtx(c, en){
+  const pe = prevOf(c, en), r = compute(en, pe), p = c.profile || {}, sm = SM(en), LAY = layoutOf(en), T = en.texts || {};
+  const nm = l => `${l.ledger || ''} ${l.caption || ''}`;
+  const texts = [];
+  const TL = Object.fromEntries(TEXT_SECTIONS.map(s => [s[0], s[1]]));
+  Object.entries(T).forEach(([k, v]) => { if (typeof v === 'string' && v.trim()) texts.push([TL[k] || k, v]); });
+  (T.policies || []).forEach(x => { if (x.mode !== 'off' && x.text) texts.push([`Policy “${x.title || x.id}”`, x.text]); });
+  (en.customNotes || []).forEach(x => texts.push([`Note “${x.title || ''}”`, `${x.title || ''}\n${x.text || ''}`]));
+  ensureSchedules(en).forEach(s => { if ((s.textAbove || '').trim() || (s.textBelow || '').trim()) texts.push([`${s.label} note text`, `${s.textAbove || ''}\n${s.textBelow || ''}`]); });
+  // names that point to related parties: sister companies share the client's own name words, other clients, shareholders
+  const own = cklCore(c.name).split(' ').filter(w => w.length >= 4);
+  const others = (DB.clients || []).filter(o => o !== c).map(o => cklCore(o.name)).filter(w => w.length >= 5);
+  const owners = (p.shareholders || []).map(s => String(s.name || '').toLowerCase().replace(/^(mr|mrs|ms|dr)\.?\s+/, '').split(/\s+/)[0]).filter(w => w && w.length >= 4);
+  const related = s => { const low = String(s).toLowerCase(); if (/\bbank\b/.test(low)) return false;
+    return /due (from|to)|related|sister|associate|group compan|director|shareholder|partner|owner/.test(low) || own.some(w => new RegExp(`\\b${w.replace(/[^a-z0-9]/g, '')}\\b`).test(low)) || others.some(w => low.includes(w)) || owners.some(w => new RegExp(`\\b${w.replace(/[^a-z0-9]/g, '')}\\b`).test(low)); };
+  const rpHits = en.tb.filter(l => sm[l.fs] && (['rec', 'pay'].includes(l.fs) || (sm[l.fs].custom && ['ca', 'nca', 'cl', 'ncl'].includes(sm[l.fs].sec) && !/related|due (from|to)|sister/i.test(sm[l.fs].label))) && nz0(l.amt, l.py) && related(nm(l)));
+  return {c, en, pe, r, p, sm, LAY, T, nm, texts, related, rpHits, Y: en.year, PY: en.year - 1, audit: en.type === 'Audit'};
+}
+
+const CKL_ITEMS = [
+  /* ---------- documents ---------- */
+  {id: 'lic-details', grp: 'docs', text: 'Company name, legal form, licence no., issue and expiry dates agree to the trade licence',
+    auto: x => { const miss = [['licenceNo', 'licence no.'], ['licenceExpiry', 'licence expiry'], ['legalForm', 'legal form'], ['emirate', 'emirate']].filter(([k]) => !String(x.p[k] || '').trim()).map(a => a[1]);
+      return miss.length ? {st: 'bad', msg: `Missing in the company profile: ${miss.join(', ')}`, fix: cklNav('profile', 'Open company profile')}
+        : {st: 'todo', msg: `Profile: ${x.c.name} · ${x.p.legalForm} · licence ${x.p.licenceNo}${x.p.licenceIssue ? ` issued ${x.p.licenceIssue}` : ''} · expires ${x.p.licenceExpiry}`, fix: cklNav('profile', 'Company profile')}; }},
+  {id: 'lic-valid', grp: 'docs', text: 'Trade licence valid at the report date – renewed licence obtained if it has expired',
+    auto: x => { const ex = parseDateText(x.p.licenceExpiry), rd = parseDateText(x.p.reportDate) || new Date();
+      if (!ex) return {st: 'todo', msg: x.p.licenceExpiry ? `Could not read the expiry date “${x.p.licenceExpiry}” – check it by eye` : 'Enter the licence expiry date in the company profile', fix: cklNav('profile', 'Company profile')};
+      return ex < rd ? {st: 'warn', msg: `Licence expired on ${x.p.licenceExpiry}, before the ${parseDateText(x.p.reportDate) ? `report date ${x.p.reportDate}` : 'current date'} – get the renewed licence and update the licence dates in the profile`, fix: cklNav('profile', 'Update licence dates')}
+        : {st: 'ok', msg: `Valid until ${x.p.licenceExpiry}`}; }},
+  {id: 'activity', grp: 'docs', text: 'Principal activities match the activities printed on the licence',
+    auto: x => x.p.activity ? {st: 'todo', msg: `Profile: “${x.p.activity}”`, fix: cklNav('profile', 'Company profile')} : {st: 'bad', msg: 'Principal activities are empty in the company profile', fix: cklNav('profile', 'Company profile')}},
+  {id: 'capital', grp: 'docs', text: 'Share capital, number of shares and shareholders agree to the MOA (and capital is paid up)',
+    auto: x => { const sh = x.p.shareholders || [], tot = sh.reduce((a, s) => a + (+s.shares || 0) * (+s.value || 0), 0);
+      if (!sh.length) return {st: 'warn', msg: 'No shareholders in the company profile', fix: cklNav('profile', 'Add shareholders')};
+      if (R(tot) !== R(x.r.cy.cap)) return {st: 'bad', msg: `Shareholders in the profile total ${fmtN(tot)} but share capital in the statements is ${fmtN(x.r.cy.cap)}`, fix: cklNav('profile', 'Company profile') + cklDrill('cap', 'Share capital')};
+      return {st: 'todo', msg: `${sh.length} shareholder(s) · capital ${fmtN(tot)} – confirm against the MOA`}; }},
+  {id: 'lr-moa', grp: 'docs', text: 'Legal reserve follows the MOA (% of profit and when it stops) – transfers and policy wording agree',
+    when: x => nz0(x.r.cy.lrClose, x.r.py.lrClose) || x.r.cy.pat > 0 || x.r.py.pat > 0,
+    auto: x => { const L = lrRule(x.en), r = x.r, issues = [];
+      const pol = ((x.T.policies) || []).find(q => q.id === 'lr'); const polTxt = pol && pol.mode !== 'off' ? fillVars(pol.text, {lrPct: L.pct, lrCap: L.cap}) : '';
+      const m = polTxt.match(/(\d+(?:\.\d+)?)\s*%\s*of the net profit/i) || polTxt.match(/(\d+(?:\.\d+)?)\s*%/);
+      if (m && +m[1] !== L.pct) issues.push(`the legal reserve policy says ${m[1]}% but the MOA rate in the profile is ${L.pct}%`);
+      const exp = (b, open) => Math.max(0, Math.min(Math.round(Math.max(0, b.pat) * L.pct / 100), Math.round(b.cap * L.cap / 100) - open));
+      const ecy = exp(r.cy, r.cy.lrOpen), epy = exp(r.py, r.py.lrOpen);
+      if (Math.abs(r.cy.lrTransfer - ecy) > 1) issues.push(`FY${x.Y} transfer is ${fmtN(r.cy.lrTransfer)}; at ${L.pct}% of profit (until ${L.cap}% of capital) it would be ${fmtN(ecy)}`);
+      if (Math.abs(r.py.lrTransfer - epy) > 1) issues.push(`FY${x.PY} transfer is ${fmtN(r.py.lrTransfer)}; at ${L.pct}% it would be ${fmtN(epy)}`);
+      if (!L.typed) issues.unshift(`the MOA rate is not entered in the company profile (${L.pct}% assumed)`);
+      return issues.length ? {st: L.typed || issues.length > 1 ? 'warn' : 'todo', msg: cap1(issues.join('; ')), fix: cklNav('profile', 'MOA rate in profile') + cklDrill('lr', 'Legal reserve') + cklText('policies', 'Policy wording')}
+        : {st: 'ok', msg: `${L.pct}% of profit until ${L.cap}% of capital – transfers FY${x.Y} ${fmtN(r.cy.lrTransfer)} · FY${x.PY} ${fmtN(r.py.lrTransfer)} agree`}; }},
+  {id: 'first-period', grp: 'docs', text: 'First financial period: dates and wording show the period from incorporation where needed (not a full year)',
+    when: x => { const E = x.r.cy.eqModes || {}; return !!E.firstPy || E.estYear === x.Y; },
+    auto: x => ({st: 'todo', msg: `Established ${x.p.estDate || '(date not entered)'} – FY${(x.r.cy.eqModes || {}).firstPy ? x.PY : x.Y} is the first period. Check column headings, “for the period from … to …” wording and first-period corporate tax.`})},
+  /* ---------- books ---------- */
+  {id: 'fs-checks', grp: 'books', text: 'All automatic checks on the statements pass (trial balance, financial position, PPE, cash flow)',
+    auto: x => { const bad = x.r.checks.filter(k => k.level === 'bad' && k.key !== 'ct'), warn = x.r.checks.filter(k => k.level === 'warn' && k.key !== 'ct');
+      const list = a => a.slice(0, 3).map(k => k.text).join(' · ') + (a.length > 3 ? ` · +${a.length - 3} more` : '');
+      return bad.length ? {st: 'bad', msg: list(bad), fix: cklNav('statements', 'Open the checks')} : warn.length ? {st: 'warn', msg: list(warn), fix: cklNav('statements', 'Open the checks')} : {st: 'ok', msg: 'All checks pass'}; }},
+  {id: 'books-rec', grp: 'books', text: 'Statements reconciled to the books (Tally / Manager) – profit and every balance, with each adjustment listed and agreed with the client',
+    auto: x => ({st: 'todo', msg: `Statements FY${x.Y}: profit before tax ${fmtN(x.r.cy.pbt)} · total assets ${fmtN(x.r.cy.ta)} – note the books figures and where the adjustment list is filed`})},
+  {id: 'sched-names', grp: 'books', text: 'Built-in schedules keep their meaning – none renamed to hold something else',
+    auto: x => { const bad = ensureSchedules(x.en).filter(s => s.builtin && CKL_MEANING[s.key] && !CKL_MEANING[s.key].test(s.label || '') && nz0(x.r.cy[s.key], x.r.py[s.key]));
+      return bad.length ? {st: 'bad', msg: bad.map(s => `“${CAT[s.key].label}” is renamed “${s.label}” – notes, cash flow, financial instruments and ratios still treat it as ${CAT[s.key].label.toLowerCase()}`).join(' · '), fix: bad.slice(0, 2).map(s => cklDrill(s.key, 'Open ' + s.label)).join('') + cklNav('tb', 'Schedules')}
+        : {st: 'ok', msg: 'Schedule names fit their meaning'}; }},
+  {id: 'cash-lines', grp: 'books', text: 'Cash and cash equivalents hold only cash and bank balances – and every bank account is in that schedule',
+    auto: x => { const out = [];
+      x.en.tb.filter(l => l.fs === 'cash' && /deposit|advance|prepa|receiv|due from|guarantee|margin|retention|fixed|term/i.test(x.nm(l)) && !/\b(bank|cash|petty|current account)\b/i.test(x.nm(l)) && nz0(l.amt, l.py))
+        .forEach(l => out.push(`“${l.ledger || l.caption}” ${fmtN(l.amt)} is in cash but looks like a ${/fixed|term/i.test(x.nm(l)) ? 'term deposit' : 'receivable or deposit'}`));
+      const custom = ensureSchedules(x.en).filter(s => s.custom && ['ca', 'nca'].includes(s.sec) && (/\b(bank|cash)\b/i.test(s.label) || x.en.tb.some(l => l.fs === s.key && /\bbank\b|petty cash|cash in hand/i.test(x.nm(l)) && !/charge|loan|overdraft|guarantee|fee/i.test(x.nm(l)))) && nz0(x.r.cy[s.key], x.r.py[s.key]));
+      custom.forEach(s => out.push(`bank / cash balances sit in the custom schedule “${s.label}” – move them to Cash and cash equivalents so the cash flow, notes and ratios use them`));
+      x.en.tb.filter(l => ['rec', 'rprec', 'inv'].includes(l.fs) && /\bbank\b|petty cash|cash in hand/i.test(x.nm(l)) && !/charge|loan|overdraft|interest|guarantee|fee|deposit/i.test(x.nm(l)) && nz0(l.amt, l.py))
+        .forEach(l => out.push(`“${l.ledger}” looks like a bank balance but is in ${x.sm[l.fs].label}`));
+      return out.length ? {st: 'bad', msg: cap1(out.slice(0, 4).join(' · ')), fix: cklDrill('cash', 'Open cash') + custom.slice(0, 1).map(s => cklDrill(s.key, 'Open ' + s.label)).join('') + cklNav('tb', 'Schedules')}
+        : {st: 'ok', msg: `Cash and cash equivalents ${fmtN(x.r.cy.cash)} (FY${x.PY}: ${fmtN(x.r.py.cash)})`}; }},
+  {id: 'rp-bal', grp: 'books', text: 'Related party balances (sister companies, owners, managers) shown separately – not inside receivables, payables or other schedules',
+    auto: x => { const hits = x.rpHits;
+      return hits.length ? {st: 'warn', msg: `Looks related: ${hits.slice(0, 4).map(l => `“${l.ledger || l.caption}” ${fmtN(l.amt)} in ${x.sm[l.fs].label}`).join(' · ')} – move to Due from / Due to related parties unless it is an ordinary trade balance`, fix: [...new Set(hits.map(l => l.fs))].slice(0, 2).map(k => cklDrill(k, 'Open ' + x.sm[k].label)).join('')}
+        : {st: 'ok', msg: 'No related-looking names inside receivables, payables or custom schedules'}; }},
+  /* ---------- tax ---------- */
+  {id: 'ct-once', grp: 'tax', text: 'Corporate tax counted once – the provision is either in the payables ledger or added by the software, not both',
+    auto: x => { const k = x.r.checks.filter(q => q.key === 'ct' && q.level === 'bad');
+      return k.length ? {st: 'bad', msg: k.map(q => q.text).join(' · '), fix: `<button class="btn small" data-act="check-why" data-key="ct">How to fix</button>`}
+        : {st: 'ok', msg: x.r.cy.ctLedger ? 'Tax taken from the ledger – the provision is not added again' : x.r.cy.ct || x.r.py.ct ? 'Provision added once by the software' : 'No corporate tax'}; }},
+  {id: 'ct-calc', grp: 'tax', text: 'Corporate tax charge agrees to the tax computation / return (adjustments, reliefs, first tax period, prior year as signed)',
+    auto: x => { const w = x.r.checks.filter(q => q.key === 'ct' && q.level === 'warn');
+      return {st: w.length ? 'warn' : 'todo', msg: (w.length ? w.map(q => q.text).join(' · ') + ' · ' : '') + `FY${x.Y}: ${fmtN(x.r.cy.ct)} on profit before tax ${fmtN(x.r.cy.pbt)} · FY${x.PY}: ${fmtN(x.r.py.ct)} on ${fmtN(x.r.py.pbt)}`, fix: cklDrill('ct', 'Corporate tax')}; }},
+  {id: 'vat', grp: 'tax', text: 'VAT payable / recoverable agrees to the last VAT return and the FTA account', when: x => x.en.tb.some(l => /\bvat\b|value added/i.test(x.nm(l))),
+    auto: x => ({st: 'todo', msg: x.en.tb.filter(l => /\bvat\b|value added/i.test(x.nm(l))).slice(0, 3).map(l => `${l.ledger || l.caption} ${fmtN(l.amt)}`).join(' · ')})},
+  /* ---------- equity ---------- */
+  {id: 'py-signed', grp: 'eq', text: 'Comparative figures agree to the signed prior-year report – any change disclosed as a restatement or reclassification',
+    auto: x => ({st: 'todo', msg: `FY${x.PY}: profit ${fmtN(x.r.py.pat)} · corporate tax ${fmtN(x.r.py.ct)} · equity ${fmtN(x.r.py.eq)} · total assets ${fmtN(x.r.py.ta)}${x.r.py.reAdj ? ` · retained earnings difference ${fmtN(x.r.py.reAdj)} in changes in equity` : ''}`})},
+  {id: 'soce-dup', grp: 'eq', text: 'No duplicate rows in changes in equity or the reserve notes (items repeating an automatic row)',
+    auto: x => { const out = [], r = x.r;
+      (x.en.soceItems || []).forEach(i => { const b = i.yr === 'py' ? r.py : r.cy, FY = i.yr === 'py' ? x.PY : x.Y, lb = i.label || '';
+        if (/(legal|statutory)\s*reserve/i.test(lb) && /transfer/i.test(lb) && b.lrTransfer) out.push(`FY${FY} item “${lb}” repeats the automatic transfer to legal reserve (${fmtN(b.lrTransfer)})`);
+        else if (/profit for the|comprehensive income/i.test(lb)) out.push(`FY${FY} item “${lb}” may repeat the profit for the year row`);
+        else if (/dividend/i.test(lb) && b.div) out.push(`FY${FY} item “${lb}” may repeat the dividend row`); });
+      return out.length ? {st: 'bad', msg: out.join(' · '), fix: `<button class="btn small" data-act="soce-open">Items in changes in equity</button>`} : {st: 'ok', msg: 'No repeated rows found'}; }},
+  {id: 'ca-class', grp: 'eq', text: 'Shareholder current account: classification (equity or liability) supported by its terms, and movements explained',
+    when: x => nz0(x.r.cy.caClose, x.r.py.caClose), auto: x => ({st: 'todo', msg: `Current account ${fmtN(x.r.cy.caClose)} (FY${x.PY}: ${fmtN(x.r.py.caClose)}) shown in equity`, fix: cklDrill('ca', 'Current account')})},
+  /* ---------- disclosures ---------- */
+  {id: 'rp-note', grp: 'disc', text: 'Related party note (IAS 24): names, relationship, balances, transactions, terms and key management compensation',
+    auto: x => { const has = (x.en.customNotes || []).some(n => /related part/i.test(`${n.title || ''} ${n.text || ''}`)) || ['rprec', 'rppay'].some(k => { const s = x.sm[k]; return s && /related part/i.test(`${s.textAbove || ''} ${s.textBelow || ''}`); });
+      const need = nz0(x.r.cy.rprec, x.r.py.rprec, x.r.cy.rppay, x.r.py.rppay) || x.rpHits.length > 0 || ensureSchedules(x.en).some(s => s.custom && /related|due (from|to)|sister/i.test(s.label) && nz0(x.r.cy[s.key], x.r.py[s.key]));
+      if (has) return {st: 'todo', msg: 'A related party note exists – check it names each party and covers balances, transactions, terms and key management', fix: cklText('custom', 'Open notes')};
+      return need ? {st: 'bad', msg: 'Related party balances are in the statements but no note describes the related parties', fix: `<button class="btn small" data-act="ckl-add-rp">Add a related party note</button>`}
+        : {st: 'todo', msg: 'No related party balances in the schedules – still ask about transactions with owners, managers and sister companies', fix: `<button class="btn small" data-act="ckl-add-rp">Add a related party note</button>`}; }},
+  {id: 'policy-words', grp: 'disc', text: 'Policies and notes fit this client – no wording or names left from another client’s file',
+    auto: x => { const out = [], own = `${x.c.name} ${x.p.activity || ''}`.toLowerCase();
+      const others = (DB.clients || []).filter(o => o !== x.c).map(o => cklCore(o.name)).filter(w => w.length >= 5 && !own.includes(w));
+      x.texts.forEach(([where, t]) => { const low = String(t).toLowerCase();
+        CKL_INDUSTRY.forEach(([re, label, ownRe]) => { if (re.test(low) && !ownRe.test(own)) out.push(`${where} mentions ${label}`); });
+        others.forEach(w => { if (low.includes(w)) out.push(`${where} mentions “${w}” (another client)`); }); });
+      const u = [...new Set(out)];
+      return u.length ? {st: 'bad', msg: cap1(u.slice(0, 4).join(' · ') + (u.length > 4 ? ` · +${u.length - 4} more` : '')) + ` – the licence activity is “${x.p.activity || '(not entered)'}”`, fix: cklText('policies', 'Policies') + cklNav('texts', 'All report text')}
+        : {st: 'ok', msg: 'No wording from another business found'}; }},
+  {id: 'revenue', grp: 'disc', text: 'Revenue policy and note match how revenue is earned (over time or at a point in time) – contract assets and liabilities considered',
+    when: x => nz0(x.r.cy.rev, x.r.py.rev),
+    auto: x => ({st: 'todo', msg: `Revenue ${fmtN(x.r.cy.rev)} · receivables ${fmtN(x.r.cy.rec)} · due from related parties ${fmtN(x.r.cy.rprec)}${!R(x.r.cy.rec) && R(x.r.cy.rev) ? ' · no receivables at year end – confirm all invoices were collected and there is no unbilled work' : ''}`, fix: cklText('policies', 'Revenue policy')})},
+  {id: 'ecl', grp: 'disc', text: 'Receivables and related party balances assessed for recoverability – ageing, expected credit loss, current or non-current',
+    when: x => nz0(x.r.cy.rec, x.r.cy.rprec) || ensureSchedules(x.en).some(s => s.custom && ['ca', 'nca'].includes(s.sec) && R(x.r.cy[s.key])),
+    auto: x => ({st: 'todo', msg: `Receivables ${fmtN(x.r.cy.rec)} · due from related parties ${fmtN(x.r.cy.rprec)}${ensureSchedules(x.en).filter(s => s.custom && ['ca', 'nca'].includes(s.sec) && R(x.r.cy[s.key])).map(s => ` · ${s.label} ${fmtN(x.r.cy[s.key])}`).join('')}`})},
+  {id: 'lease', grp: 'disc', text: 'Leases: tenancy of 12 months or less (short-term exemption), otherwise right-of-use asset and lease liability (IFRS 16)',
+    auto: x => { const rent = x.en.tb.filter(l => x.sm[l.fs] && ['exp', 'dc'].includes(x.sm[l.fs].sec) && /\brent|lease|tenancy/i.test(x.nm(l)) && R(l.amt)); const t = rent.reduce((a, l) => a + R(l.amt), 0);
+      return rent.length ? {st: 'todo', msg: `Rent expense ${fmtN(t)} (${rent.slice(0, 2).map(l => l.ledger || l.caption).join(', ')}) – note the tenancy term from the contract`} : {st: 'ok', msg: 'No rent or lease expense in the ledger'}; }},
+  {id: 'cf-class', grp: 'disc', text: 'Cash flow classification: advances to related parties in investing, owner and loan movements in financing, non-cash items removed',
+    auto: x => ({st: 'todo', msg: `Operating ${fmtN(x.r.cf.op)} · investing ${fmtN(x.r.cf.invTot)} · financing ${fmtN(x.r.cf.finTot)}`, fix: `<button class="btn small" data-act="edit-cfpy">Cash flow editor</button>`})},
+  {id: 'risk-sens', grp: 'disc', text: 'Risk note figures make sense – no “AED 0” interest-rate sensitivity when there are no borrowings',
+    auto: x => { const noB = !nz0(x.r.cy.ltl + x.r.cy.stb, x.r.py.ltl + x.r.py.stb);
+      return /\{sens\}/.test(x.T.riskText || '') && noB ? {st: 'warn', msg: 'There are no borrowings, so the interest-rate sentence prints “approximately AED 0”', fix: `<button class="btn small" data-act="ckl-fix-sens">Replace with “no interest-bearing borrowings”</button>`}
+        : {st: 'ok', msg: noB ? 'No sensitivity figure printed' : 'Borrowings exist – sensitivity worked out'}; }},
+  {id: 'gc-events', grp: 'disc', text: 'Going concern and events after the reporting date considered (licence renewal, losses, major changes)',
+    auto: x => x.r.cy.eq < 0 ? {st: 'warn', msg: `Equity is negative (${fmtN(x.r.cy.eq)}) – going concern needs support (owner’s letter, disclosure)`} : {st: 'todo', msg: `Equity ${fmtN(x.r.cy.eq)} · profit for the year ${fmtN(x.r.cy.pat)}`}},
+  /* ---------- auditor's report ---------- */
+  {id: 'report-date', grp: 'ar', text: 'Report / approval date entered and after the year end (not left from last year)',
+    auto: x => { const d = parseDateText(x.p.reportDate), ye = parseDateText(`${x.p.yearEndText || 'December 31'} ${x.Y}`);
+      if (!String(x.p.reportDate || '').trim()) return {st: 'bad', msg: 'No report date – the approval note prints “…” and the auditor’s signature has no date', fix: cklNav('profile', 'Enter the report date')};
+      if (d && ye && d <= ye) return {st: 'bad', msg: `Report date ${x.p.reportDate} is not after the year end – it may be left from FY${x.PY}`, fix: cklNav('profile', 'Update the report date')};
+      return d ? {st: 'ok', msg: `Report date ${x.p.reportDate}`} : {st: 'todo', msg: `Could not read “${x.p.reportDate}” as a date – check it by eye`}; }},
+  {id: 'auditor', grp: 'ar', text: 'Audit firm, signing partner and registration no. entered and correct', when: x => x.audit,
+    auto: x => { const miss = [['auditor', 'audit firm'], ['partner', 'signing partner'], ['auditorReg', 'registration no.'], ['auditorCity', 'auditor city']].filter(([k]) => !String(x.p[k] || '').trim()).map(a => a[1]);
+      return miss.length ? {st: 'bad', msg: 'Missing: ' + miss.join(', '), fix: cklNav('profile', 'Company profile')} : {st: 'ok', msg: `${x.p.auditor} · ${x.p.partner} · Reg. ${x.p.auditorReg}`}; }},
+  {id: 'ar-oi', grp: 'ar', text: 'Auditor’s report has an “Other Information” section (ISA 720) when the management report is included',
+    when: x => x.audit && !x.LAY.hide.mr && !x.LAY.hide.ar,
+    auto: x => /other information/i.test(x.T.auditorReport || '') ? {st: 'ok', msg: 'Other Information section found'} : {st: 'bad', msg: 'The management report is included but the auditor’s report has no Other Information section', fix: `<button class="btn small" data-act="ckl-fix-oi">Insert the standard section</button>`}},
+  {id: 'final', grp: 'ar', text: 'Pages set to Final (no “Draft for review” footer) for the issued copy',
+    auto: x => x.en.settings.draft ? {st: 'warn', msg: 'Pages still print “Draft for review”', fix: `<button class="btn small" data-act="ckl-final">Set to Final</button>`} : {st: 'ok', msg: 'Final – no draft label'}},
+  {id: 'letters', grp: 'ar', text: 'Management representation letter signed and dated; engagement letter and independence on file', when: x => x.audit,
+    auto: x => ({st: 'todo', msg: 'Write the letter dates in the note'})},
+  {id: 'proof', grp: 'ar', text: 'Final read-through of the pages: names and spellings, figures, note references, index page numbers and signatures',
+    auto: x => ({st: 'todo', msg: 'Open the page preview and read every page once', fix: `<button class="btn small" data-act="pdf-preview">Preview pages</button>`})}
+];
+
+function cklEval(c, en){
+  const x = cklCtx(c, en), CK = en.checklist || {}, marks = CK.marks || {}, notes = CK.notes || {};
+  const defs = CKL_ITEMS.concat(((DB.settings || {}).cklCustom || []).map(i => ({id: 'u:' + i.id, grp: i.grp, text: i.text, custom: true})));
+  const out = [];
+  defs.forEach(d => {
+    let a;
+    try { if (d.when && !d.when(x)) return; a = d.auto ? d.auto(x) : {st: 'todo', msg: ''}; }
+    catch (e) { console.warn('checklist', d.id, e); a = {st: 'todo', msg: 'The automatic check could not run – review by hand'}; }
+    const m = marks[d.id]; let st = a.st, stale = false;
+    if (m && (m.st === 'ok' || m.st === 'na')){
+      if (['bad', 'warn'].includes(a.st) && m.sig !== a.msg) stale = true; // the finding changed after it was signed off
+      else st = m.st === 'na' ? 'na' : a.st === 'ok' ? 'ok' : 'done';
+    }
+    out.push({id: d.id, grp: d.grp, text: d.text, custom: !!d.custom, auto: a, st, mark: m, stale, note: notes[d.id] || ''});
+  });
+  return out;
+}
+const cklOpen = list => list.filter(i => ['bad', 'warn', 'todo'].includes(i.st));
+const CKL_CHIP = {bad: ['bad', 'Issue'], warn: ['warn', 'Check'], todo: ['neutral', 'To review'], ok: ['ok', 'Passed'], done: ['ok', 'Reviewed'], na: ['neutral', 'N/A']};
+const cklDomId = id => 'ckl-' + String(id).replace(/[^\w-]/g, '_');
+
+function vChecklist(){
+  const c = client(), en = eng(), list = cklEval(c, en), open = cklOpen(list), CK = en.checklist || {};
+  const cnt = st => list.filter(i => i.st === st).length;
+  const cleared = list.length - open.length, pct = list.length ? Math.round(cleared / list.length * 100) : 100;
+  const show = UI.cklOpenOnly ? open : list;
+  const item = i => { const did = cklDomId(i.id), m = i.mark && !i.stale ? i.mark : null;
+    return `<li class="ckl-it st-${i.st}" id="${did}">
+      <span class="chip ${CKL_CHIP[i.st][0]} ckl-chip">${CKL_CHIP[i.st][1]}</span>
+      <div class="ckl-main"><div class="ckl-t">${e_(i.text)}${i.custom ? ' <span class="chip accent">firm item</span>' : ''}</div>
+        ${i.auto.msg ? `<div class="ckl-msg small">${e_(i.auto.msg)}</div>` : ''}
+        ${i.stale ? `<div class="ckl-msg small warn-t">The finding changed after it was marked on ${e_(fmtStamp(i.mark.at))} – review it again</div>` : ''}
+        ${m ? `<div class="small muted">${m.st === 'na' ? 'Marked not applicable' : 'Marked reviewed'} · ${e_(fmtStamp(m.at))}</div>` : ''}
+        ${i.auto.fix ? `<div class="ckl-acts">${i.auto.fix}</div>` : ''}
+        <input class="ckl-note" id="${did}-note" data-ckl-note="${e_(i.id)}" value="${e_(i.note)}" placeholder="Note / evidence – e.g. “MOA Art. 14: 10% until 50% of capital”" aria-label="Note">
+      </div>
+      <div class="ckl-mark">${i.auto.st === 'ok' && !i.mark ? '' : `<button class="btn small${m && m.st === 'ok' ? ' on' : ''}" data-act="ckl-mark" data-id="${e_(i.id)}" data-st="ok" aria-pressed="${!!(m && m.st === 'ok')}">✓ Reviewed</button><button class="btn small${m && m.st === 'na' ? ' on' : ''}" data-act="ckl-mark" data-id="${e_(i.id)}" data-st="na" aria-pressed="${!!(m && m.st === 'na')}">N/A</button>`}${i.custom ? `<button class="linkish danger-t" data-act="ckl-del" data-id="${e_(i.id)}">Remove</button>` : ''}</div></li>`; };
+  const groups = CKL_GROUPS.map(([g, label]) => { const its = show.filter(i => i.grp === g); if (!its.length) return '';
+    const all = list.filter(i => i.grp === g), op = cklOpen(all).length;
+    return `<section class="panel"><div class="row between"><h2>${label}</h2><span class="chip ${op ? 'warn' : 'ok'}">${op ? `${op} open` : 'cleared'}</span></div><ul class="ckl-list">${its.map(item).join('')}</ul></section>`; }).join('');
+  const ov = (CK.overrides || []).slice().reverse();
+  return `<section class="panel"><div class="head"><div><h1>Pre-issue checklist</h1><p class="sub">${e_(c.name)} · FY${en.year} · Clear every item before issuing the final report. Automatic items update as you work; review items need your tick – write the evidence in the note.</p></div>
+      <div class="row"><button class="btn" data-act="ckl-xlsx">${IC.down}Download checklist</button><button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div>
+    <div class="ckl-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Checklist cleared"><span style="width:${pct}%"></span></div>
+    <div class="row between"><div class="row"><span class="chip bad">${cnt('bad')} issue${cnt('bad') === 1 ? '' : 's'}</span><span class="chip warn">${cnt('warn')} to check</span><span class="chip neutral">${cnt('todo')} to review</span><span class="chip ok">${cleared} of ${list.length} cleared</span></div>
+      <button class="linkish" data-act="ckl-filter">${UI.cklOpenOnly ? 'Show all items' : 'Show only open items'}</button></div>
+    ${open.length ? '' : '<div class="banner ok">Everything is cleared – the report can be issued.</div>'}</section>
+  ${groups || '<section class="panel"><p>No open items.</p></section>'}
+  <section class="panel"><h2>Add your own item</h2><p class="sub">Firm items appear in the checklist of every client and every future year – add each lesson learned so it is never missed again.</p>
+    <div class="form-grid three"><div class="field"><label for="ckl-new-grp">Group</label><select id="ckl-new-grp">${CKL_GROUPS.map(([g, l]) => `<option value="${g}">${e_(l)}</option>`).join('')}</select></div>
+      <div class="field wide"><label for="ckl-new-t">Item</label><input id="ckl-new-t" placeholder="e.g. Bank confirmation received for every bank account"></div></div>
+    <div class="row" style="margin-top:8px"><button class="btn" data-act="ckl-add">${IC.plus}Add to the checklist</button></div></section>
+  ${ov.length ? `<section class="panel"><h2>Issued with open items</h2><div class="table-wrap"><table class="ui compact"><thead><tr><th>When</th><th>Download</th><th>Reason</th><th class="r">Open items</th></tr></thead><tbody>${ov.map(o => `<tr><td>${e_(fmtStamp(o.at))}</td><td>${e_(o.what || '')}</td><td>${e_(o.reason)}</td><td class="r" title="${e_((o.open || []).join('\n'))}">${(o.open || []).length}</td></tr>`).join('')}</tbody></table></div></section>` : ''}`;
+}
+
+/* Final report downloads: warn while checklist items are open; issuing anyway needs a reason, kept with the engagement */
+const CKL_WHAT = {'dl-pdf': 'PDF', 'print-pdf': 'Print', 'dl-word': 'Word', 'dl-excel': 'Excel', 'drive-pdf': 'PDF to Google Drive'};
+function cklGate(t){
+  const c = client(), en = eng(); if (!c || !en) return false;
+  if (UI.cklPass){ UI.cklPass = false; return false; }
+  if (en.settings.draft) return false; // draft copies for review are not the issued report
+  let open; try { const rank = {bad: 0, warn: 1, todo: 2}; open = cklOpen(cklEval(c, en)).sort((a, b) => rank[a.st] - rank[b.st]); } catch (e) { console.warn('checklist', e); return false; }
+  if (!open.length) return false;
+  UI.cklBtn = t;
+  modal(`<div class="qd"><h2>${open.length} checklist item${open.length > 1 ? 's are' : ' is'} still open</h2>
+    <p class="sub">This report is set to Final. Clear the pre-issue checklist first, or give the reason for issuing it now – the reason is saved with FY${en.year}.</p>
+    <ul class="ckl-gate">${open.slice(0, 12).map(i => `<li><span class="chip ${CKL_CHIP[i.st][0]}">${CKL_CHIP[i.st][1]}</span><span>${e_(i.text)}</span></li>`).join('')}${open.length > 12 ? `<li class="muted">+${open.length - 12} more</li>` : ''}</ul>
+    <div class="field"><label for="ckl-reason">Reason for issuing with open items</label><textarea id="ckl-reason" rows="2" placeholder="e.g. Bank copy needed today – items cleared before the signed copy"></textarea></div>
+    <div class="foot"><button class="btn" data-close>Cancel</button><button class="btn" data-act="ckl-go">Open the checklist</button><button class="btn primary" data-act="ckl-override" data-what="${e_(t.dataset.act)}">Issue anyway</button></div></div>`, true);
+  return true;
+}
+function cklExcel(c, en){
+  const list = cklEval(c, en), CK = en.checklist || {};
+  const rows = [[`${c.name} – pre-issue checklist FY${en.year}`], [`Printed ${fmtStamp(new Date().toISOString())} · ${cklOpen(list).length} open of ${list.length}`], [],
+    ['Group', 'Item', 'Status', 'Finding', 'Note / evidence', 'Signed off', 'Signed off at']];
+  CKL_GROUPS.forEach(([g, gl]) => list.filter(i => i.grp === g).forEach(i => rows.push([gl, i.text, CKL_CHIP[i.st][1], i.auto.msg || '', i.note || '', i.mark && !i.stale ? (i.mark.st === 'na' ? 'Not applicable' : 'Reviewed') : '', i.mark && !i.stale ? fmtStamp(i.mark.at) : ''])));
+  if ((CK.overrides || []).length){ rows.push([], ['Issued with open items'], ['When', 'Download', 'Reason', 'Open items']); CK.overrides.forEach(o => rows.push([fmtStamp(o.at), o.what || '', o.reason, (o.open || []).join('; ')])); }
+  const ws = XLSX.utils.aoa_to_sheet(rows); ws['!cols'] = [{wch: 28}, {wch: 60}, {wch: 11}, {wch: 60}, {wch: 40}, {wch: 14}, {wch: 20}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Checklist');
+  return new Blob([XLSX.write(wb, {bookType: 'xlsx', type: 'array'})], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
 function checksList(r){
   return r.checks.map(x => `<li class="ck ${x.level}">${x.key ? `<button class="ck-btn" data-act="check-why" data-key="${x.key}" title="Click to see what causes this"><span class="dot"></span><span class="ck-t">${e_(x.text)}</span><span class="ck-why">${x.ok ? 'details' : 'why?'}</span></button>` : `<span class="dot"></span>${e_(x.text)}`}</li>`).join('');
 }
@@ -3470,7 +3828,7 @@ function checkBody(key){
       list.push({label: `FY${PY} retained earnings line may be the opening balance`, amt: -(r.py.pat - r.py.div - r.py.lrTransfer + r.py.reItems), how: `The FY${PY} column needs the closing balance (after FY${PY} profit, dividend and transfer).`, btn: openBtn('re', 'Open retained earnings', 'py')});
       if (r.ppe.length && r.ppeLines.n) list.push({label: `FY${PY} PPE ledger lines differ from the PPE schedule`, amt: r.ppeLines.py - T.nbvPy, how: `The statement uses the schedule (${fmtN(T.nbvPy)}), not the ledger lines (${fmtN(r.ppeLines.py)}).`, btn: whyBtn('ppe-py', 'See the PPE difference')});
     }
-    list.push(b.ct ? {label: `Corporate tax FY${FY} is added to payables`, amt: -b.ct, how: `If the payables ledger already holds the corporate tax provision (${fmtN(b.ct)}), it is counted twice.`, btn: openBtn('pay', 'Open payables', yr) + '<button class="btn small" data-drill="ct">Corporate tax</button>'} : null);
+    list.push(b.ct && !b.ctLedger ? {label: `Corporate tax FY${FY} is added to payables`, amt: -b.ct, how: `If the payables ledger already holds the corporate tax provision (${fmtN(b.ct)}), it is counted twice.`, btn: openBtn('pay', 'Open payables', yr) + whyBtn('ct', 'Corporate tax')} : null);
     const us = yr === 'cy' ? unmSum : unmSumPy;
     list.push(us ? {label: 'Ledger lines not in any schedule', amt: us, how: 'They are left out of the statement.', btn: whyBtn('unmapped', 'Put them in schedules')} : null);
     body += causes(d, list);
@@ -3525,6 +3883,20 @@ function checkBody(key){
       body += `<p class="small">${d ? `For FY${PY} to reconcile, cash at the beginning of FY${PY} would need to be <b>${fmtN(need)}</b> (now ${fmtN(bk.open)}).${E.firstPy ? ` FY${PY} is the first year, so it should be nil – a line is missing or wrong.` : ''}` : ''}</p>`;
     }
     body += causes(d, list) + `<div class="row"><button class="btn small" data-act="edit-cfpy">All cash flow lines</button></div>`;
+  } else if (key === 'ct'){
+    title = 'Corporate tax – counted once';
+    const src = (b, mode) => b.ctLedger ? 'from the “Corporate tax (in the ledger)” schedule' : mode === 'manual' ? 'typed amount' : '9% above AED 375,000';
+    body = tbl([`FY${Y}`, `FY${PY}`], tr('Profit before tax', [r.cy.pbt, r.py.pbt]) + tr('9% above AED 375,000 (after tax adjustments)', [r.cy.ctCalc, r.py.ctCalc])
+      + tr('Corporate tax charge used', [fmtN(r.cy.ct) + muted(src(r.cy, S.ctMode)), fmtN(r.py.ct) + muted(src(r.py, en.pyInfo.ctMode))], 'tot')
+      + tr('Provision added to payables by the software', [r.cy.payTot - r.cy.pay, r.py.payTot - r.py.pay]));
+    const ctLines = en.tb.filter(l => CT_NAME.test(`${l.ledger || ''} ${l.caption || ''}`) || l.fs === 'ctx');
+    const lineRows = ctLines.map(l => `<tr><td>${e_(l.ledger || l.caption || '(no name)')}</td><td><select id="q-ctfs-${l.id}" data-line="${l.id}" data-field="fs" aria-label="Schedule for ${e_(l.ledger)}">${schedOptions(en, l.fs)}</select></td><td class="r">${fmtN(l.amt)}</td><td class="r">${fmtN(l.py)}</td></tr>`).join('');
+    body += `<h3 class="h3">Corporate tax lines in the ledger</h3>${ctLines.length ? `<div class="table-wrap"><table class="ui compact q-tab"><thead><tr><th>Ledger</th><th>Schedule</th><th class="r">FY${Y}</th><th class="r">FY${PY}</th></tr></thead><tbody>${lineRows}</tbody></table></div>` : '<p class="small muted">No ledger line is named corporate tax.</p>'}
+      <h3 class="h3">How to fix a double count</h3><ol class="setup small">
+        <li><b>The books already hold the tax</b> (Dr tax expense, Cr corporate tax payable): keep the payable line in payables and put the <b>tax expense</b> line in <b>Corporate tax (in the ledger)</b>. The charge then comes from the ledger and the software stops adding the provision.</li>
+        <li><b>The payable line was typed only to show the tax</b>: delete it – the software adds the provision from the tax calculation.</li>
+        <li>If the tax debit was posted to retained earnings or the current account, make a separate “Corporate tax expense” line for it and put it in Corporate tax (in the ledger).</li></ol>
+      <div class="row"><button class="btn small" data-drill="pay">Open payables</button><button class="btn small" data-drill="ct">Corporate tax settings</button></div>`;
   } else if (key === 'docs'){
     title = 'Supporting documents';
     const rows = schedulesInOrder(en).map(x => { const ls = en.tb.filter(l => l.fs === x.key), miss = ls.filter(l => !(l.docs && l.docs.length)); return miss.length ? tr(`<button class="linkish" data-drill="${x.key}">${e_(x.label)}</button>` + muted(miss.slice(0, 3).map(l => e_(l.ledger)).join(', ') + (miss.length > 3 ? ' …' : '')), [`${miss.length} of ${ls.length}`]) : ''; }).join('');
@@ -5022,6 +5394,53 @@ document.addEventListener('click', async ev => {
       case 'q-add-line': { const l = {id: uid(), ledger: '', fs: t.dataset.key, caption: '', amt: 0, py: 0, docs: []}; en.tb.push(l); save(); render(); const el = document.getElementById('q-led-' + l.id); if (el) el.focus(); break; }
       case 'q-add-ppe': { const p = {id: uid(), name: '', life: '', costOpen: 0, add: 0, disp: 0, depOpen: 0, charge: 0, depDisp: 0, docs: []}; en.ppe.push(p); save(); render(); const el = document.getElementById('q-pm-name-' + p.id); if (el) el.focus(); break; }
       case 'soce-open': soceModal(); break;
+      /* pre-issue checklist */
+      case 'ckl-mark': {
+        const id = t.dataset.id, st = t.dataset.st, it = cklEval(c, en).find(i => i.id === id); if (!it) break;
+        const CK = en.checklist = en.checklist || {}; CK.marks = CK.marks || {};
+        const cur = CK.marks[id];
+        if (cur && cur.st === st && !it.stale){ delete CK.marks[id]; save(); render(); break; }
+        if (st === 'ok' && ['bad', 'warn'].includes(it.auto.st) && !String(it.note || '').trim()){
+          toast('Write a note first – why this finding is acceptable', true); const n = document.getElementById(cklDomId(id) + '-note'); if (n) n.focus(); break; }
+        CK.marks[id] = {st, at: new Date().toISOString(), sig: it.auto.msg || ''}; save(); render(); break;
+      }
+      case 'ckl-filter': UI.cklOpenOnly = !UI.cklOpenOnly; render(); break;
+      case 'ckl-add': {
+        const txt = (document.getElementById('ckl-new-t') || {}).value || '', grp = (document.getElementById('ckl-new-grp') || {}).value || 'disc';
+        if (!txt.trim()){ toast('Type the checklist item first', true); break; }
+        DB.settings.cklCustom = DB.settings.cklCustom || []; DB.settings.cklCustom.push({id: uid(), grp, text: txt.trim()}); save(); render(); toast('Added to the checklist of every client'); break;
+      }
+      case 'ckl-del': {
+        const id = String(t.dataset.id || '').replace(/^u:/, '');
+        if (confirm('Remove this firm item from the checklist of every client?')){ DB.settings.cklCustom = (DB.settings.cklCustom || []).filter(i => i.id !== id); save(); render(); } break;
+      }
+      case 'ckl-text': UI.view = 'texts'; UI.textOpen = t.dataset.k; closeModal(); save(); render(); window.scrollTo(0, 0); break;
+      case 'ckl-final': en.settings.draft = false; save(); render(); toast('Pages set to Final'); break;
+      case 'ckl-fix-oi': {
+        let a = en.texts.auditorReport || ''; if (/other information/i.test(a)) break;
+        const at = a.search(/^##\s*Responsibilities of Management/m), at2 = a.search(/^##\s*Auditor.s Responsibilities/m), at3 = a.indexOf('[[AUDITOR_SIGNATURE]]');
+        const pos = at >= 0 ? at : at2 >= 0 ? at2 : at3 >= 0 ? at3 : a.length;
+        en.texts.auditorReport = a.slice(0, pos) + AR_OTHER_INFO + '\n\n' + a.slice(pos); save(); render(); toast('Other Information section added to the auditor’s report'); break;
+      }
+      case 'ckl-fix-sens': {
+        en.texts.riskText = String(en.texts.riskText || '').replace(/^.*\{sens\}.*$/m, line => { const pre = line.match(/^(\*\*[^*]+\*\*\s*[–-]\s*)/); return (pre ? pre[1] : '') + 'the Entity has no interest-bearing borrowings and is therefore not exposed to significant interest rate risk.'; });
+        save(); render(); toast('Interest rate sentence replaced'); break;
+      }
+      case 'ckl-add-rp': {
+        en.customNotes = en.customNotes || []; en.customNotes.push({id: uid(), title: 'Related party transactions and balances', text: RP_NOTE_TEXT});
+        UI.view = 'texts'; UI.textOpen = 'custom'; closeModal(); save(); render(); window.scrollTo(0, 0); toast('Related party note added – fill in the names and amounts'); break;
+      }
+      case 'ckl-xlsx': download(cklExcel(c, en), `${safeName(c.name)}_Checklist_${en.year}.xlsx`); break;
+      case 'ckl-go': closeModal(); UI.view = 'checklist'; save(); render(); window.scrollTo(0, 0); break;
+      case 'ckl-override': {
+        const reason = ((document.getElementById('ckl-reason') || {}).value || '').trim();
+        if (reason.length < 5){ toast('Type the reason for issuing with open items', true); const r0 = document.getElementById('ckl-reason'); if (r0) r0.focus(); break; }
+        const open = cklOpen(cklEval(c, en)), what = t.dataset.what;
+        const CK = en.checklist = en.checklist || {}; (CK.overrides = CK.overrides || []).push({at: new Date().toISOString(), what: CKL_WHAT[what] || what, reason, open: open.map(i => i.text)});
+        save(); closeModal();
+        const b = UI.cklBtn && document.body.contains(UI.cklBtn) ? UI.cklBtn : document.querySelector(`[data-act="${what}"]`);
+        UI.cklBtn = null; if (b){ UI.cklPass = true; b.click(); } break;
+      }
       case 'check-why': checkModal(t.dataset.key); break;
       case 'fix-ppe-lines': { const r0 = compute(en, prev()), yr = t.dataset.yr, f = yr === 'py' ? 'py' : 'amt', fs = t.dataset.fs || 'ppe';
         const target = fs === 'ppe' ? (yr === 'py' ? r0.ppeT.nbvPy : r0.ppeT.nbv) : (yr === 'py' ? r0.ppeT.pyCharge : r0.ppeT.charge);
@@ -5104,10 +5523,10 @@ document.addEventListener('click', async ev => {
         const n = rollForward(c, latest); if (c.engagements.some(x => x.year === n.year)){ toast(`FY${n.year} already exists`, true); break; }
         c.engagements.push(n); UI.engId = n.id; UI.view = 'tb'; save(); render(); toast(`FY${n.year} created — prior year figures carried forward`); break;
       }
-      case 'dl-pdf': { t.disabled = true; toast('Preparing the PDF – this takes a few seconds…'); try { const {doc, only} = await pdfFor(t); download(await blobOf(doc), `${safeName(c.name)}_FS_${en.year}${only ? '_selected' : ''}.pdf`); } finally { t.disabled = false; } break; }
-      case 'print-pdf': { t.disabled = true; try { const {doc} = await pdfFor(t); await printPdf(doc); } finally { t.disabled = false; } break; }
+      case 'dl-pdf': { if (cklGate(t)) break; t.disabled = true; toast('Preparing the PDF – this takes a few seconds…'); try { const {doc, only} = await pdfFor(t); download(await blobOf(doc), `${safeName(c.name)}_FS_${en.year}${only ? '_selected' : ''}.pdf`); } finally { t.disabled = false; } break; }
+      case 'print-pdf': { if (cklGate(t)) break; t.disabled = true; try { const {doc} = await pdfFor(t); await printPdf(doc); } finally { t.disabled = false; } break; }
       case 'pdf-preview': { t.disabled = true; toast('Laying out the pages…'); try { const {doc, only, withLh} = await pdfFor(t, true); UI.pvOnly = only; UI.pvWithLh = withLh; await previewPdf(doc, only ? 'selected sections' : ''); } finally { t.disabled = false; } break; }
-      case 'dl-word': { t.disabled = true; try { const M = buildReport(c, en, prev()); const num = await pdfPageNumbers(M); download(wordFile(M, num), `${safeName(c.name)}_FS_${en.year}.doc`); } finally { t.disabled = false; } break; }
+      case 'dl-word': { if (cklGate(t)) break; t.disabled = true; try { const M = buildReport(c, en, prev()); const num = await pdfPageNumbers(M); download(wordFile(M, num), `${safeName(c.name)}_FS_${en.year}.doc`); } finally { t.disabled = false; } break; }
       case 'lay-move': { const li = t.closest('li'); const nb = +t.dataset.dir < 0 ? li.previousElementSibling : li.nextElementSibling; if (nb && layMove(en, t.dataset.type, t.dataset.id, nb.dataset.id, +t.dataset.dir > 0)){ save(); render(); } break; }
       case 'lay-reset-page': { const img = layoutOf(en).page.lhImage; layoutOf(en).page = Object.assign({}, PAGE_DEFAULT, {lhImage: img}); save(); render(); break; }
       case 'lh-remove': layoutOf(en).page.lhImage = ''; save(); render(); break;
@@ -5126,8 +5545,9 @@ document.addEventListener('click', async ev => {
       case 'note-text-above': { UI.noteTextAbove = UI.noteTextAbove || {}; UI.noteTextAbove[t.dataset.key] = true; render(); const el = document.getElementById('nt-a-' + t.dataset.key); if (el) el.focus(); break; }
       case 'note-text-del': { const x = SM(en)[t.dataset.key]; if (x && ((x.textBelow || x.textAbove) ? confirm('Remove the text from this note?') : true)){ x.textBelow = ''; x.textAbove = ''; (UI.noteText || {})[x.key] = false; (UI.noteTextAbove || {})[x.key] = false; save(); render(); } break; }
       case 'do-retrieve': doRetrieve(); break;
-      case 'dl-excel': download(excelFile(buildReport(c, en, prev())), `${safeName(c.name)}_FS_${en.year}.xlsx`); break;
+      case 'dl-excel': if (cklGate(t)) break; download(excelFile(buildReport(c, en, prev())), `${safeName(c.name)}_FS_${en.year}.xlsx`); break;
       case 'drive-pdf': {
+        if (cklGate(t)) break;
         if (!Drive.connected()) await Drive.connect(true);
         toast('Preparing PDF…'); const M = buildReport(c, en, prev()); const doc = await makePdf(M);
         const blob = await new Promise(res => doc.getBlob(res));
@@ -5212,6 +5632,7 @@ document.addEventListener('change', async ev => {
   }
   if (el.id === 'show-empty'){ UI.showEmpty = el.checked; save(); render(); return; }
   if (el.dataset.ui){ UI[el.dataset.ui] = el.value; render(); return; }
+  if (el.dataset.cklNote !== undefined){ const CK = en.checklist = en.checklist || {}; (CK.notes = CK.notes || {})[el.dataset.cklNote] = el.value; save(); return; }
   if (el.dataset.line){ const l = en.tb.find(x => x.id === el.dataset.line); const f = el.dataset.field; if (f === 'fs'){ moveLine(en, l, el.value); UI.justAdded[el.value] = true; } else if (['amt', 'py'].includes(f)){ try { fxInput(c, en, `L:${l.id}:${f}`, el.value, v => { l[f] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
     else l[f] = el.value;
     if (f === 'ledger' && !l.fs){ const k = autoMap(l.ledger, en); if (k) moveLine(en, l, k); } save(); scheduleRender(); return; }
