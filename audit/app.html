@@ -312,7 +312,7 @@ table.ui.compact .sg-sh{min-width:90px}table.ui.compact .sg-sh[data-f=name]{min-
 .numi.ov{box-shadow:inset 3px 0 0 var(--accent)}.numi.ov.fx{box-shadow:inset 3px 0 0 var(--ok)}
 body.fx-picking [data-ref]:not(:focus){cursor:copy}
 body.fx-picking [data-ref]:not(:focus):hover{outline:2px dashed var(--ok);outline-offset:1px}
-#fx-help{position:fixed;z-index:90;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);font-size:13px;display:flex;flex-direction:column;max-height:340px;max-width:calc(100vw - 16px)}
+#fx-help{position:fixed;z-index:90;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);font-size:13px;display:flex;flex-direction:column;max-height:380px;max-width:calc(100vw - 16px)}
 #fx-help .fh-head{padding:8px 10px;border-bottom:1px solid var(--line);line-height:1.35}
 #fx-help .fh-res{padding:6px 10px;font-weight:700;color:var(--ok);font-variant-numeric:tabular-nums}
 #fx-help .fh-res.fh-err{color:var(--bad);font-weight:600}
@@ -321,6 +321,9 @@ body.fx-picking [data-ref]:not(:focus):hover{outline:2px dashed var(--ok);outlin
 #fx-help .fh-it{all:unset;box-sizing:border-box;display:flex;justify-content:space-between;gap:10px;width:100%;padding:4px 10px;cursor:pointer}
 #fx-help .fh-it:hover,#fx-help .fh-it:focus-visible{background:var(--hover)}
 #fx-help .fh-it b{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+#fx-help .fh-tabs{display:flex;gap:4px;padding:6px 8px 0;flex-wrap:wrap}#fx-help .fh-tab{all:unset;cursor:pointer;padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-weight:600;font-size:12px}
+#fx-help .fh-tab[aria-pressed=true]{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}#fx-help .fh-tab[aria-pressed=true] .muted{color:inherit;opacity:.75}
+#fx-help .fh-it.fh-tot span{font-weight:700}#fx-help .fh-it.fh-line span{padding-left:12px;color:var(--ink)}#fx-help .fh-it.fh-line b{font-weight:400}
 #fx-help .fh-foot{padding:6px 10px;border-top:1px solid var(--line)}
 .gs-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding:8px 12px;border:1px dashed var(--line);border-radius:8px;background:var(--surface-2)}
 .gs-bar.on{border-style:solid;border-color:#BFE0CC;background:#F1F8F4}
@@ -354,6 +357,7 @@ table.cfpy th[scope=row]{font-weight:400}
 .qd .q-soce input.numi{min-width:86px}
 table.matrix.cfpy{table-layout:fixed;min-width:900px}table.matrix.cfpy thead th{white-space:normal;vertical-align:bottom}table.cfpy td.cf-auto{color:var(--muted)}table.cfpy td.cf-dif{background:#FBF0DC;color:#7a5200;font-weight:700}table.cfpy input.numi.dv{box-shadow:inset 3px 0 0 var(--warn);background:#FFF8EC}.cf-review{margin:8px 0}.cf-review .btn{margin-left:8px}tr.wdv-diff th{color:var(--bad);font-weight:600}table.matrix.cfpy thead th:first-child{min-width:0}table.matrix.cfpy td input{min-width:0}
 table.cfpy td.cf-h{white-space:nowrap;padding-left:2px;padding-right:2px}
+table.cfpy tr.tot th[scope=row]{white-space:normal;overflow-wrap:anywhere;line-height:1.3}table.cfpy td.cf-acts{white-space:normal;text-align:right}table.cfpy td.cf-acts .linkish{margin-right:4px;white-space:nowrap}table.matrix.cfpy{min-width:1060px}
 .cf-grip{cursor:grab;color:var(--muted);padding:0 5px;user-select:none;font-weight:700;letter-spacing:-2px;vertical-align:middle}
 table.cfpy .cf-mv{width:22px;height:24px;font-size:10px}
 table.cfpy input.cf-label{width:100%;min-width:230px;border:1px solid transparent;background:transparent;padding:5px 7px;border-radius:6px;font:inherit;font-weight:400;color:var(--ink)}
@@ -652,8 +656,8 @@ function compute(eng, prevEng){
     K = 'ppe-pydiff'; if (ppeT.pyDiff) { const n0 = v => Math.round(v || 0).toLocaleString('en-US'); add(false, `PPE comparative ${eng.year - 1} does not add up: opening ${n0(ppeT.nbvPyOpen)} + additions ${n0(ppeT.pyAdd)} − disposals ${n0(ppeT.pyDispWdv)} − depreciation ${n0(ppeT.pyCharge)} = ${n0(ppeT.pyCloseCalc)}, but the ${eng.year} opening balances give ${n0(ppeT.nbvPy)} – difference ${n0(ppeT.pyDiff)}`); }
     K = 'ppe-pydiff'; if (!ppeT.pyOpenTyped && ppeT.nbvPyOpen < 0) add(false, `Comparative PPE opening written down value is negative (${fmtN(ppeT.nbvPyOpen)}) – check prior year additions and depreciation`, 'warn');
   }
-  K = 'cf-cy'; add(cf.diff === 0, cf.diff === 0 ? `Cash flow ${eng.year} reconciles to cash balance` : `Cash flow ${eng.year} does not reconcile – difference ${fmtN(cf.diff)}`);
-  K = 'cf-py'; add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} reconciles` : `Prior year cash flow does not reconcile – difference ${fmtN(cfp.diff)} (enter prior year cash flow figures)`, 'warn');
+  K = 'cf-cy'; add(cf.diff === 0, cf.diff === 0 ? `Cash flow ${eng.year} ends at ${fmtN(cf.close)} = cash and cash equivalents ${fmtN(cy.cash)}` : `Cash flow ${eng.year} ends at ${fmtN(cf.close)} but cash and cash equivalents are ${fmtN(cy.cash)} – difference ${fmtN(cf.diff)}`);
+  K = 'cf-py'; add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} = cash and cash equivalents ${fmtN(py.cash)}` : `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} but cash and cash equivalents are ${fmtN(py.cash)} – difference ${fmtN(cfp.diff)}`);
   K = 'lr'; if (cy.lrClose < cy.cap * 0.5 && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below 50% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
   { const Y0 = eng.year, P0 = eng.year - 1;
     K = 're'; if (py.reAdj) add(false, `Retained earnings at the end of FY${P0} (${fmtN(py.reClose)}) differ from the FY${P0} profit less transfers (${fmtN(py.reClose - py.reAdj)}) by ${fmtN(py.reAdj)} – shown as ${Math.abs(py.reAdj) <= 10 ? 'a rounding difference' : 'a difference'} in changes in equity`, 'warn');
@@ -3273,18 +3277,20 @@ function cfLineBody(k, yr){
   if (!x){ toast('This cash flow line was removed', true); return; }
   const val = (bk, z) => z.kind === 'std' ? R(bk[z.key]) : R((bk.custom || {})[z.key]);
   const typed = ov[k] !== undefined && ov[k] !== null && ov[k] !== '', key = 'CFP:' + k, src = CF_SOURCE[k] || (x.kind === 'sched' ? k : '');
-  const cyCell = x.kind === 'user' ? `<input class="numi${fxCls(en, 'CFC:' + k)}" id="q-cfcy-${k}" data-cfcy="${k}"${fxAttrs(en, 'CFC:' + k, '')} value="${fmtSigned((en.cfCy || {})[k])}" inputmode="decimal" aria-label="FY${Y}">` : `<b>${fmtN(val(cf, x))}</b>`;
-  const hint = x.kind === 'user' ? 'A line you added – type both years.' : k === 'pat' ? `FY${Y} comes from the statement of profit or loss.` : k === 'proceeds' ? '' : src ? `FY${Y} is worked out from the <button class="linkish" data-drill="${src}" data-yr="cy">${e_(schedLabel(en, src))}</button> figures – change them to change this line.` : `FY${Y} is worked out from the schedules.`;
+  const AC = cf.auto || cf, cyv = en.cfCy || {}, typedCy = cyv[k] !== undefined && cyv[k] !== null && cyv[k] !== '';
+  const cyCell = k === 'open' ? `<b>${fmtN(cf.open)}</b>` : `<input class="numi${typedCy && x.kind !== 'user' ? ' ov' : ''}${fxCls(en, 'CFC:' + k)}" id="q-cfcy-${k}" data-cfcy="${k}"${fxAttrs(en, 'CFC:' + k, '')} value="${fmtSigned(val(cf, x))}" inputmode="decimal" aria-label="FY${Y}">`;
+  const hint = (x.kind === 'user' ? 'A line you added – type both years.' : k === 'pat' ? `FY${Y} comes from the statement of profit or loss.` : k === 'proceeds' ? '' : src ? `FY${Y} is worked out from the <button class="linkish" data-drill="${src}" data-yr="cy">${e_(schedLabel(en, src))}</button> figures.` : `FY${Y} is worked out from the schedules.`) + (x.kind === 'user' || k === 'open' ? '' : ` To replace the FY${Y} figure, type an amount or a formula (start with =) – clear it to go back to automatic.`);
   modal(`<div class="qd"><h2>Cash flow line</h2>
     ${k === 'open' ? `<p class="sub">${e_(x.label)}</p>` : `<div class="field"><label for="q-cfl-${k}">Name in the statement of cash flows</label><input id="q-cfl-${k}" data-cflabel="${k}" value="${e_(x.label)}" placeholder="${e_(x.def || '')}"></div>`}
     <div class="table-wrap"><table class="ui compact q-fig"><colgroup><col><col style="width:170px"></colgroup><tbody>
-      <tr class="${yr === 'cy' ? 'q-hlr' : ''}"><th scope="row">FY${Y}</th><td class="r">${cyCell}</td></tr>
+      ${x.kind === 'user' || k === 'open' ? '' : `<tr><th scope="row">FY${Y} automatic</th><td class="r muted">${fmtN(val(AC, x))}</td></tr>`}
+      <tr class="${yr === 'cy' ? 'q-hlr' : ''}"><th scope="row">FY${Y} in the report ${typedCy && x.kind !== 'user' ? `<button class="linkish" data-act="cfcy-reset" data-k="${k}">↺ use automatic</button>` : ''}</th><td class="r">${cyCell}</td></tr>
       ${k === 'proceeds' ? `<tr><th scope="row">FY${Y} proceeds from disposal of PPE</th><td>${`<input class="numi" id="q-disp-pr" data-bind="eng.settings.disposalProceeds" data-num="1" inputmode="decimal" value="${fmtIn(en.settings.disposalProceeds)}" aria-label="Proceeds FY${Y}">`}</td></tr>` : ''}
       <tr><th scope="row">FY${PY} automatic</th><td class="r muted">${x.kind === 'user' ? '' : fmtN(k === 'open' ? A.open : val(A, x))}</td></tr>
       <tr class="${yr === 'py' ? 'q-hlr' : ''}"><th scope="row">FY${PY} in the report ${typed && x.kind !== 'user' ? `<button class="linkish" data-act="cfpy-reset" data-k="${k}">↺ use automatic</button>` : ''}</th><td><input class="numi${typed ? ' ov' : ''}${fxCls(en, key)}" id="q-cfpy-${k}" data-cfpy="${k}"${fxAttrs(en, key, '')} value="${fmtSigned(k === 'open' ? cfp.open : val(cfp, x))}" inputmode="decimal" aria-label="FY${PY}"></td></tr>
     </tbody></table></div>
     <p class="small muted">${hint}</p>
-    <ul class="checks"><li class="ck ${cf.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${Y} ${cf.diff ? 'differs by ' + fmtN(cf.diff) : 'reconciles'}</li><li class="ck ${cfp.diff ? 'warn' : 'ok'}"><span class="dot"></span>Cash flow FY${PY} ${cfp.diff ? 'differs by ' + fmtN(cfp.diff) : 'reconciles'}</li></ul>
+    <ul class="checks"><li class="ck ${cf.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${Y} ends at ${fmtN(cf.close)}, cash ${fmtN(r.cy.cash)}${cf.diff ? ' – difference ' + fmtN(cf.diff) : ''}</li><li class="ck ${cfp.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${PY} ends at ${fmtN(cfp.close)}, cash ${fmtN(r.py.cash)}${cfp.diff ? ' – difference ' + fmtN(cfp.diff) : ''}</li></ul>
     <div class="foot"><button class="btn" data-act="edit-cfpy">All cash flow lines</button><button class="btn primary" data-close>Done</button></div></div>`);
 }
 function soceModal(){ liveModal(soceBody); }
@@ -3429,6 +3435,8 @@ function checkBody(key){
       list.push(dS ? {label: `Statement of financial position FY${Y} does not agree`, amt: dS, how: 'Movements in the cash flow come from the balance sheet, so its difference carries through.', btn: whyBtn('sofp-cy', 'See why')} : null);
       list.push(dP ? {label: `Statement of financial position FY${PY} does not agree`, amt: dP, how: `The FY${PY} balances are the starting point of the FY${Y} movements.`, btn: whyBtn('sofp-py', 'See why')} : null);
       if (T.dispWdv && !R(S.disposalProceeds)) list.push({label: 'Disposal proceeds are missing', amt: -(T.dispWdv + r.cy.gain), how: `Disposals at written down value ${fmtN(T.dispWdv)} plus gain ${fmtN(r.cy.gain)} – enter the cash received.`, btn: '<button class="btn small" data-nav="adjust">Tax, reserve &amp; prior year</button>'});
+      const AC = r.cf.auto || r.cf, cyv = en.cfCy || {};
+      lines.filter(x => x.kind !== 'user' && cyv[x.key] !== undefined && cyv[x.key] !== null && cyv[x.key] !== '' && val(AC, x) !== val(r.cf, x)).forEach(x => list.push({label: `“${e_(x.label)}”: your FY${Y} figure ${fmtN(val(r.cf, x))}, automatic ${fmtN(val(AC, x))}`, amt: val(r.cf, x) - val(AC, x), how: `Typed or formula FY${Y} figure differs from the one worked out from the balances.`, btn: `<button class="btn small" data-drill="cf:${x.key}" data-yr="cy">Change</button><button class="btn small" data-act="cfcy-reset" data-k="${x.key}">Use automatic</button>`}));
       const userCy = lines.filter(x => x.kind === 'user').reduce((a, x) => a + val(r.cf, x), 0);
       list.push(userCy ? {label: 'Lines you added with typed FY' + Y + ' figures', amt: userCy, how: 'These are not checked against the balance sheet.', btn: '<button class="btn small" data-act="edit-cfpy">Review cash flow lines</button>'} : null);
       list.push(unmSum ? {label: 'Ledger lines not in any schedule', amt: unmSum, how: 'Balance sheet movements in these lines are not in the cash flow.', btn: whyBtn('unmapped', 'Put them in schedules')} : null);
@@ -3728,7 +3736,7 @@ function fxTargetExists(en, key){
   const k = key.split(':');
   if (k[0] === 'L') return en.tb.some(x => x.id === k[1]);
   if (k[0] === 'P') return (en.ppe || []).some(x => x.id === k[1]);
-  if (k[0] === 'CFC' || (k[0] === 'CFP' && /^u/.test(k[1]))) return ((en.cfLayout || {}).custom || []).some(u => u.key === k[1]);
+  if ((k[0] === 'CFC' || k[0] === 'CFP') && /^u/.test(k[1])) return ((en.cfLayout || {}).custom || []).some(u => u.key === k[1]);
   return true;
 }
 /* recalculate every formula of a client (all years) until nothing changes */
@@ -3764,26 +3772,30 @@ function fxCatalogBuild(c, en){
   const out = [];
   const eng2 = (c.engagements || []).slice().sort((a, b) => (a === en ? -1 : b === en ? 1 : b.year - a.year));
   eng2.forEach(e => {
-    const yr = e === en ? '' : ` · FY${e.year}`, grpY = e === en ? `FY${e.year} (this year)` : `FY${e.year}`;
+    const own = e === en, yr = own ? '' : ` · FY${e.year}`;
     const memo = new Map(), r = fxCompute(c, e, memo), sm = SM(e);
-    const push = (group, label, ref, value) => out.push({group: grpY + ' – ' + group, label: String(label).replace(/[\[\]]/g, '') , ref, value});
-    schedulesInOrder(e).forEach(s => {
-      if (!R(r.cy[s.key]) && !R(r.py[s.key]) && !e.tb.some(l => l.fs === s.key)) return;
-      push('schedule totals', `${s.label} total${yr}`, `{${e.year}:S:${s.key}:cy}`, r.cy[s.key]);
-      push('schedule totals', `${s.label} total PY${yr}`, `{${e.year}:S:${s.key}:py}`, r.py[s.key]);
+    const push = (sec, group, label, ref, value, kind) => out.push({sec, group, label: String(label).replace(/[\[\]]/g, ''), ref, value, kind: kind || ''});
+    // one section per year: FY this year and FY prior year of this engagement; other saved years after
+    const sides = own ? [['cy', `FY${e.year}`, ''], ['py', `FY${e.year - 1}`, ' PY']] : [['cy', `FY${e.year} (saved year)`, ''], ['py', `FY${e.year} (saved year)`, ' PY']];
+    sides.forEach(([side, sec, suf]) => {
+      const b = side === 'py' ? r.py : r.cy, f = side === 'py' ? 'py' : 'amt';
+      const seen = {};
+      schedulesInOrder(e).forEach(s => {
+        const ls = e.tb.filter(l => l.fs === s.key);
+        if (!R(r.cy[s.key]) && !R(r.py[s.key]) && !ls.length) return;
+        push(sec, s.label, `${s.label} total${suf}${yr}`, `{${e.year}:S:${s.key}:${side}}`, b[s.key], 'total');
+        ls.forEach(l => { let base = `${(l.ledger || l.caption || 'Line').trim()} (${s.label})`; seen[base] = (seen[base] || 0) + 1; if (seen[base] > 1) base += ' #' + seen[base]; push(sec, s.label, base + suf + yr, `{${e.year}:L:${l.id}:${f}}`, l[f], 'line'); });
+      });
+      e.tb.filter(l => !sm[l.fs]).forEach(l => { let base = `${(l.ledger || l.caption || 'Line').trim()} (no schedule)`; seen[base] = (seen[base] || 0) + 1; if (seen[base] > 1) base += ' #' + seen[base]; push(sec, 'Not in a schedule', base + suf + yr, `{${e.year}:L:${l.id}:${f}}`, l[f], 'line'); });
+      if (side === 'cy'){
+        r.ppe.forEach(p => Object.entries(FX_FIELDS_PPE).forEach(([k, lbl]) => push(sec, 'Property, plant & equipment', `PPE ${p.name || 'class'}: ${lbl}${yr}`, `{${e.year}:P:${p.id}:${k}}`, p[k], 'line')));
+        if (r.ppe.length) Object.entries(FX_FIELDS_PPE).forEach(([k, lbl]) => push(sec, 'Property, plant & equipment', `PPE total: ${lbl}${yr}`, `{${e.year}:P:*:${k}}`, r.ppeT[k], 'total'));
+      }
+      FX_CALC.forEach(([k, lbl]) => push(sec, 'Calculated', lbl + suf + yr, `{${e.year}:C:${k}:${side}}`, b[k]));
+      const bk = side === 'py' ? r.cfp : r.cf;
+      FX_CF.forEach(([k, lbl]) => push(sec, 'Cash flow', `Cash flow: ${lbl}${suf}${yr}`, `{${e.year}:F:${k}:${side}}`, bk[k]));
+      cfLines(e).filter(x => x.kind !== 'std' && !x.hidden).forEach(x => push(sec, 'Cash flow', `Cash flow: ${x.label}${suf}${yr}`, `{${e.year}:F:${x.key}:${side}}`, (bk.custom || {})[x.key]));
     });
-    const seen = {};
-    e.tb.forEach(l => {
-      let base = `${(l.ledger || l.caption || 'Line').trim()} (${sm[l.fs] ? sm[l.fs].label : 'no schedule'})`;
-      seen[base] = (seen[base] || 0) + 1; if (seen[base] > 1) base += ' #' + seen[base];
-      push('lines', base + yr, `{${e.year}:L:${l.id}:amt}`, l.amt);
-      push('lines', base + ' PY' + yr, `{${e.year}:L:${l.id}:py}`, l.py);
-    });
-    r.ppe.forEach(p => Object.entries(FX_FIELDS_PPE).forEach(([f, lbl]) => push('property, plant & equipment', `PPE ${p.name || 'class'}: ${lbl}${yr}`, `{${e.year}:P:${p.id}:${f}}`, p[f])));
-    if (r.ppe.length) Object.entries(FX_FIELDS_PPE).forEach(([f, lbl]) => push('property, plant & equipment', `PPE total: ${lbl}${yr}`, `{${e.year}:P:*:${f}}`, r.ppeT[f]));
-    FX_CALC.forEach(([k, lbl]) => { push('calculated', lbl + yr, `{${e.year}:C:${k}:cy}`, r.cy[k]); push('calculated', lbl + ' PY' + yr, `{${e.year}:C:${k}:py}`, r.py[k]); });
-    FX_CF.forEach(([k, lbl]) => { push('cash flow', `Cash flow: ${lbl}${yr}`, `{${e.year}:F:${k}:cy}`, r.cf[k]); push('cash flow', `Cash flow: ${lbl} PY${yr}`, `{${e.year}:F:${k}:py}`, r.cfp[k]); });
-    cfLines(e).filter(x => x.kind !== 'std' && !x.hidden).forEach(x => { push('cash flow', `Cash flow: ${x.label}${yr}`, `{${e.year}:F:${x.key}:cy}`, (r.cf.custom || {})[x.key]); push('cash flow', `Cash flow: ${x.label} PY${yr}`, `{${e.year}:F:${x.key}:py}`, (r.cfp.custom || {})[x.key]); });
   });
   return out;
 }
@@ -3844,17 +3856,24 @@ function fxHelpShow(el){
   const val = el.value, caret = el.selectionStart == null ? val.length : el.selectionStart;
   const before = val.slice(0, caret), open = before.lastIndexOf('['), partial = open > before.lastIndexOf(']') && open >= 0 ? before.slice(open + 1).toLowerCase() : '';
   const cat = fxCatalog(c, en);
+  const secs = [...new Set(cat.map(x => x.sec))];
+  // start on the year the amount belongs to: prior year inputs open on the prior year list
+  if (FXH.forEl !== el){ FXH.forEl = el; const k = el.dataset.fxKey || ''; FXH.sec = /^CFP:|:py$|^B:(pyInfo|ppePy)/.test(k) ? secs[1] || secs[0] : secs[0]; }
+  if (!secs.includes(FXH.sec)) FXH.sec = secs[0];
   const words = partial.split(/\s+/).filter(Boolean);
-  const list = (partial ? cat.filter(x => words.every(w => x.label.toLowerCase().includes(w))) : cat).slice(0, partial ? 60 : 400);
+  const inSec = cat.filter(x => x.sec === FXH.sec);
+  const list = (partial ? inSec.filter(x => words.every(w => x.label.toLowerCase().includes(w))) : inSec).slice(0, partial ? 80 : 600);
   const pv = fxPreview(c, en, val);
   let groups = '', last = '';
   list.forEach((x, i) => {
     if (x.group !== last){ last = x.group; groups += `<div class="fh-grp">${e_(x.group)}</div>`; }
-    groups += `<button type="button" class="fh-it" data-fx-pick="${e_(x.ref)}"><span>${e_(x.label)}</span><b>${fmtN(x.value)}</b></button>`;
+    groups += `<button type="button" class="fh-it${x.kind === 'total' ? ' fh-tot' : x.kind === 'line' ? ' fh-line' : ''}" data-fx-pick="${e_(x.ref)}"><span>${e_(x.label)}</span><b>${fmtN(x.value)}</b></button>`;
   });
+  const tabs = secs.map(sc => `<button type="button" class="fh-tab" data-fx-sec="${e_(sc)}" aria-pressed="${sc === FXH.sec}">${e_(sc)}${partial ? ` <span class="muted">${cat.filter(x => x.sec === sc && words.every(w => x.label.toLowerCase().includes(w))).length}</span>` : ''}</button>`).join('');
   h.innerHTML = `<div class="fh-head"><b>ƒ Formula</b> <span class="muted">– click any amount or total on the page to add it, or pick below. Type <b>[</b> to search.</span></div>
+    <div class="fh-tabs">${tabs}</div>
     <div class="fh-res ${pv.ok ? '' : 'fh-err'}">${pv.ok ? '= ' + fmtN(pv.v) + ' AED' : e_(val.trim() === '=' ? 'Start the formula, e.g. [Receivables total] + 5,000' : pv.err)}</div>
-    <div class="fh-list">${groups || '<div class="muted fh-grp">No match</div>'}</div>
+    <div class="fh-list">${groups || `<div class="muted fh-grp">No match in ${e_(FXH.sec)}</div>`}</div>
     <div class="fh-foot"><span class="muted small">+ − * / ( ) · SUM · ROUND · Enter to finish · Esc to cancel</span></div>`;
   const rc = el.getBoundingClientRect(), W = Math.min(380, window.innerWidth - 16);
   h.style.width = W + 'px';
@@ -3912,6 +3931,8 @@ document.addEventListener('mousedown', ev => {
 }, true);
 document.addEventListener('click', ev => {
   if (FX_SWALLOW){ FX_SWALLOW = false; ev.preventDefault(); ev.stopPropagation(); return; }
+  const tab = ev.target.closest('[data-fx-sec]');
+  if (tab && FXH.el){ ev.preventDefault(); ev.stopPropagation(); FXH.sec = tab.dataset.fxSec; FXH.el.focus(); fxHelpShow(FXH.el); return; }
   const pick = ev.target.closest('[data-fx-pick]');
   if (pick && FXH.el){ ev.preventDefault(); ev.stopPropagation(); fxInsert(FXH.el, pick.dataset.fxPick); }
 }, true);
@@ -4012,15 +4033,17 @@ function applyCfLayout(eng, cf, cfp, cy, py){
   // prior year figures typed or imported before the share capital line existed: that line was not part of them
   if (ov.shareCap === undefined && ['open', 'loans', 'pat'].every(k => ov[k] !== undefined && ov[k] !== null && ov[k] !== '')) ov = Object.assign({}, ov, {shareCap: 0});
   Object.keys(ov).forEach(k => { const v = ov[k]; if (v === null || v === undefined || v === '') return; if (CFPY_KEYS.includes(k)) cfp[k] = R(v); else cfp.custom[k] = R(v); });
-  Object.keys(cyv).forEach(k => { if (!CFPY_KEYS.includes(k)) cf.custom[k] = R(cyv[k]); });
+  const autoCy = Object.assign({}, cf, {custom: Object.assign({}, cf.custom)}); delete autoCy.auto;
+  // current year figures typed or worked out by formula replace the automatic ones; blank = automatic
+  Object.keys(cyv).forEach(k => { const v = cyv[k]; if (CFPY_KEYS.includes(k)){ if (v === null || v === undefined || v === '') return; cf[k] = R(v); } else cf.custom[k] = R(v); });
   const rows = cfLines(eng).filter(x => !x.hidden);
-  [[cf, cy], [cfp, py], [auto, py]].forEach(([bk, yr]) => {
+  [[cf, cy], [cfp, py], [auto, py], [autoCy, cy]].forEach(([bk, yr]) => {
     CFPY_KEYS.forEach(k => { bk[k] = R(bk[k]); });
     const sum = sec => rows.filter(x => x.sec === sec).reduce((a, x) => a + (x.kind === 'std' ? R(bk[x.key]) : R(bk.custom[x.key])), 0);
     bk.opBefore = sum('adj'); bk.op = bk.opBefore + sum('wc'); bk.invTot = sum('inv'); bk.finTot = sum('fin');
     bk.net = bk.op + bk.invTot + bk.finTot; bk.close = bk.open + bk.net; bk.diff = bk.close - yr.cash;
   });
-  cfp.auto = auto;
+  cfp.auto = auto; cf.auto = autoCy;
   return cfp;
 }
 function pyCfTable(en, r){
@@ -4034,33 +4057,36 @@ function pyCfTable(en, r){
   const autoCell = k => /^u/.test(k) ? `<td class="r calc cf-auto" title="A line you added has no automatic figure"></td>` : `<td class="r calc cf-auto${differs(k) ? ' cf-dif' : ''}" title="${differs(k) ? `Automatic figure – your FY${PY} figure differs by ${fmtN(usedOf(k) - autoOf(k))}` : 'Automatic figure'}">${fmtN(autoOf(k))}</td>`;
   const pyIn = (k, label) => { const key = 'CFP:' + k; return `<input class="numi${ov[k] !== undefined && ov[k] !== null && ov[k] !== '' ? ' ov' : ''}${differs(k) ? ' dv' : ''}${fxCls(en, key)}" id="cfpy-${k}" data-cfpy="${k}"${fxAttrs(en, key, `{${Y}:F:${k}:py}`)} value="${fmtSigned(k === 'open' ? cfp.open : val(cfp, lines.find(x => x.key === k) || {key: k, kind: 'std'}))}" inputmode="decimal" aria-label="${e_(label)} FY${PY}">`; };
   const auto = k => ov[k] !== undefined && ov[k] !== null && ov[k] !== '' ? `<button class="linkish" data-act="cfpy-reset" data-k="${k}" title="Back to the automatic FY${PY} figure">↺ auto</button>` : '';
-  const tot = (key, label) => `<tr class="tot"><td></td><th scope="row">${e_(label)}</th><td class="r calc"${fxRefAttr(`{${Y}:F:${key}:cy}`)}>${fmtN(cf[key])}</td><td class="r calc cf-auto${A[key] !== cfp[key] ? ' cf-dif' : ''}">${fmtN(A[key])}</td><td class="r calc b"${fxRefAttr(`{${Y}:F:${key}:py}`)}>${fmtN(cfp[key])}</td><td></td></tr>`;
+  const AC = cf.auto || cf, typedCy = k => cyv[k] !== undefined && cyv[k] !== null && cyv[k] !== '';
+  const differsCy = k => typedCy(k) && !/^u/.test(k) && val(AC, lines.find(x => x.key === k) || {key: k, kind: 'std'}) !== val(cf, lines.find(x => x.key === k) || {key: k, kind: 'std'});
+  const autoCyCell = x => /^u/.test(x.key) ? `<td class="r calc cf-auto" title="A line you added has no automatic figure"></td>` : `<td class="r calc cf-auto${differsCy(x.key) ? ' cf-dif' : ''}" title="Automatic figure worked out from the FY${Y} schedules">${fmtN(val(AC, x))}</td>`;
+  const tot = (key, label) => `<tr class="tot"><td></td><th scope="row">${e_(label)}</th><td class="r calc cf-auto${AC[key] !== cf[key] ? ' cf-dif' : ''}">${fmtN(AC[key])}</td><td class="r calc b"${fxRefAttr(`{${Y}:F:${key}:cy}`)}>${fmtN(cf[key])}</td><td class="r calc cf-auto${A[key] !== cfp[key] ? ' cf-dif' : ''}">${fmtN(A[key])}</td><td class="r calc b"${fxRefAttr(`{${Y}:F:${key}:py}`)}>${fmtN(cfp[key])}</td><td></td></tr>`;
   const line = x => {
     const k = x.key, ck = 'CFC:' + k;
-    const cyCell = x.kind === 'user' ? `<td><input class="numi${fxCls(en, ck)}" id="cfcy-${k}" data-cfcy="${k}"${fxAttrs(en, ck, `{${Y}:F:${k}:cy}`)} value="${fmtSigned(cyv[k])}" inputmode="decimal" aria-label="${e_(x.label)} FY${Y}"></td>`
-      : `<td class="r calc"${fxRefAttr(`{${Y}:F:${k}:cy}`)} title="Automatic from the FY${Y} figures">${fmtN(val(cf, x))}</td>`;
+    const cyCell = autoCyCell(x) + `<td><input class="numi${typedCy(k) && x.kind !== 'user' ? ' ov' : ''}${differsCy(k) ? ' dv' : ''}${fxCls(en, ck)}" id="cfcy-${k}" data-cfcy="${k}"${fxAttrs(en, ck, `{${Y}:F:${k}:cy}`)} value="${fmtSigned(val(cf, x))}" inputmode="decimal" aria-label="${e_(x.label)} FY${Y}"></td>`;
     return `<tr class="cf-line${x.kind === 'user' ? ' cf-user' : ''}" data-cfk="${k}">
       <td class="cf-h"><span class="cf-grip" title="Drag up or down" aria-hidden="true">⋮⋮</span><button class="icon-btn cf-mv" data-act="cf-move" data-k="${k}" data-dir="-1" title="Move up" aria-label="Move up">▲</button><button class="icon-btn cf-mv" data-act="cf-move" data-k="${k}" data-dir="1" title="Move down" aria-label="Move down">▼</button></td>
       <th scope="row"><input class="cf-label" id="cfl-${k}" data-cflabel="${k}" value="${e_(x.label)}" placeholder="${e_(x.def)}" aria-label="Line name"></th>${cyCell}
-      ${autoCell(k)}<td>${pyIn(k, x.label)}</td><td class="cf-acts">${auto(k)}<button class="icon-btn" data-act="cf-del" data-k="${k}" title="Remove this line" aria-label="Remove ${e_(x.label)}">${IC.trash}</button></td></tr>`;
+      ${autoCell(k)}<td>${pyIn(k, x.label)}</td><td class="cf-acts">${typedCy(k) && x.kind !== 'user' ? `<button class="linkish" data-act="cfcy-reset" data-k="${k}" title="Back to the automatic FY${Y} figure">↺ ${Y}</button>` : ''}${auto(k) ? auto(k).replace('↺ auto', '↺ ' + PY) : ''}<button class="icon-btn" data-act="cf-del" data-k="${k}" title="Remove this line" aria-label="Remove ${e_(x.label)}">${IC.trash}</button></td></tr>`;
   };
   let body = '';
   CF_SECS.forEach(([sec, head, totKey, totLabel]) => {
-    body += `<tr class="msub cf-sec" data-cfsec="${sec}"><th colspan="6">${e_(head)}<button class="linkish cf-add" data-act="cf-add" data-sec="${sec}">+ Add line</button></th></tr>`
+    body += `<tr class="msub cf-sec" data-cfsec="${sec}"><th colspan="7">${e_(head)}<button class="linkish cf-add" data-act="cf-add" data-sec="${sec}">+ Add line</button></th></tr>`
       + vis.filter(x => x.sec === sec).map(line).join('') + tot(totKey, totLabel);
   });
   body += tot('net', 'Net increase / (decrease) in cash (A+B+C)')
-    + `<tr><td></td><th scope="row">Cash and cash equivalents at the beginning of FY${PY}</th><td class="r calc"${fxRefAttr(`{${Y}:F:open:cy}`)}>${fmtN(cf.open)}</td>${autoCell('open')}<td>${pyIn('open', 'Cash at the beginning')}</td><td class="cf-acts">${auto('open')}</td></tr>`
+    + `<tr><td></td><th scope="row">Cash and cash equivalents at the beginning of the year</th><td class="r calc cf-auto">${fmtN(AC.open)}</td><td class="r calc"${fxRefAttr(`{${Y}:F:open:cy}`)}>${fmtN(cf.open)}</td>${autoCell('open')}<td>${pyIn('open', 'Cash at the beginning')}</td><td class="cf-acts">${auto('open')}</td></tr>`
     + tot('close', `Cash and cash equivalents at the end of the year`);
   const src = pe ? `Blank FY${PY} figures come automatically from FY${pe.year} in this software.` : `Blank FY${PY} figures come from the prior year details above (or 0).`;
   const L = en.cfLayout || {}, changed = (L.order || []).length || Object.keys(L.labels || {}).length || Object.keys(L.hidden || {}).length || (L.custom || []).length;
   return `<h3 class="h3" id="py-cf">Cash flow lines &amp; prior year FY${PY}</h3>
+    ${(() => { const dc = lines.filter(x => !x.hidden).map(x => x.key).filter(differsCy); return dc.length ? `<div class="banner warn cf-review"><b>FY${Y}:</b> ${dc.length} figure(s) are typed or worked out by formula and differ from the automatic figures (highlighted). The cash flow check now compares your figures with the cash balance. <button class="btn small" data-act="cfcy-reset-all">Use automatic FY${Y} figures</button></div>` : ''; })()}
     ${(() => { const dl = lines.filter(x => !x.hidden).map(x => x.key).concat(['open']).filter(differs); const nTyped = Object.keys(ov).filter(typed).length;
       return `<div class="banner ${dl.length ? 'warn' : 'ok'} cf-review">${dl.length ? `<b>Review FY${PY}:</b> ${dl.length} figure(s) in the report differ from the automatic figures – they are highlighted below. ${pe ? `Automatic = worked out from FY${pe.year} in this software.${!prevOf(client(), pe) && !pe.tb.some(l => R(l.py) && !['ca', 're', 'lr', 'cap'].includes(l.fs)) ? ` <b>FY${pe.year} has no FY${pe.year - 1} figures in the software, so its working capital and loan movements are not reliable – keep the figures from the audited report for those lines.</b>` : ''}` : `Automatic = worked out from the FY${PY} figures in the schedules and the prior year details above.`} Keep your figure if it matches last year’s audited cash flow, or click ↺ auto to use the automatic one.` : nTyped ? `All typed FY${PY} figures agree with the automatic figures.` : `FY${PY} figures are the automatic figures – check them against last year’s audited cash flow and type any correction.`}
         ${dl.length ? `<button class="btn small" data-act="cfpy-reset-all">Use all automatic figures</button>` : ''}</div>`; })()}
-    <p class="small muted">Click a line name to rename it, <b>+ Add line</b> for a new account, 🗑 to remove, and drag ⋮⋮ (or ▲ ▼) to change its position – the statement of cash flows prints in this order. Type any FY${PY} figure exactly as in last year’s audited cash flow; ${src} Formulas work too (type =).</p>
-    <div class="table-wrap"><table class="ui matrix cfpy"><colgroup><col style="width:78px"><col><col style="width:130px"><col style="width:130px"><col style="width:150px"><col style="width:96px"></colgroup>
-      <thead><tr><th></th><th>Line</th><th class="r">FY${Y}</th><th class="r">FY${PY} automatic</th><th class="r">FY${PY} in the report</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
+    <p class="small muted">Click a line name to rename it, <b>+ Add line</b> for a new account, 🗑 to remove, and drag ⋮⋮ (or ▲ ▼) to change its position – the statement of cash flows prints in this order. Type any FY${PY} figure exactly as in last year’s audited cash flow; ${src} FY${Y} figures are automatic – type a figure or a formula (start with =) to replace one, and clear it to go back to automatic. In a formula, pick amounts from the FY${Y} or FY${PY} list: schedule totals and each ledger line.</p>
+    <div class="table-wrap"><table class="ui matrix cfpy"><colgroup><col style="width:78px"><col><col style="width:112px"><col style="width:140px"><col style="width:112px"><col style="width:140px"><col style="width:120px"></colgroup>
+      <thead><tr><th></th><th>Line</th><th class="r">FY${Y} automatic</th><th class="r">FY${Y} in the report</th><th class="r">FY${PY} automatic</th><th class="r">FY${PY} in the report</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
     ${removed.length ? `<p class="small muted cf-removed">Removed lines: ${removed.map(x => `${e_(x.label)} <button class="linkish" data-act="cf-restore" data-k="${x.key}">restore</button>`).join(' · ')}</p>` : ''}
     <div class="row between"><p class="small ${cfp.diff === 0 ? 'ok-t' : 'bad-t'}">${cfp.diff === 0 ? `FY${PY} cash flow reconciles to cash of ${fmtN(r.py.cash)}` : `FY${PY} cash flow ends at ${fmtN(cfp.close)}, but cash at the end of FY${PY} is ${fmtN(r.py.cash)} (difference ${fmtN(cfp.diff)})`}${cf.diff === 0 ? '' : ` · <span class="bad-t">FY${Y} difference ${fmtN(cf.diff)}</span>`}</p>
       <span class="row">${Object.keys(ov).length ? `<button class="linkish" data-act="cfpy-reset-all">Clear all typed FY${PY} figures</button>` : ''}${changed ? `<button class="linkish" data-act="cf-reset-layout">Standard cash flow lines</button>` : ''}</span></div>`;
@@ -4877,6 +4903,8 @@ document.addEventListener('click', async ev => {
       case 'note-num': noteNumModal(t.dataset.key); break;
       case 'nn-save': { const to = +document.getElementById('nn-to').value, mode = (document.querySelector('input[name=nn-mode]:checked') || {}).value || 'swap';
         if (setNoteNumber(c, en, t.dataset.key, to, mode)){ save(); closeModal(); render(); toast(`Now note ${to}`); } else closeModal(); break; }
+      case 'cfcy-reset': if (en.cfCy) delete en.cfCy[t.dataset.k]; if (en.fx) delete en.fx['CFC:' + t.dataset.k]; save(); render(); break;
+      case 'cfcy-reset-all': if (confirm(`Use the automatic FY${en.year} cash flow figures for every line? Lines you added keep their figures.`)){ Object.keys(en.cfCy || {}).forEach(k => { if (!/^u/.test(k)) delete en.cfCy[k]; }); Object.keys(en.fx || {}).forEach(k => { if (k.startsWith('CFC:') && !/^CFC:u/.test(k)) delete en.fx[k]; }); save(); render(); } break;
       case 'cfpy-reset': if (en.cfPy) delete en.cfPy[t.dataset.k]; if (en.fx) delete en.fx['CFP:' + t.dataset.k]; save(); render(); break;
       case 'cfpy-reset-all': if (confirm(`Clear all typed FY${en.year - 1} cash flow figures and use the automatic figures?`)){ Object.keys(en.cfPy || {}).forEach(k => { if (!/^u/.test(k)) delete en.cfPy[k]; }); Object.keys(en.fx || {}).forEach(k => { if (k.startsWith('CFP:') && !/^CFP:u/.test(k)) delete en.fx[k]; }); save(); render(); } break;
       case 'cf-add': { const L = cfLayoutOf(en), key = 'u' + uid(); L.custom.push({key, sec: t.dataset.sec, label: 'New line'});
