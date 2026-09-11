@@ -88,8 +88,11 @@ write(styles, sy);
 // 6. Our small native helper (battery / notification settings) + loud reminder sounds (res/raw copied above)
 const javaDir = path.join(APP, 'src', 'main', 'java', 'com', 'fairtax', 'portal');
 fs.mkdirSync(javaDir, {recursive: true});
-['MainActivity.java', 'FTSystemPlugin.java'].forEach(f => { fs.copyFileSync(path.join(ROOT, 'native', f), path.join(javaDir, f)); console.log('copied native/' + f); });
+['MainActivity.java', 'FTSystemPlugin.java', 'FTSpeechPlugin.java'].forEach(f => { fs.copyFileSync(path.join(ROOT, 'native', f), path.join(javaDir, f)); console.log('copied native/' + f); });
 let m2 = read(manifestFile);
 if (m2.indexOf('REQUEST_IGNORE_BATTERY_OPTIMIZATIONS') < 0) m2 = m2.replace('</manifest>', '    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n</manifest>');
+// 7. Microphone for the AI assistant (speech recognition + read-aloud services must be visible to the app)
+['android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS'].forEach(p => { if (m2.indexOf('"' + p + '"') < 0) m2 = m2.replace('</manifest>', `    <uses-permission android:name="${p}" />\n</manifest>`); });
+if (m2.indexOf('android.speech.RecognitionService') < 0) m2 = m2.replace('</manifest>', '    <queries>\n        <intent><action android:name="android.speech.RecognitionService" /></intent>\n        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>\n    </queries>\n</manifest>');
 write(manifestFile, m2);
 console.log('Android project ready (versionCode ' + run + ')');

@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta charset="utf-8"><title>sound</title></head><body>
+<script>
+  const { ipcRenderer } = require('electron');
+  let current = null;
+  ipcRenderer.on('play', (_e, name) => {
+    try { if (current) { current.pause(); } current = new Audio('assets/fairtax_' + (name === 'urgent' ? 'urgent' : 'alert') + '.wav'); current.volume = 1; current.play().catch(() => {}); } catch (e) { /* ignore */ }
+  });
+</script></body></html>

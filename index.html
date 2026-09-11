@@ -63,10 +63,10 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
 @media(max-width:520px){.askrow button.talk{display:none}}.phone b{display:block;font-size:16px;margin-bottom:4px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.who{display:none}}
 </style>
-<script src="shared/cloud.js?v=5"></script>
-<script src="shared/reminders.js?v=5"></script>
-<script src="shared/notify.js?v=5"></script>
-<script src="shared/ai-launcher.js?v=5"></script>
+<script src="shared/cloud.js?v=6"></script>
+<script src="shared/reminders.js?v=6"></script>
+<script src="shared/notify.js?v=6"></script>
+<script src="shared/ai-launcher.js?v=6"></script>
 </head>
 <body>
 <header class="top"><div class="top-in">
@@ -141,6 +141,7 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
     if (FTNotify.native() && FT.canOpen(me, 'crm')) FTNotify.scheduleFromCloud().then(function(){ var pc = document.getElementById('phone-state'); if (pc) pc.outerHTML = phoneState(); });
   }
   var APK_URL = 'https://github.com/AsifKhan170920/audit-desk/releases/latest/download/FairTaxPortal.apk';
+  var WIN_URL = 'https://github.com/AsifKhan170920/audit-desk/releases/download/windows-app/FairTaxPortal-Setup.exe';
   function phoneState(){
     var st = FTNotify.status();
     return '<div id="phone-state">' + (st ? '<p class="' + (st.ok ? 'note' : 'msg info') + '">' + esc(st.text) + '</p>' + (st.ok ? '' : '<button class="btn primary" data-go="notify-on">Turn on notifications</button>') : '') + '</div>';
@@ -151,8 +152,12 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
     if (ios) return '<div class="card phone"><b>📱 Fair Tax on iPhone</b>' + (standalone
       ? '<p class="note" style="margin:0">Installed ✓. Open <b>CRM → Alerts</b> for your reminders. The AI assistant, CRM and Audit Desk work here; pop-up reminder notifications are available in the Android app.</p>'
       : '<p class="note" style="margin:0 0 8px">Install it like an app (free):</p><ol class="note" style="margin:0;padding-left:18px;line-height:1.8"><li>Open this page in <b>Safari</b></li><li>Tap the <b>Share</b> button (square with arrow ↑)</li><li>Tap <b>Add to Home Screen</b> → <b>Add</b></li><li>Open <b>Fair Tax</b> from your home screen and sign in</li></ol>') + '</div>';
-    if (FTNotify.native()) return '<div class="card phone"><b>📱 Reminders on this phone</b>' + (FT.canOpen(me, 'crm') ? phoneState() : '<p class="note">Reminders come from the CRM – ask the admin for CRM access.</p>') + '</div>';
-    return '<div class="card phone"><b>📱 Android app with reminders</b><p class="note" style="margin:0 0 10px">Lead follow-ups, client check-ins, meetings, VAT / Corporate Tax / audit deadlines, contract expiry and cheque reminders as phone notifications.</p>' +
+    var noCrm = '<p class="note">Reminders come from the CRM – ask the admin for CRM access.</p>';
+    if (FTNotify.desktop && FTNotify.desktop()) return '<div class="card phone"><b>💻 Fair Tax for Windows</b>' + (FT.canOpen(me, 'crm') ? phoneState() : noCrm) + '<p class="note" style="margin:6px 0 0">Runs in the tray near the clock and starts with Windows. Right-click the tray icon for a test reminder or to switch off start-up.</p></div>';
+    if (FTNotify.native()) return '<div class="card phone"><b>📱 Reminders on this phone</b>' + (FT.canOpen(me, 'crm') ? phoneState() : noCrm) + '</div>';
+    var winCard = /Windows NT/.test(navigator.userAgent) ? '<div class="card phone"><b>💻 Windows app with reminders</b><p class="note" style="margin:0 0 10px">Its own window, starts with Windows, stays in the tray and pops up reminders with sound even when closed. The AI microphone uses Windows speech.</p>' +
+      '<div class="row"><a class="btn primary" href="' + WIN_URL + '">Download for Windows</a><span class="note">Run FairTaxPortal-Setup.exe. If Windows says “Windows protected your PC”, click <span style="font-weight:700">More info → Run anyway</span>.</span></div></div>' : '';
+    return winCard + '<div class="card phone"><b>📱 Android app with reminders</b><p class="note" style="margin:0 0 10px">Lead follow-ups, client check-ins, meetings, VAT / Corporate Tax / audit deadlines, contract expiry and cheque reminders as phone notifications.</p>' +
       '<div class="row"><a class="btn primary" href="' + APK_URL + '">Download the app (APK)</a><span class="note">On the phone: open this page, download, then allow “Install unknown apps” for your browser when Android asks.</span></div></div>';
   }
   async function users(){

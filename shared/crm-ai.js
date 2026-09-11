@@ -20,7 +20,8 @@
   function $(s, r) { return (r || document).querySelector(s); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
   function today() { return ymd(new Date()); }
-  function prefs() { try { return Object.assign({lang: 'en-GB', speak: true, autoSend: true, model: ''}, JSON.parse(localStorage.getItem(PREF_KEY)) || {}); } catch (e) { return {lang: 'en-GB', speak: true, autoSend: true, model: ''}; } }
+  var PREF_DEFAULTS = {lang: 'en-GB', speak: true, pauseSec: 3, pauseMic: false, model: ''};
+  function prefs() { try { return Object.assign({}, PREF_DEFAULTS, JSON.parse(localStorage.getItem(PREF_KEY)) || {}); } catch (e) { return Object.assign({}, PREF_DEFAULTS); } }
   function setPref(k, v) { var p = prefs(); p[k] = v; try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch (e) {} }
   function me() { return (window.FT && FT.me) || {}; }
   function myName() { var m = me(); return m.name || m.id || 'AI Assistant'; }
@@ -481,53 +482,266 @@
   }
 
   /* ---------------- voice ---------------- */
-  var Voice = {
-    rec: null, listening: false, conversation: false, finalText: '',
-    supported: function () { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
-    start: function () {
-      if (!Voice.supported()) { UI.add('error', 'Voice typing needs Google Chrome or Microsoft Edge.'); return; }
-      if (Voice.listening || busy) return;
-      try { speechSynthesis.cancel(); } catch (e) {}
-      var R = window.SpeechRecognition || window.webkitSpeechRecognition, rec = new R();
-      rec.lang = prefs().lang; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-      Voice.finalText = ''; Voice.rec = rec;
-      var input = $('#cai-input'), base = input.value ? input.value.trim() + ' ' : '';
+  // saying "enter" (or "send it") at the end sends the message
+  var SEND_RE = /(?:^|[\s,.;:!?،])(?:enter|send it|send now|انٹر|اینٹر|إنتر)[\s.,!?؟،]*$/i;
+  function join(a, b) { a = (a || '').trim(); b = (b || '').trim(); return a && b ? a + ' ' + b : a || b; }
+  function host(name) {
+    try { if (window[name]) return window[name]; } catch (e) {}
+    try { if (window.parent && window.parent !== window && window.parent[name]) return window.parent[name]; } catch (e) {}
+    return null;
+  }
+  // Android app: native speech plugin (null = not the app, false = app too old)
+  function nativeSpeech() {
+    var C = host('Capacitor');
+    try { if (!(C && C.isNativePlatform && C.isNativePlatform())) return null; return C.isPluginAvailable && C.isPluginAvailable('FTSpeech') ? C.Plugins.FTSpeech : false; } catch (e) { return null; }
+  }
+  // Windows app: Windows speech recognition through the desktop shell
+  function desktopSpeech() { var D = host('ftDesktop'); return D && D.speech ? D.speech : null; }
+  var MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  // browser speech (Chrome / Edge): keeps listening through pauses
+  function webEngine(h) {
+    var R = window.SpeechRecognition || window.webkitSpeechRecognition, alive = true, netFails = 0, rec, finals;
+    function boot() {
+      rec = new R(); finals = {};
+      rec.lang = h.lang; rec.continuous = !MOBILE; rec.interimResults = true; rec.maxAlternatives = 1;
       rec.onresult = function (ev) {
-        var fin = '', interim = '';
-        for (var i = 0; i < ev.results.length; i++) { if (ev.results[i].isFinal) fin += ev.results[i][0].transcript; else interim += ev.results[i][0].transcript; }
-        Voice.finalText = fin; input.value = base + fin + interim; UI.grow();
+        var interim = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) {
+          var r = ev.results[i], t = r[0] ? r[0].transcript : '';
+          if (r.isFinal) { if (!finals[i]) { finals[i] = 1; h.final(t); } } else interim += t;
+        }
+        h.partial(interim); netFails = 0;
       };
       rec.onerror = function (ev) {
-        if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') UI.add('error', 'Microphone permission is blocked. Click the lock icon in the address bar and allow the microphone.');
-        else if (ev.error === 'no-speech') { if (!Voice.conversation) UI.status('Did not hear anything.'); }
-        else if (ev.error !== 'aborted') UI.add('error', 'Voice error: ' + ev.error);
-        if (ev.error !== 'no-speech') Voice.conversation = false;
+        if (ev.error === 'no-speech' || ev.error === 'aborted') return;
+        if (ev.error === 'network' && ++netFails <= 2) return;
+        alive = false; h.error(ev.error);
       };
       rec.onend = function () {
-        Voice.listening = false; UI.mic(false);
-        var t = input.value.trim();
-        if (Voice.finalText && t && prefs().autoSend) { input.value = ''; UI.grow(); ask(t, true); }
-        else if (Voice.conversation && !t) { setTimeout(function () { if (Voice.conversation && !busy) Voice.start(); }, 400); }
+        if (!alive) { h.end(); return; }
+        h.segmentEnd();
+        setTimeout(function () { if (alive) try { boot(); } catch (e) { alive = false; h.error('start'); } }, 120);
       };
-      try { rec.start(); Voice.listening = true; UI.mic(true); UI.status('Listening… speak now'); } catch (e) { UI.add('error', 'Could not start the microphone: ' + e.message); }
+      rec.start();
+    }
+    boot();
+    return {abort: function () { alive = false; try { rec.abort(); } catch (e) {} }};
+  }
+  // Android app: SpeechRecognizer with live partial results and sound levels
+  function nativeEngine(P, h) {
+    var alive = true, subs = [], restartT = null, fails = 0;
+    function on(ev, fn) { try { var r = P.addListener(ev, fn); if (r && r.then) r.then(function (x) { if (alive) subs.push(x); else try { x.remove(); } catch (e) {} }); else subs.push(r); } catch (e) {} }
+    function cleanup() { subs.forEach(function (s) { try { s.remove(); } catch (e) {} }); subs = []; }
+    on('partial', function (d) { if (alive) h.partial(d.text || ''); });
+    on('final', function (d) { if (alive && d.text) { fails = 0; h.final(d.text); } });
+    on('level', function (d) { h.level(Math.max(0, Math.min(1, ((+d.rms || 0) + 2) / 12))); });
+    on('error', function (d) {
+      if (!alive) return; var c = +d.code;
+      if (c === 6 || c === 7 || c === 8 || c === 5) return;                 // silence / nothing matched / busy → listen again
+      if (c === 9) { alive = false; cleanup(); h.error('not-allowed'); return; }
+      if (c === 12 || c === 13) { alive = false; cleanup(); h.error('language-not-supported'); return; }
+      if (c === 3) { alive = false; cleanup(); h.error('audio-capture'); return; }
+      if (++fails > 2) { alive = false; cleanup(); h.error(c === 1 || c === 2 || c === 4 || c === 11 ? 'network' : 'native:' + (d.message || c)); }
+    });
+    on('end', function () { if (!alive) return; h.segmentEnd(); clearTimeout(restartT); restartT = setTimeout(go, 150); });
+    function go() {
+      if (!alive) return;
+      P.start({lang: h.lang}).catch(function (e) { if (!alive) return; alive = false; cleanup(); var m = String((e && (e.code || e.message)) || e); h.error(/denied|permission/i.test(m) ? 'not-allowed' : 'native:' + ((e && e.message) || m)); });
+    }
+    setTimeout(go, 0);
+    return {abort: function () { alive = false; clearTimeout(restartT); try { P.abort().catch(function () {}); } catch (e) {} cleanup(); }};
+  }
+  // Windows app
+  function desktopEngine(S, h) {
+    var alive = true, failed = false, restarts = 0;
+    function go() {
+      failed = false;
+      Promise.resolve(S.start({lang: h.lang}, function (ev) {
+        if (!alive || !ev) return;
+        if (ev.type === 'partial') h.partial(ev.text || '');
+        else if (ev.type === 'final') { restarts = 0; h.final(ev.text || ''); }
+        else if (ev.type === 'notice') h.notice(ev.text || '');
+        else if (ev.type === 'error') { failed = true; alive = false; h.error('desktop:' + (ev.message || '')); }
+        else if (ev.type === 'end') { if (!alive) return; h.segmentEnd(); if (!failed && ++restarts < 20) setTimeout(go, 250); else { alive = false; h.end(); } }
+      })).then(function (r) { if (alive && (!r || !r.ok)) { alive = false; h.error('desktop:' + ((r && r.error) || 'missing')); } }, function (e) { if (alive) { alive = false; h.error('desktop:' + (e && e.message)); } });
+    }
+    go();
+    return {abort: function () { alive = false; try { S.abort(); } catch (e) {} }};
+  }
+  // microphone level for the waves (computer browsers and the Windows app)
+  var Meter = {
+    stream: null, ctx: null, raf: 0,
+    start: async function (onLevel) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return 'unsupported';
+      try { Meter.stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}}); }
+      catch (e) { var n = e && e.name; return n === 'NotAllowedError' || n === 'SecurityError' ? 'denied' : n === 'NotFoundError' || n === 'OverconstrainedError' ? 'nomic' : 'error'; }
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext; Meter.ctx = new AC();
+        if (Meter.ctx.state !== 'running') try { await Meter.ctx.resume(); } catch (e) {}
+        var an = Meter.ctx.createAnalyser(); an.fftSize = 512; Meter.ctx.createMediaStreamSource(Meter.stream).connect(an);
+        var buf = new Uint8Array(an.fftSize);
+        (function tick() {
+          if (!Meter.ctx) return;
+          if (Meter.ctx.state === 'running') { an.getByteTimeDomainData(buf); var s = 0; for (var i = 0; i < buf.length; i++) { var v = (buf[i] - 128) / 128; s += v * v; } onLevel(Math.min(1, Math.sqrt(s / buf.length) * 5)); }
+          Meter.raf = requestAnimationFrame(tick);
+        })();
+      } catch (e) {}
+      return 'ok';
     },
-    stop: function () { Voice.conversation = false; if (Voice.rec) try { Voice.rec.stop(); } catch (e) {} },
+    stop: function () {
+      cancelAnimationFrame(Meter.raf);
+      try { if (Meter.stream) Meter.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+      try { if (Meter.ctx) Meter.ctx.close(); } catch (e) {}
+      Meter.stream = null; Meter.ctx = null;
+    }
+  };
+  function voiceError(code, kind) {
+    code = String(code || '');
+    if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'denied') {
+      if (kind === 'native') return 'The microphone is blocked for the Fair Tax app. Open Android Settings → Apps → Fair Tax → Permissions → Microphone → Allow, then tap 🎤 again.';
+      if (kind === 'desktop') return 'Windows is blocking the microphone. Open Settings → Privacy & security → Microphone and turn on “Let desktop apps access your microphone”.';
+      return 'The microphone is blocked for this site. Click the 🔒 icon at the left of the address bar → Microphone → Allow, then tap 🎤 again.';
+    }
+    if (code === 'nomic' || code === 'audio-capture') return 'No microphone found (or another app is using it). Check that a microphone/headset is connected and selected in your sound settings.';
+    if (code === 'network') return 'The voice service could not be reached. Check the internet connection and try again.';
+    if (code === 'language-not-supported') return 'This voice language is not available here – change it in ⚙ Settings → Voice language.';
+    if (code.indexOf('desktop:') === 0) {
+      var d = code.slice(8);
+      if (d === 'missing') return 'The Windows speech component is missing – please reinstall Fair Tax for Windows.';
+      return 'Voice: ' + (d.indexOf('|') >= 0 ? d.split('|').slice(1).join('|') : d || 'Windows speech recognition stopped.');
+    }
+    if (code.indexOf('native:') === 0) return 'Voice: ' + code.slice(7);
+    return 'Voice error: ' + code;
+  }
+
+  var Voice = {
+    listening: false, conversation: false, engine: null, base: '', committed: '', interim: '', level: 0, levelAt: 0, levels: [],
+    startedAt: 0, lastActivity: 0, heard: false, stableT: null, raf: 0, speaking: false, pendingResume: false, ttsSub: null,
+    kind: function () {
+      if (desktopSpeech()) return 'desktop';
+      var n = nativeSpeech(); if (n) return 'native'; if (n === false) return 'old-app';
+      return window.SpeechRecognition || window.webkitSpeechRecognition ? 'web' : 'none';
+    },
+    supported: function () { var k = Voice.kind(); return k !== 'none' && k !== 'old-app'; },
+    text: function () { return join(join(Voice.base, Voice.committed), Voice.interim); },
+    start: async function () {
+      if (Voice.listening || busy) return;
+      var kind = Voice.kind();
+      if (kind === 'none') { UI.add('error', 'Voice typing is not available in this browser. Please use Google Chrome or Microsoft Edge, or the Fair Tax app.'); Voice.conversation = false; UI.conv(false); return; }
+      if (kind === 'old-app') { UI.add('error', 'Please update the Fair Tax app to use the microphone: Dashboard → Download the app (APK), install it over this one.'); Voice.conversation = false; UI.conv(false); return; }
+      Voice.cancelSpeech();
+      var input = $('#cai-input');
+      Voice.base = input.value.trim(); Voice.committed = ''; Voice.interim = ''; Voice.levels = []; Voice.level = 0; Voice.levelAt = 0;
+      Voice.listening = true; Voice.heard = false; Voice.startedAt = Voice.lastActivity = Date.now();
+      UI.voice(true); Voice.render(); Voice.loop();
+      var h = {
+        lang: prefs().lang,
+        partial: function (t) { Voice.onPartial(t); },
+        final: function (t) { Voice.onFinal(t); },
+        level: function (v) { Voice.level = v; Voice.levelAt = Date.now(); },
+        segmentEnd: function () { if (Voice.interim) Voice.onFinal(Voice.interim); },
+        notice: function (t) { UI.vnote(t); },
+        error: function (code) { Voice.onError(code, kind); },
+        end: function () { if (Voice.listening) Voice.finish('edit'); }
+      };
+      if (kind !== 'native' && !MOBILE) {
+        var m = await Meter.start(h.level);
+        if (!Voice.listening) { Meter.stop(); return; }
+        if (m === 'denied' || m === 'nomic') { Voice.onError(m, kind); return; }
+      }
+      try { Voice.engine = kind === 'desktop' ? desktopEngine(desktopSpeech(), h) : kind === 'native' ? nativeEngine(nativeSpeech(), h) : webEngine(h); }
+      catch (e) { Voice.onError(e && e.name === 'NotAllowedError' ? 'not-allowed' : 'native:' + ((e && e.message) || e), kind); }
+    },
+    onPartial: function (t) {
+      if (!Voice.listening) return;
+      t = String(t || '').trim();
+      if (t !== Voice.interim) { Voice.interim = t; if (t) { Voice.lastActivity = Date.now(); Voice.heard = true; } Voice.render(); }
+      clearTimeout(Voice.stableT);
+      if (t && SEND_RE.test(Voice.text())) Voice.stableT = setTimeout(function () { if (Voice.listening && SEND_RE.test(Voice.text())) Voice.finish('send'); }, 700);
+    },
+    onFinal: function (t) {
+      if (!Voice.listening) return;
+      t = String(t || '').trim(); Voice.interim = '';
+      if (t) { Voice.committed = join(Voice.committed, t); Voice.lastActivity = Date.now(); Voice.heard = true; }
+      Voice.render();
+      if (SEND_RE.test(Voice.text())) Voice.finish('send');
+    },
+    onError: function (code, kind) {
+      var wasTalk = Voice.conversation;
+      Voice.conversation = false; UI.conv(false);
+      if (Voice.listening) Voice.finish('edit');
+      UI.add('error', voiceError(code, kind || Voice.kind()) + (wasTalk ? ' (Talk mode stopped.)' : ''));
+    },
+    render: function () {
+      var input = $('#cai-input'); input.value = Voice.text(); UI.grow();
+      UI.vtext(join(Voice.base, Voice.committed), Voice.interim);
+    },
+    loop: function () {
+      var last = 0;
+      (function frame(ts) {
+        if (!Voice.listening) return;
+        if (ts - last > 55) {
+          last = ts;
+          var now = Date.now(), v = Voice.level;
+          if (now - Voice.levelAt > 400) v = now - Voice.lastActivity < 500 && Voice.heard ? 0.25 + Math.random() * 0.55 : 0.04 + Math.random() * 0.05;   // no level source → gentle animation
+          Voice.smooth = Math.max(v, (Voice.smooth || 0) * 0.8); v = Voice.smooth;   // fuller, smoother bars
+          Voice.levels.push(v); if (Voice.levels.length > 120) Voice.levels.shift();
+          UI.wave(Voice.levels); UI.vtime(now - Voice.startedAt);
+          var p = prefs(), pause = (+p.pauseSec || 0) * 1000;
+          if (pause && (Voice.conversation || p.pauseMic) && Voice.heard && now - Voice.lastActivity > pause && Voice.text().trim()) { Voice.finish('send'); return; }
+          if (!Voice.heard && now - Voice.startedAt > (Voice.conversation ? 45000 : 25000)) { Voice.conversation = false; UI.conv(false); Voice.finish('edit'); UI.status('Stopped listening – I did not hear anything.'); return; }
+          if (now - Voice.startedAt > 5 * 60000) { Voice.finish('edit'); return; }
+        }
+        Voice.raf = requestAnimationFrame(frame);
+      })(0);
+    },
+    // mode: 'send' | 'edit' (keep the text to correct it) | 'cancel'
+    finish: function (mode) {
+      if (!Voice.listening) return;
+      Voice.listening = false; clearTimeout(Voice.stableT); cancelAnimationFrame(Voice.raf);
+      var eng = Voice.engine; Voice.engine = null; try { if (eng) eng.abort(); } catch (e) {}
+      Meter.stop();
+      var input = $('#cai-input'), full = Voice.text().replace(SEND_RE, '').trim();
+      UI.voice(false);
+      if (mode === 'cancel') { input.value = Voice.base; UI.grow(); Voice.conversation = false; UI.conv(false); return; }
+      if (mode === 'send' && full) { input.value = ''; UI.grow(); ask(full, true); return; }
+      input.value = full; UI.grow();
+      if (mode === 'send' && Voice.conversation) { setTimeout(function () { if (Voice.conversation && !busy) Voice.start(); }, 300); return; }
+      try { input.focus(); input.setSelectionRange(full.length, full.length); } catch (e) {}
+    },
+    stop: function () { Voice.conversation = false; if (Voice.listening) Voice.finish('edit'); Voice.cancelSpeech(); },
     voiceFor: function (lang) {
       var vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [], base = lang.split('-')[0];
       return vs.find(function (v) { return v.lang === lang; }) || vs.find(function (v) { return v.lang && v.lang.indexOf(base) === 0; }) || null;
     },
+    cancelSpeech: function () {
+      Voice.speaking = false;
+      try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {}
+      var n = nativeSpeech(); if (n) try { n.stopSpeaking().catch(function () {}); } catch (e) {}
+    },
     say: function (text) {
-      if (!prefs().speak || !window.speechSynthesis) return;
+      if (!prefs().speak) return;
       var clean = String(text).replace(/[*_#`>|]/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\n+/g, '. ').slice(0, 1500);
+      var lang = /[؀-ۿ]/.test(clean) ? (prefs().lang.indexOf('ur') === 0 ? 'ur-PK' : 'ar-AE') : (/[ऀ-ॿ]/.test(clean) ? 'hi-IN' : 'en-GB');
+      var n = nativeSpeech();
+      if (n) {   // Android app: the phone's own voice
+        if (!Voice.ttsSub) try { Voice.ttsSub = n.addListener('ttsDone', function () { Voice.speaking = false; Voice.afterSpeech(); }); } catch (e) {}
+        Voice.speaking = true;
+        try { n.speak({text: clean, lang: lang}).catch(function () { Voice.speaking = false; Voice.afterSpeech(); }); } catch (e) { Voice.speaking = false; }
+        return;
+      }
+      if (!window.speechSynthesis) return;
       try {
         speechSynthesis.cancel();
-        var u = new SpeechSynthesisUtterance(clean), lang = /[؀-ۿ]/.test(clean) ? (prefs().lang.indexOf('ur') === 0 ? 'ur-PK' : 'ar-AE') : (/[ऀ-ॿ]/.test(clean) ? 'hi-IN' : 'en-GB');
+        var u = new SpeechSynthesisUtterance(clean);
         u.lang = lang; var v = Voice.voiceFor(lang); if (v) u.voice = v; u.rate = 1.03;
         Voice.speaking = true;
-        u.onend = u.onerror = function () { Voice.speaking = false; if (Voice.pendingResume) { Voice.pendingResume = false; setTimeout(function () { if (Voice.conversation && !busy) Voice.start(); }, 250); } };
+        u.onend = u.onerror = function () { Voice.speaking = false; Voice.afterSpeech(); };
         speechSynthesis.speak(u);
-      } catch (e) {}
+      } catch (e) { Voice.speaking = false; }
     },
+    afterSpeech: function () { if (Voice.pendingResume) { Voice.pendingResume = false; setTimeout(function () { if (Voice.conversation && !busy) Voice.start(); }, 250); } },
     resumeAfterSpeech: function () {
       if (!Voice.conversation) return;
       if (Voice.speaking || (window.speechSynthesis && speechSynthesis.speaking)) Voice.pendingResume = true;
@@ -553,7 +767,12 @@
     '#cai .ft{display:flex;align-items:flex-end;gap:8px;padding:10px;border-top:1px solid #e5e7eb;background:#fff}#cai textarea{flex:1;resize:none;border:1px solid #d1d5db;border-radius:10px;padding:9px 10px;font:inherit;max-height:120px;min-height:40px;outline:none}#cai textarea:focus{border-color:#0f9d6b}' +
     '#cai .rb{border:0;border-radius:10px;width:40px;height:40px;cursor:pointer;display:grid;place-items:center;font-size:17px;flex:none}#cai .send{background:#0f9d6b;color:#fff}#cai .send:disabled{opacity:.5}#cai .mic{background:#eef2f7;color:#0b5c9c}#cai .mic.on{background:#dc2626;color:#fff;animation:caipulse 1.2s infinite}' +
     '#cai .conv{background:#eef2f7;color:#0b5c9c;font-size:12px;width:auto;padding:0 10px;font-weight:600}#cai .conv.on{background:#0b5c9c;color:#fff}' +
-    '@keyframes caipulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,.5)}70%{box-shadow:0 0 0 10px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}' +
+    '#cai .vx{display:none;padding:10px 12px 12px;border-top:1px solid #e5e7eb;background:linear-gradient(180deg,#effaf5,#fff)}#cai.voice .vx{display:block}#cai.voice .ft{display:none}' +
+    '#cai .vx-top{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#374151}#cai .vx-dot{width:10px;height:10px;border-radius:50%;background:#dc2626;animation:caiblink 1s infinite}' +
+    '#cai .vx-time{font-variant-numeric:tabular-nums;color:#6b7280}#cai .vx-lang{margin-left:auto;color:#0b5c9c;cursor:pointer;font-size:12px}#cai .vx-wave{display:block;width:100%;height:48px;margin:6px 0}' +
+    '#cai .vx-text{min-height:46px;max-height:130px;overflow:auto;font-size:15px;line-height:1.45;color:#111827;background:#fff;border:1px solid #cdeedd;border-radius:10px;padding:8px 10px;white-space:pre-wrap}#cai .vx-text .int{color:#6b7280}#cai .vx-text .ph{color:#9ca3af}' +
+    '#cai .vx-hint{font-size:12px;color:#0b7e55;margin-top:6px}#cai .vx-btns{display:flex;gap:8px;margin-top:10px}#cai .vx-btns button{flex:1;border:1px solid #d1d5db;background:#fff;border-radius:10px;padding:10px 6px;font:600 13px/1 inherit;cursor:pointer;color:#374151}#cai .vx-btns .p{background:#0f9d6b;border-color:#0f9d6b;color:#fff}' +
+    '@keyframes caiblink{50%{opacity:.25}}@keyframes caipulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,.5)}70%{box-shadow:0 0 0 10px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}' +
     '#cai .set{position:absolute;inset:66px 0 0 0;background:#fff;padding:16px;overflow:auto;display:none}#cai .set.open{display:block}#cai .set label{display:block;font-weight:600;font-size:13px;margin:12px 0 4px}#cai .set input[type=password],#cai .set select{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px}' +
     '#cai .set .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}#cai .set .btn{border:1px solid #d1d5db;background:#fff;border-radius:8px;padding:7px 12px;font-weight:600;cursor:pointer}#cai .set .btn.p{background:#0f9d6b;border-color:#0f9d6b;color:#fff}' +
     '#cai .set .chk{display:flex;align-items:center;gap:8px;font-weight:500;margin-top:10px}#cai .note{font-size:12px;color:#6b7280;margin-top:6px}' +
@@ -575,6 +794,9 @@
       p.innerHTML = '<div class="hd"><div style="flex:1"><b>AI Assistant</b><small>Type or speak – e.g. “add a follow-up call with Rio Trading on Monday”</small></div>' +
         '<button class="ib" data-c="clear" title="New conversation">⟲</button><button class="ib" data-c="settings" title="Settings">⚙</button><button class="ib" data-c="close" title="Close">✕</button></div>' +
         '<div class="body" id="cai-body"></div><div class="st" id="cai-st"></div>' +
+        '<div class="vx" id="cai-vx"><div class="vx-top"><span class="vx-dot"></span><b>Listening</b><span class="vx-time" id="cai-vx-time">0:00</span><span class="vx-lang" data-c="settings" id="cai-vx-lang" title="Change voice language"></span></div>' +
+        '<canvas class="vx-wave" id="cai-vx-wave"></canvas><div class="vx-text" id="cai-vx-text"></div><div class="vx-hint" id="cai-vx-hint"></div>' +
+        '<div class="vx-btns"><button type="button" data-c="vx-cancel">✕ Cancel</button><button type="button" data-c="vx-edit">✎ Stop &amp; edit</button><button type="button" class="p" data-c="vx-send">➤ Send</button></div></div>' +
         '<div class="ft"><button class="rb conv" data-c="conv" title="Hands-free: talk back and forth">Talk</button><button class="rb mic" data-c="mic" title="Speak an instruction">🎤</button>' +
         '<textarea id="cai-input" rows="1" placeholder="Ask or instruct… (Enter to send)"></textarea><button class="rb send" data-c="send" title="Send">➤</button></div>' +
         '<div class="set" id="cai-set"></div>';
@@ -588,24 +810,27 @@
         else if (c === 'settings') UI.settings(!$('#cai-set').classList.contains('open'));
         else if (c === 'clear') { if (busy) { stopFlag = true; return; } history = []; $('#cai-body').innerHTML = ''; UI.welcome(); }
         else if (c === 'send') { var t = $('#cai-input').value; $('#cai-input').value = ''; UI.grow(); ask(t, false); }
-        else if (c === 'mic') { if (Voice.listening) Voice.stop(); else { Voice.conversation = false; UI.conv(false); Voice.start(); } }
-        else if (c === 'conv') { if (Voice.conversation) { Voice.stop(); UI.conv(false); try { speechSynthesis.cancel(); } catch (e2) {} } else { Voice.conversation = true; UI.conv(true); setPref('speak', true); Voice.start(); } }
+        else if (c === 'mic') { if (Voice.listening) Voice.finish('edit'); else { Voice.conversation = false; UI.conv(false); Voice.start(); } }
+        else if (c === 'conv') { if (Voice.conversation) { Voice.stop(); UI.conv(false); } else { Voice.conversation = true; UI.conv(true); setPref('speak', true); if (!Voice.listening) Voice.start(); else UI.voice(true); } }
+        else if (c === 'vx-send') Voice.finish('send');
+        else if (c === 'vx-edit') { Voice.conversation = false; UI.conv(false); Voice.finish('edit'); }
+        else if (c === 'vx-cancel') Voice.finish('cancel');
         else if (c === 'chip') { ask(b.textContent, false); }
       });
       var input = $('#cai-input');
       input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); var t = input.value; input.value = ''; UI.grow(); ask(t, false); } });
       input.addEventListener('input', UI.grow);
-      document.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); UI.open(!p.classList.contains('open')); } if (e.key === 'Escape' && p.classList.contains('open') && !$('.modal')) UI.open(false); });
+      document.addEventListener('keydown', function (e) { if (Voice.listening && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); Voice.finish(e.key === 'Enter' ? 'send' : 'cancel'); return; } if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); UI.open(!p.classList.contains('open')); } if (e.key === 'Escape' && p.classList.contains('open') && !$('.modal')) UI.open(false); });
       if (window.speechSynthesis) try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = function () {}; } catch (e) {}
       UI.welcome();
     },
     open: function (on) {
       UI.root.classList.toggle('open', on); $('#cai-fab').style.display = on ? 'none' : '';
-      if (on) setTimeout(function () { $('#cai-input').focus(); }, 50); else { Voice.stop(); UI.conv(false); }
+      if (on) setTimeout(function () { if (!Voice.listening) $('#cai-input').focus(); }, 50); else { Voice.stop(); UI.conv(false); }
     },
     welcome: function () {
       var w = document.createElement('div'); w.className = 'm assistant';
-      w.innerHTML = 'Hello ' + esc(myName().split(/\s+/)[0]) + '. Tell me what to do in the CRM – by typing or with the 🎤 microphone. <span class="hint">“Talk” keeps listening so you can speak back and forth.</span>' +
+      w.innerHTML = 'Hello ' + esc(myName().split(/\s+/)[0]) + '. Tell me what to do in the CRM – by typing or with the 🎤 microphone. <span class="hint">Say “enter” to send what you spoke. “Talk” keeps listening so you can speak back and forth.</span>' +
         '<div class="chips">' + ['What is overdue today?', 'Which invoices are unpaid?', 'Add a lead: Rio Trading, phone 0501234567, from referral', 'Create a VAT return reminder for Power Poles due on the 28th, high priority', 'Mark the latest Power Poles VAT task as completed']
           .map(function (s) { return '<button data-c="chip">' + esc(s) + '</button>'; }).join('') + '</div>';
       $('#cai-body').appendChild(w);
@@ -636,6 +861,36 @@
     status: function (t) { $('#cai-st').textContent = t || ''; },
     busy: function (on) { $('.send', UI.root).disabled = on; if (on) UI.status('Thinking…'); },
     mic: function (on) { $('.mic', UI.root).classList.toggle('on', on); if (!on && !busy) UI.status(''); },
+    voice: function (on) {
+      UI.root.classList.toggle('voice', on); UI.mic(on);
+      if (!on) return;
+      var l = LANGS.filter(function (x) { return x[0] === prefs().lang; })[0], p = prefs();
+      $('#cai-vx-lang').textContent = '🌐 ' + (l ? l[1] : p.lang);
+      $('#cai-vx-hint').textContent = Voice.conversation ? 'Talk mode – say “enter”' + (+p.pauseSec ? ' or pause ' + p.pauseSec + ' s' : '') + ' to send; I answer and listen again.' : 'Say “enter” to send · pauses are fine, I keep listening.';
+      UI.status('');
+    },
+    vtext: function (fin, interim) {
+      var el = $('#cai-vx-text'); if (!el) return;
+      el.innerHTML = fin || interim ? '<span class="fin">' + esc(fin) + '</span>' + (interim ? (fin ? ' ' : '') + '<span class="int">' + esc(interim) + '</span>' : '') : '<span class="ph">Start speaking…</span>';
+      el.scrollTop = el.scrollHeight;
+    },
+    vnote: function (t) { if (t) $('#cai-vx-hint').textContent = t; },
+    vtime: function (ms) { var s = Math.floor(ms / 1000); $('#cai-vx-time').textContent = Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); },
+    wave: function (levels) {
+      var cv = $('#cai-vx-wave'); if (!cv) return;
+      var dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 300, hgt = cv.clientHeight || 48;
+      if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(hgt * dpr); }
+      var g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, hgt);
+      var step = 5, n = Math.floor(w / step), mid = hgt / 2;
+      g.fillStyle = '#0f9d6b';
+      for (var i = 0; i < n; i++) {
+        var v = levels[levels.length - n + i]; if (v == null) v = 0;
+        var bh = Math.max(3, Math.min(hgt, v * hgt * 1.15)), x = i * step;
+        g.globalAlpha = 0.35 + 0.65 * (i / n);
+        g.fillRect(x, mid - bh / 2, 3, bh);
+      }
+      g.globalAlpha = 1;
+    },
     conv: function (on) { $('.conv', UI.root).classList.toggle('on', on); },
     grow: function () { var t = $('#cai-input'); t.style.height = 'auto'; t.style.height = Math.min(120, t.scrollHeight) + 'px'; },
     settings: async function (on) {
@@ -651,8 +906,9 @@
         '<label for="cai-lang">Voice language (what you speak)</label><select id="cai-lang">' + LANGS.map(function (l) { return '<option value="' + l[0] + '"' + (p.lang === l[0] ? ' selected' : '') + '>' + l[1] + '</option>'; }).join('') + '</select>' +
         '<label class="chk"><input type="checkbox" id="cai-speak"' + (p.speak ? ' checked' : '') + '> Read replies aloud after I speak</label>' +
         '<label class="chk"><input type="checkbox" id="cai-speakall"' + (p.speakAll ? ' checked' : '') + '> Also read replies aloud when I type</label>' +
-        '<label class="chk"><input type="checkbox" id="cai-auto"' + (p.autoSend ? ' checked' : '') + '> Send automatically when I stop speaking</label>' +
-        '<p class="note">Voice typing uses the browser’s speech service (Chrome or Edge). Allow the microphone when asked.</p>' +
+        '<label for="cai-pause">In Talk mode, send after a pause of</label><select id="cai-pause">' + [[2, '2 seconds'], [3, '3 seconds'], [5, '5 seconds'], [0, 'never – only when I say “enter”']].map(function (o) { return '<option value="' + o[0] + '"' + (+p.pauseSec === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+        '<label class="chk"><input type="checkbox" id="cai-pausemic"' + (p.pauseMic ? ' checked' : '') + '> Also send after that pause when I use 🎤</label>' +
+        '<p class="note">Say “enter” at the end to send. While listening you see live waves and the text as you speak; pauses don’t cut you off. Computers use Chrome/Edge speech, the Android app uses the phone’s speech service, the Windows app uses Windows speech.</p>' +
         '<div class="row"><button class="btn" data-s="done">Done</button></div>';
       box.onclick = function (e) {
         var s = e.target.getAttribute && e.target.getAttribute('data-s'); if (!s) return;
@@ -666,7 +922,8 @@
         if (id === 'cai-lang') setPref('lang', e.target.value);
         if (id === 'cai-speak') setPref('speak', e.target.checked);
         if (id === 'cai-speakall') setPref('speakAll', e.target.checked);
-        if (id === 'cai-auto') setPref('autoSend', e.target.checked);
+        if (id === 'cai-pause') setPref('pauseSec', +e.target.value);
+        if (id === 'cai-pausemic') setPref('pauseMic', e.target.checked);
       };
     }
   };
@@ -688,7 +945,7 @@
         var d = ev.data;
         if (d.type === 'focus') setTimeout(function () { $('#cai-input').focus(); }, 30);
         if (d.type === 'ask' && d.text) ask(d.text, !!d.spoken);
-        if (d.type === 'voice') { Voice.conversation = false; Voice.start(); }
+        if (d.type === 'voice') { Voice.conversation = false; UI.conv(false); Voice.start(); }
         if (d.type === 'talk') { Voice.conversation = true; UI.conv(true); setPref('speak', true); Voice.start(); }
         if (d.type === 'stop') { Voice.stop(); UI.conv(false); }
       });

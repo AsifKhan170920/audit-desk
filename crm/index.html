@@ -20,7 +20,7 @@ FT.openApp('crm', 'app.html', async function (me) {
   var av = document.querySelector('.nav .avatar'); if (av) { av.textContent = initials; if (av.nextElementSibling) av.nextElementSibling.textContent = name; }
   // team directory (names + expertise) for assignment and reminders
   try { window.FT_TEAM = await FT.getTeam(); } catch (e) { window.FT_TEAM = []; }
-  var V = '?v=5';
+  var V = '?v=6';
   function add(src) { return new Promise(function (res) { var s = document.createElement('script'); s.src = src + V; s.onload = res; s.onerror = res; document.body.appendChild(s); }); }
   await add('../shared/reminders.js');                 // reminder engine
   if (!EMBED) await add('../shared/notify.js');        // phone notifications (Android app)

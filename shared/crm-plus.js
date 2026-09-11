@@ -286,7 +286,7 @@
     app.innerHTML = '<div class="page-head"><div><h1>Reminders</h1><p class="sub">Everything the system will remind ' + (remScope === 'all' ? 'the team' : 'you') + ' about in the next 14 days</p></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (m.admin ? '<button class="btn btn-sm ' + (remScope === 'mine' ? 'btn-primary' : '') + '" data-cp="rem-scope" data-v="mine">Mine</button><button class="btn btn-sm ' + (remScope === 'all' ? 'btn-primary' : '') + '" data-cp="rem-scope" data-v="all">Everyone</button>' : '') +
       '<a class="btn btn-sm" href="#/settings">⚙ Policies</a></div></div>' +
-      (phone ? '<div class="card card-p" style="margin-bottom:14px;border-left:4px solid ' + (phone.ok ? 'var(--brand)' : 'var(--amber)') + '">📱 <span id="cp-phone-text">' + esc2(phone.text) + '</span>' + (phone.ok ? '' : ' <span class="link" data-cp="phone-enable">Turn on</span>') +
+      (phone ? '<div class="card card-p" style="margin-bottom:14px;border-left:4px solid ' + (phone.ok ? 'var(--brand)' : 'var(--amber)') + '">' + (phone.desktop ? '💻' : '📱') + ' <span id="cp-phone-text">' + esc2(phone.text) + '</span>' + (phone.ok ? '' : ' <span class="link" data-cp="phone-enable">Turn on</span>') +
         '<div class="rc-act"><button class="btn" data-cp="phone-test">🔔 Send a test notification</button>' +
         (phone.hasSystem ? '<button class="btn" data-cp="phone-sound">🔊 Sound & pop-up settings</button>' + (phone.battery === false ? '<button class="btn btn-primary" data-cp="phone-battery">🔋 Allow reminders in background</button>' : '') : '') + '</div>' +
         (phone.battery === false ? '<div class="q-hint">Samsung: also open Settings → Apps → Fair Tax → Battery → <b>Unrestricted</b>, otherwise reminders may stop when the app is closed.</div>' : '') +
@@ -391,7 +391,7 @@
         db.clients.unshift(nc); save(); closeModal(); toast('Client created – assigning staff and planning reminders…');
         setTimeout(function () { location.hash = '#/client/' + nc.id; }, 900); break;
       }
-      case 'phone-test': if (window.FTNotify) FTNotify.test().then(function (ok) { toast(ok ? 'Test notification in 8 seconds – close the app now to check the sound' : 'Turn on notifications first'); }); break;
+      case 'phone-test': if (window.FTNotify) FTNotify.test().then(function (ok) { toast(ok ? (FTNotify.desktop && FTNotify.desktop() ? 'Test reminder in 5 seconds – you can close the window to check it' : 'Test notification in 8 seconds – close the app now to check the sound') : 'Turn on notifications first'); }); break;
       case 'phone-battery': if (window.FTNotify) FTNotify.allowBackground(); break;
       case 'phone-sound': if (window.FTNotify) FTNotify.openNotificationSettings(); break;
       case 'phone-enable': if (window.FTNotify) FTNotify.enable().then(function () { renderReminders(); }); break;

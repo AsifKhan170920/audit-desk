@@ -1,6 +1,6 @@
 /* ============================================================
-   PHONE NOTIFICATIONS (Android app)
-   Turns the reminder list into notifications scheduled on the phone.
+   PHONE / COMPUTER NOTIFICATIONS (Android app and Windows app)
+   Turns the reminder list into notifications scheduled on the device.
    They fire even when the app is closed; opening the app (or any change
    in the CRM) refreshes them. In a normal browser this file does nothing.
    ============================================================ */
@@ -25,6 +25,9 @@
   function cap() { return window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() ? window.Capacitor : null; }
   function plugin() { var c = cap(); return c && c.Plugins && c.Plugins.LocalNotifications; }
   function sys() { var c = cap(); return c && c.Plugins && c.Plugins.FTSystem; }
+  // Windows app (Fair Tax for Windows): reminders are kept by the app itself, in the tray
+  function desk() { try { return window.ftDesktop && window.ftDesktop.notify ? window.ftDesktop.notify : null; } catch (e) { return null; } }
+  function plain(r) { return {id: r.id, at: new Date(r.at).toISOString(), kind: r.kind, title: r.title, body: r.body, details: (r.details || []).slice(0, 4), route: r.route || '#/reminders'}; }
   function me() {
     var m = (window.FT && FT.me) || {};
     return {name: m.name || m.id || '', id: m.id || '', admin: m.role === 'admin'};
@@ -97,6 +100,14 @@
 
   // schedule everything for the signed-in person for the next 7 days
   async function schedule(db) {
+    if (desk() && db && window.FTReminders) {
+      try {
+        var dl = FTReminders.compute(db, {days: 7, me: me(), max: MAX});
+        var res = await desk().schedule(dl.map(plain));
+        state.permission = 'granted'; state.count = (res && res.count) || dl.length; state.at = new Date().toISOString(); state.error = '';
+        return {scheduled: state.count};
+      } catch (e) { state.error = e.message || String(e); return {error: state.error}; }
+    }
     var LN = plugin(); if (!LN || !db || !window.FTReminders) return {skipped: true};
     try {
       if ((await permission(false)) !== 'granted') { state.error = 'Notifications are off'; return {skipped: true}; }
@@ -118,7 +129,7 @@
 
   // the dashboard has no CRM data loaded – fetch the shared copy first
   async function scheduleFromCloud() {
-    if (!plugin() || !window.FT || !FT.me || !FT.canOpen(FT.me, 'crm')) return {skipped: true};
+    if (!(plugin() || desk()) || !window.FT || !FT.me || !FT.canOpen(FT.me, 'crm')) return {skipped: true};
     var key = FT.APPS.crm.key;
     try { await FT.pull('crm', key); } catch (e) {}
     var raw = localStorage.getItem(key); if (!raw) return {skipped: true};
@@ -126,6 +137,7 @@
   }
 
   async function enable() {
+    if (desk()) { if (typeof load === 'function') await schedule(load()); else await scheduleFromCloud(); return true; }
     var LN = plugin(); if (!LN) return false;
     var p = await permission(true);
     if (p === 'granted' && state.exact && state.exact !== 'granted') { try { await LN.changeExactNotificationSetting(); } catch (e) {} }
@@ -135,6 +147,7 @@
 
   // a sample reminder in 8 seconds – close the app to check sound and pop-up
   async function test() {
+    if (desk()) { try { await desk().test(); return true; } catch (e) { return false; } }
     var LN = plugin(); if (!LN) return false;
     if ((await permission(true)) !== 'granted') return false;
     await prepare();
@@ -149,6 +162,10 @@
   async function openNotificationSettings() { try { if (sys()) { await sys().openNotificationSettings(); return true; } } catch (e) {} return false; }
 
   function status() {
+    if (desk()) {
+      var w = state.at ? new Date(state.at).toLocaleString('en-GB', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : '';
+      return {ok: true, desktop: true, loud: true, text: state.at ? state.count + ' reminders set on this computer for the next 7 days (updated ' + w + ') – they pop up even when the window is closed.' + (state.error ? ' · ' + state.error : '') : 'Reminders on this computer are being prepared…'};
+    }
     if (!plugin()) return null;
     if (state.permission === 'denied') return {ok: false, text: 'Phone notifications are blocked. Allow them in Android Settings → Apps → Fair Tax → Notifications.'};
     if (state.permission !== 'granted') return {ok: false, text: 'Phone notifications are not turned on yet.'};
@@ -187,7 +204,7 @@
     });
   }
 
-  window.FTNotify = {native: function () { return !!plugin(); }, schedule: schedule, scheduleFromCloud: scheduleFromCloud, enable: enable, status: status, permission: permission,
+  window.FTNotify = {native: function () { return !!(plugin() || desk()); }, desktop: function () { return !!desk(); }, schedule: schedule, scheduleFromCloud: scheduleFromCloud, enable: enable, status: status, permission: permission,
     test: test, allowBackground: allowBackground, openNotificationSettings: openNotificationSettings, PENDING_KEY: PENDING_KEY, _state: state};
   if (plugin()) { listen(); permission(false).catch(function () {}); appBuild(); }
 })();
