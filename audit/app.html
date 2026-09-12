@@ -425,7 +425,7 @@ const CATALOG = [
   {key:'ca',   label:'Shareholder’s current account', sec:'eq', dr:false, note:'SHAREHOLDER’S CURRENT ACCOUNT', folder:'01 Legal & Equity'},
   {key:'ltl',  label:'Long term loans', sec:'ncl', dr:false, note:'LONG TERM LOANS', folder:'03 Bank & Loans', hint:'Non-current portion only'},
   {key:'eosb', label:'Employees’ end of service benefits', sec:'ncl', dr:false, note:'EMPLOYEES’ END OF SERVICE BENEFITS', folder:'06 Payroll & EOSB'},
-  {key:'pay',  label:'Accounts and other payables', sec:'cl', dr:false, note:'ACCOUNTS AND OTHER PAYABLES', folder:'04 Receivables & Payables', hint:'Corporate tax provision is added automatically'},
+  {key:'pay',  label:'Accounts and other payables', sec:'cl', dr:false, note:'ACCOUNTS AND OTHER PAYABLES', folder:'04 Receivables & Payables', hint:'Corporate tax provision is added automatically unless it is already typed here'},
   {key:'rppay',label:'Due to related parties', sec:'cl', dr:false, note:'DUE TO RELATED PARTIES', folder:'04 Receivables & Payables'},
   {key:'stb',  label:'Short term borrowings', sec:'cl', dr:false, note:'SHORT TERM BORROWINGS', folder:'03 Bank & Loans', hint:'Including current portion of long term loans'},
   {key:'rev',  label:'Revenue', sec:'inc', dr:false, note:'REVENUE', folder:'07 Revenue & Expenses'},
@@ -551,6 +551,13 @@ function lrRule(en){ const c = engClient(en), p = (c && c.profile) || {}, n = (v
   return {pct: n(p.lrPct, 5), cap: n(p.lrCap, 50), typed: String(p.lrPct ?? '').trim() !== ''}; }
 function eqDiffLabel(v){ return Math.abs(v) <= 10 ? 'Rounding difference' : 'Other movements (difference – check)'; }
 
+function ctPayField(id, en, r, yr){
+  const b = r[yr], bind = yr === 'cy' ? 'eng.settings.ctPay' : 'eng.pyInfo.ctPay', val = (yr === 'cy' ? en.settings.ctPay : en.pyInfo.ctPay) || 'auto';
+  if (b.ctLedger) return '';
+  const auto = b.ctInPay && b.ctPayMode === 'auto' ? 'Auto – typed in payables, not added' : 'Auto – added to payables';
+  return field(id, 'Provision for corporate tax in payables', val, {bind, select: [['auto', auto], ['ledger', 'Typed in payables – do not add'], ['add', 'Add to payables']],
+    hint: b.ctInPay ? `Payables show the typed line${b.ctTyped ? ` (${fmtN(b.ctTyped)})` : ''} only – no “Provision for corporate tax” row` : `“Provision for corporate tax” ${fmtN(b.ct)} is added to payables${b.ctTyped ? ` – a corporate tax line of ${fmtN(b.ctTyped)} is also typed there` : ''}`});
+}
 function ctFor(pbt, adj){ return Math.round(Math.max(0, pbt + (adj || 0) - 375000) * 0.09); }
 const CT_NAME = /corporate\s*tax|income\s*tax|\bCT\s*(payable|provision)|tax\s*(expense|charge)/i;
 function ctPayLines(eng, col){ return (eng.tb || []).filter(l => l.fs === 'pay' && CT_NAME.test(`${l.ledger || ''} ${l.caption || ''}`) && R(l[col || 'amt']) !== 0); }
@@ -598,6 +605,12 @@ function compute(eng, prevEng){
   py.ctAdj = R(PYI.ctAdjust);
   py.ctCalc = ctFor(py.pbt, py.ctAdj);
   py.ct = py.ctLedger ? R(py.ctx) : PYI.ctMode === 'manual' ? R(PYI.ctAmount) : py.ctCalc;
+  // the provision may already be typed in the payables ledger: then it is not added again (Auto = a corporate tax line in payables equal to the tax)
+  for (const [b, mode, col] of [[cy, S.ctPay, 'amt'], [py, PYI.ctPay, 'py']]){
+    const tl = ctPayLines(eng, col), typed = tl.reduce((a, l) => a + R(l[col]), 0);
+    b.ctPayMode = mode === 'add' || mode === 'ledger' ? mode : 'auto'; b.ctTyped = typed;
+    b.ctInPay = !b.ctLedger && !!b.ct && (b.ctPayMode === 'ledger' || (b.ctPayMode === 'auto' && tl.length > 0 && Math.abs(typed - b.ct) <= 1));
+  }
   cy.pat = cy.pbt - cy.ct; py.pat = py.pbt - py.ct;
   const eqIt = (yr, col) => (eng.soceItems || []).filter(x => x.yr === yr).reduce((a, x) => a + R(x[col]), 0);
   ['cap', 'lr', 're', 'ca', 'oth'].forEach(col => { cy[col + 'Items'] = eqIt('cy', col); py[col + 'Items'] = eqIt('py', col); });
@@ -630,7 +643,7 @@ function compute(eng, prevEng){
   // a trial balance holding closing reserves also still holds this year's profit – take the difference out for the balance check
   const eqTbAdj = (lrIsClose ? cy.lr - cy.lrOpen : 0) + (reIsClose ? cy.re - cy.reOpen : 0);
   for (const b of [cy, py]){
-    b.payTot = b.pay + (b.ctLedger ? 0 : b.ct);
+    b.payTot = b.pay + (b.ctLedger || b.ctInPay ? 0 : b.ct);
     b.nca = b.ppe + b.xnca; b.caTot = b.inv + b.rec + b.rprec + b.cash + b.xca; b.ta = b.nca + b.caTot;
     b.eq = b.cap + b.lrClose + b.reClose + b.caClose + b.xeq;
     b.ncl = b.ltl + b.eosb + b.xncl; b.cl = b.payTot + b.rppay + b.stb + b.xcl; b.tl = b.ncl + b.cl; b.tel = b.eq + b.tl;
@@ -671,7 +684,7 @@ function compute(eng, prevEng){
   K = 'unmapped'; add(unmapped === 0, unmapped ? `${unmapped} ledger line(s) not in any schedule` : 'All ledger lines are in schedules');
   K = 'ct'; for (const [b, col, FY] of [[cy, 'amt', eng.year], [py, 'py', eng.year - 1]]){
     const tl = ctPayLines(eng, col);
-    if (!b.ctLedger && b.ct && tl.length) add(false, `Corporate tax FY${FY} may be counted twice – the payables ledger holds “${tl[0].ledger || tl[0].caption}” ${fmtN(tl.reduce((a, l) => a + R(l[col]), 0))} and the provision ${fmtN(b.ct)} is added to payables again`);
+    if (!b.ctLedger && !b.ctInPay && b.ct && tl.length) add(false, `Corporate tax FY${FY} may be counted twice – the payables ledger holds “${tl[0].ledger || tl[0].caption}” ${fmtN(tl.reduce((a, l) => a + R(l[col]), 0))} and the provision ${fmtN(b.ct)} is added to payables again`);
     else if (b.ctLedger && b.ct !== b.ctCalc && (col === 'amt' ? S.ctMode !== 'manual' : PYI.ctMode !== 'manual')) add(false, `Corporate tax FY${FY} in the ledger (${fmtN(b.ct)}) differs from 9% above AED 375,000 on the profit before tax (${fmtN(b.ctCalc)}) – check the tax adjustments`, 'warn');
   }
   K = 'sofp-cy'; add(cy.ta === cy.tel, cy.ta === cy.tel ? `Statement of financial position ${eng.year} agrees` : `Statement of financial position ${eng.year} out by ${fmtN(cy.ta - cy.tel)}`);
@@ -727,7 +740,7 @@ function rollForward(client, eng){
     if (l.fs === 're') py = r.cy.reClose; if (l.fs === 'lr') py = r.cy.lrClose;
     return {id: uid(), ledger: l.ledger, fs: l.fs, caption: l.caption, amt: 0, py, docs: []};
   });
-  n.pyInfo.caOpen = r.cy.caOpen; n.pyInfo.lrTransfer = r.cy.lrTransfer; n.pyInfo.ctMode = 'manual'; n.pyInfo.ctAmount = r.cy.ct;
+  n.pyInfo.caOpen = r.cy.caOpen; n.pyInfo.lrTransfer = r.cy.lrTransfer; n.pyInfo.ctMode = 'manual'; n.pyInfo.ctAmount = r.cy.ct; n.pyInfo.ctPay = r.cy.ctInPay ? 'ledger' : (eng.settings.ctPay || 'auto');
   n.pyInfo.cf = {};
   n.ppe = r.ppe.map(p => ({id: uid(), name: p.name, life: p.life, costOpen: p.costClose, add: 0, disp: 0, depOpen: p.depClose, charge: 0, depDisp: 0, docs: []}));
   n.ppePy = {add: r.ppeT.add, disp: r.ppeT.dispWdv, charge: r.ppeT.charge};
@@ -1322,7 +1335,7 @@ function buildReport(client, eng, prevEng){
       grp.push(head(key, NT('ca', 'SHAREHOLDER’S CURRENT ACCOUNT')), T([row('Balance at the beginning of the year', '', cy.caOpen, py.caOpen), row('Net movement during the year', '', cy.caMove - cy.caItems, py.caMove - py.caItems)].concat(eqNoteRows('ca'), [total('Balance at the end of the year', cy.caClose, py.caClose)])),
         {k: 'small', text: 'The current account is unsecured, interest-free and has no fixed repayment terms.'});
     } else if (key === 'pay'){
-      const pc = cy.ctLedger ? 0 : cy.ct, pp = py.ctLedger ? 0 : py.ct;
+      const pc = cy.ctLedger || cy.ctInPay ? 0 : cy.ct, pp = py.ctLedger || py.ctInPay ? 0 : py.ct;
       const extra = nz(pc, pp) ? [row('Provision for corporate tax', '', pc, pp)] : [];
       grp.push(head(key, NT('pay')), T(subRows('pay', extra).concat([total('', cy.payTot, py.payTot)])));
     } else if (key === 'ct'){
@@ -2836,6 +2849,7 @@ function vAdjust(){
     ${r.cy.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.cy.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>` : `${field('ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
     ${S.ctMode === 'manual' ? field('ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}`}
     <div class="field"><label>Corporate tax for the year</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:cy}`)}>${fmtN(r.cy.ct)}</div></div>
+    ${ctPayField('ct-pay', en, r, 'cy')}
     ${(r.cy.eqModes || {}).lr === 'close' ? `<div class="field"><label>Transfer to legal reserve</label><div class="static">${fmtN(r.cy.lrTransfer)} <span class="muted small">(legal reserve line holds the closing balance)</span></div></div>` : field('lr-tr', 'Transfer to legal reserve', S.lrTransfer, {bind: 'eng.settings.lrTransfer', num: true, hint: `Suggested: ${fmtN(r.cy.lrSuggest)} (${r.cy.lrRule.pct}% of profit until reserve = ${r.cy.lrRule.cap}% of capital, per company profile) <button class="linkish" data-act="lr-suggest">Use</button>`})}
     ${field('disp-pr', 'Proceeds from disposal of PPE', S.disposalProceeds, {bind: 'eng.settings.disposalProceeds', num: true})}
     ${r.ppe.length ? '' : field('ppe-add', 'Additions to PPE (no PPE schedule)', S.ppeAdditions, {bind: 'eng.settings.ppeAdditions', num: true})}
@@ -2846,6 +2860,7 @@ function vAdjust(){
     ${r.py.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.py.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>` : `${field('py-ct-mode', `Corporate tax FY${en.year - 1}`, P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
     ${P.ctMode === 'manual' ? field('py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}`}
     <div class="field"><label>Corporate tax FY${en.year - 1}</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:py}`)}>${fmtN(r.py.ct)}</div></div>
+    ${ctPayField('py-ct-pay', en, r, 'py')}
     ${eqModeFields(en, r, 'adj-eq')}
     ${(r.cy.eqModes || {}).firstPy ? `<div class="field"><label>Transfer to legal reserve in FY${en.year - 1}</label><div class="static">${fmtN(r.py.lrTransfer)} <span class="muted small">(first year)</span></div></div>` : field('py-lr', `Transfer to legal reserve in FY${en.year - 1}`, P.lrTransfer, {bind: 'eng.pyInfo.lrTransfer', num: true})}
     ${(r.cy.eqModes || {}).firstPy ? '' : field('py-ca', `Shareholder current account at start of FY${en.year - 1}`, P.caOpen, {bind: 'eng.pyInfo.caOpen', num: true})}
@@ -3387,8 +3402,8 @@ function drillBody(key, yr){
     if (k === 'cap') extra = `<h3 class="h3">Share capital</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.py.cap), fmtN(r.py.capOpen) + pyOpenTag) + fig(`Share capital introduced`, fmtN(r.cy.capIntro), fmtN(r.py.capIntro)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.capItems), fmtN(r.py.capItems)) + fig('Balance at the end of the year', fmtN(r.cy.cap), fmtN(r.py.cap), 'tot'))}
       <p class="small muted">${E.firstPy ? `FY${PY} is the first year, so all FY${PY} share capital shows as introduced.` : `If the company started in FY${PY}, choose “Yes” for the first year above. If an existing company introduced capital in FY${PY}, add it as an item for FY${PY}.`}</p>`;
   } else if (k === 'pay' && (r.cy.ct || r.py.ct)){
-    const led = b => b.ctLedger ? muted('already in the ledger lines above') : '';
-    extra = `<h3 class="h3">Corporate tax included in payables</h3>${figT(fig('Provision for corporate tax added', fmtN(r.cy.ctLedger ? 0 : r.cy.ct) + led(r.cy), fmtN(r.py.ctLedger ? 0 : r.py.ct) + led(r.py)) + fig('Total payables in the statement', fmtN(r.cy.payTot), fmtN(r.py.payTot), 'tot'))}
+    const led = b => b.ctLedger || b.ctInPay ? muted('already typed in the ledger lines above') : '';
+    extra = `<h3 class="h3">Corporate tax included in payables</h3>${figT(fig('Provision for corporate tax added', fmtN(r.cy.ctLedger || r.cy.ctInPay ? 0 : r.cy.ct) + led(r.cy), fmtN(r.py.ctLedger || r.py.ctInPay ? 0 : r.py.ct) + led(r.py)) + fig('Total payables in the statement', fmtN(r.cy.payTot), fmtN(r.py.payTot), 'tot'))}
       ${r.checks.some(x => x.key === 'ct' && x.level === 'bad') ? `<div class="banner bad">A corporate tax line is typed in these payables and the provision is added again. <button class="linkish" data-act="check-why" data-key="ct">See how to fix</button></div>` : ''}<div class="row"><button class="btn small" data-drill="ct">Change corporate tax</button></div>`;
   }
   const lineNote = isRes ? `<p class="small muted">${e_(s.label)} lines: FY${Y} = <b>${(r.cy.eqModes || {})[k] === 'close' ? 'closing' : 'opening'}</b> balance, FY${PY} = <b>closing</b> balance.</p>` : '';
@@ -3407,10 +3422,12 @@ function taxBody(){
     <div class="form-grid"><div class="box"><h3 class="h3">FY${Y}</h3>
       ${r.cy.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.cy.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>${field('q-ct-adj', 'Tax adjustments for the 9% check', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}` : `${field('q-ct-mode', 'Corporate tax', S.ctMode, {bind: 'eng.settings.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount manually']]})}
       ${S.ctMode === 'manual' ? field('q-ct-amt', 'Corporate tax amount', S.ctAmount, {bind: 'eng.settings.ctAmount', num: true}) : field('q-ct-adj', 'Tax adjustments (add-backs +, deductions −)', S.ctAdjust, {bind: 'eng.settings.ctAdjust', num: true})}`}
+      ${ctPayField('q-ct-pay', en, r, 'cy')}
       <p class="small">Profit before tax ${fmtN(r.cy.pbt)} · corporate tax <b>${fmtN(r.cy.ct)}</b></p></div>
     <div class="box"><h3 class="h3">FY${PY}</h3>
       ${r.py.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.py.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>` : `${field('q-py-ct-mode', 'Corporate tax', P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
       ${P.ctMode === 'manual' ? field('q-py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('q-py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}`}
+      ${ctPayField('q-py-ct-pay', en, r, 'py')}
       <p class="small">Profit before tax ${fmtN(r.py.pbt)} · corporate tax <b>${fmtN(r.py.ct)}</b></p></div></div>
     <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
 }
@@ -3604,7 +3621,7 @@ const CKL_ITEMS = [
   {id: 'ct-once', grp: 'tax', text: 'Corporate tax counted once – the provision is either in the payables ledger or added by the software, not both',
     auto: x => { const k = x.r.checks.filter(q => q.key === 'ct' && q.level === 'bad');
       return k.length ? {st: 'bad', msg: k.map(q => q.text).join(' · '), fix: `<button class="btn small" data-act="check-why" data-key="ct">How to fix</button>`}
-        : {st: 'ok', msg: x.r.cy.ctLedger ? 'Tax taken from the ledger – the provision is not added again' : x.r.cy.ct || x.r.py.ct ? 'Provision added once by the software' : 'No corporate tax'}; }},
+        : {st: 'ok', msg: x.r.cy.ctLedger ? 'Tax taken from the ledger – the provision is not added again' : x.r.cy.ctInPay ? 'Provision typed in the payables ledger – not added again' : x.r.cy.ct || x.r.py.ct ? 'Provision added once by the software' : 'No corporate tax'}; }},
   {id: 'ct-calc', grp: 'tax', text: 'Corporate tax charge agrees to the tax computation / return (adjustments, reliefs, first tax period, prior year as signed)',
     auto: x => { const w = x.r.checks.filter(q => q.key === 'ct' && q.level === 'warn');
       return {st: w.length ? 'warn' : 'todo', msg: (w.length ? w.map(q => q.text).join(' · ') + ' · ' : '') + `FY${x.Y}: ${fmtN(x.r.cy.ct)} on profit before tax ${fmtN(x.r.cy.pbt)} · FY${x.PY}: ${fmtN(x.r.py.ct)} on ${fmtN(x.r.py.pbt)}`, fix: cklDrill('ct', 'Corporate tax')}; }},
@@ -3828,7 +3845,8 @@ function checkBody(key){
       list.push({label: `FY${PY} retained earnings line may be the opening balance`, amt: -(r.py.pat - r.py.div - r.py.lrTransfer + r.py.reItems), how: `The FY${PY} column needs the closing balance (after FY${PY} profit, dividend and transfer).`, btn: openBtn('re', 'Open retained earnings', 'py')});
       if (r.ppe.length && r.ppeLines.n) list.push({label: `FY${PY} PPE ledger lines differ from the PPE schedule`, amt: r.ppeLines.py - T.nbvPy, how: `The statement uses the schedule (${fmtN(T.nbvPy)}), not the ledger lines (${fmtN(r.ppeLines.py)}).`, btn: whyBtn('ppe-py', 'See the PPE difference')});
     }
-    list.push(b.ct && !b.ctLedger ? {label: `Corporate tax FY${FY} is added to payables`, amt: -b.ct, how: `If the payables ledger already holds the corporate tax provision (${fmtN(b.ct)}), it is counted twice.`, btn: openBtn('pay', 'Open payables', yr) + whyBtn('ct', 'Corporate tax')} : null);
+    list.push(b.ctInPay ? {label: `Corporate tax FY${FY} is typed in payables – its debit may be taken off equity twice`, amt: b.ct, how: `The provision ${fmtN(b.ct)} is a ledger line in payables, so its debit is also in the ledger – usually inside retained earnings, the current account or an expense line – while the statements take the tax off profit again. Put that debit line in “Corporate tax (in the ledger)”, or take the tax out of that line.`, btn: whyBtn('ct', 'Corporate tax')} : null);
+    list.push(b.ct && !b.ctLedger && !b.ctInPay ? {label: `Corporate tax FY${FY} is added to payables`, amt: -b.ct, how: `If the payables ledger already holds the corporate tax provision (${fmtN(b.ct)}), it is counted twice.`, btn: openBtn('pay', 'Open payables', yr) + whyBtn('ct', 'Corporate tax')} : null);
     const us = yr === 'cy' ? unmSum : unmSumPy;
     list.push(us ? {label: 'Ledger lines not in any schedule', amt: us, how: 'They are left out of the statement.', btn: whyBtn('unmapped', 'Put them in schedules')} : null);
     body += causes(d, list);
@@ -3889,11 +3907,13 @@ function checkBody(key){
     body = tbl([`FY${Y}`, `FY${PY}`], tr('Profit before tax', [r.cy.pbt, r.py.pbt]) + tr('9% above AED 375,000 (after tax adjustments)', [r.cy.ctCalc, r.py.ctCalc])
       + tr('Corporate tax charge used', [fmtN(r.cy.ct) + muted(src(r.cy, S.ctMode)), fmtN(r.py.ct) + muted(src(r.py, en.pyInfo.ctMode))], 'tot')
       + tr('Provision added to payables by the software', [r.cy.payTot - r.cy.pay, r.py.payTot - r.py.pay]));
+    body += `<div class="form-grid">${ctPayField('q-why-ct-pay', en, r, 'cy').replace('Provision for corporate tax in payables', `FY${Y} provision in payables`)}${ctPayField('q-why-py-ct-pay', en, r, 'py').replace('Provision for corporate tax in payables', `FY${PY} provision in payables`)}</div>`;
     const ctLines = en.tb.filter(l => CT_NAME.test(`${l.ledger || ''} ${l.caption || ''}`) || l.fs === 'ctx');
     const lineRows = ctLines.map(l => `<tr><td>${e_(l.ledger || l.caption || '(no name)')}</td><td><select id="q-ctfs-${l.id}" data-line="${l.id}" data-field="fs" aria-label="Schedule for ${e_(l.ledger)}">${schedOptions(en, l.fs)}</select></td><td class="r">${fmtN(l.amt)}</td><td class="r">${fmtN(l.py)}</td></tr>`).join('');
     body += `<h3 class="h3">Corporate tax lines in the ledger</h3>${ctLines.length ? `<div class="table-wrap"><table class="ui compact q-tab"><thead><tr><th>Ledger</th><th>Schedule</th><th class="r">FY${Y}</th><th class="r">FY${PY}</th></tr></thead><tbody>${lineRows}</tbody></table></div>` : '<p class="small muted">No ledger line is named corporate tax.</p>'}
       <h3 class="h3">How to fix a double count</h3><ol class="setup small">
         <li><b>The books already hold the tax</b> (Dr tax expense, Cr corporate tax payable): keep the payable line in payables and put the <b>tax expense</b> line in <b>Corporate tax (in the ledger)</b>. The charge then comes from the ledger and the software stops adding the provision.</li>
+        <li><b>Keep the typed payable line and stop the automatic row</b>: choose “Typed in payables – do not add” above. If the statement of financial position then differs by the tax, its debit is still inside retained earnings, the current account or an expense – move it to Corporate tax (in the ledger).</li>
         <li><b>The payable line was typed only to show the tax</b>: delete it – the software adds the provision from the tax calculation.</li>
         <li>If the tax debit was posted to retained earnings or the current account, make a separate “Corporate tax expense” line for it and put it in Corporate tax (in the ledger).</li></ol>
       <div class="row"><button class="btn small" data-drill="pay">Open payables</button><button class="btn small" data-drill="ct">Corporate tax settings</button></div>`;
