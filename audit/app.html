@@ -72,6 +72,7 @@ table.ui td input,table.ui td select{width:100%;border:1px solid transparent;bac
 table.ui td input:hover,table.ui td select:hover{border-color:var(--line)}
 table.ui td input:focus,table.ui td select:focus{border-color:var(--primary);background:#fff;outline:none}
 .numi{text-align:right;min-width:92px;font-variant-numeric:tabular-nums}.numi.s{min-width:48px}
+.w-cmt{min-width:130px}
 .w-ledger{min-width:190px}.w-fs{min-width:170px}.w-cap{min-width:150px}.w-ppe{min-width:150px}
 table.ui.tb td,table.ui.ppe td{padding:5px 5px}table.ui.tb td input,table.ui.tb td select,table.ui.ppe td input{font-size:13.5px;padding:4px 5px}
 table.ui.tb th,table.ui.ppe th{padding:7px 6px}
@@ -195,7 +196,7 @@ table.matrix tr.msub th{color:var(--muted);font-size:12.5px;text-transform:upper
 table.matrix tr.mband th{background:var(--primary);color:#fff;text-transform:none}
 /* single year header for all schedules */
 .yearbar,.sched:not(.unassigned) .sched-head,.sec-title{display:grid;grid-template-columns:var(--sg-name) var(--sg-cy) var(--sg-py) var(--sg-doc) var(--sg-act);gap:0;align-items:center}
-main{--sg-led:27%;--sg-cap:29%;--sg-name:56%;--sg-cy:14%;--sg-py:14%;--sg-doc:10%;--sg-act:6%}
+main{--sg-led:23%;--sg-cap:23%;--sg-name:46%;--sg-cy:13%;--sg-py:13%;--sg-cmt:16%;--sg-doc:9%;--sg-act:5%}
 .yearbar{grid-template-columns:var(--sg-led) var(--sg-cap) var(--sg-cy) var(--sg-py) var(--sg-doc) var(--sg-act);position:sticky;top:0;z-index:5;background:var(--primary);color:#fff;border-radius:10px;border-left:3px solid var(--primary);font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:9px 0;box-shadow:0 2px 6px rgba(0,0,0,.08)}
 .yearbar>span{padding:0 11px}.yearbar .r{text-align:right}.yearbar .sign-hint{background:rgba(255,255,255,.2);color:#fff}
 .sched:not(.unassigned) .sched-head{padding:10px 0;gap:0;flex-wrap:nowrap}
@@ -207,8 +208,8 @@ main{--sg-led:27%;--sg-cap:29%;--sg-name:56%;--sg-cy:14%;--sg-py:14%;--sg-doc:10
 .sec-title{grid-template-columns:var(--sg-name) var(--sg-cy) 1fr;margin:8px 0 -4px;border-left:3px solid transparent}
 .sec-title .sec-tot{text-align:right;padding-right:11px;color:var(--ink);letter-spacing:0;font-size:13px;font-variant-numeric:tabular-nums}
 table.ui.tb.sch{table-layout:fixed;width:100%}
-table.sch col.c-led{width:var(--sg-led)}table.sch col.c-cap{width:var(--sg-cap)}table.sch col.c-cy{width:var(--sg-cy)}table.sch col.c-py{width:var(--sg-py)}table.sch col.c-doc{width:var(--sg-doc)}table.sch col.c-act{width:var(--sg-act)}
-table.sch .w-ledger,table.sch .w-cap,table.sch .numi{min-width:0}
+table.sch col.c-led{width:var(--sg-led)}table.sch col.c-cap{width:var(--sg-cap)}table.sch col.c-cy{width:var(--sg-cy)}table.sch col.c-py{width:var(--sg-py)}table.sch col.c-cmt{width:var(--sg-cmt)}table.sch col.c-doc{width:var(--sg-doc)}table.sch col.c-act{width:var(--sg-act)}
+table.sch .w-ledger,table.sch .w-cap,table.sch .w-cmt,table.sch .numi{min-width:0}
 table.sch td{overflow:hidden}table.sch .doc-link{max-width:100%}
 table.sch td.acts{white-space:nowrap;overflow:visible}
 table.sch tfoot td.r{padding-right:11px}
@@ -294,6 +295,9 @@ table.ui.sg td.cur{color:var(--muted);font-size:13px;max-width:260px}
 table.ui.sg tr.same td.cur{color:var(--ok)}
 .banner.warn ul{margin:4px 0 0 18px;padding:0}
 .banner.warn{background:var(--warn-soft);color:#7a5200}
+.q-cmt-box{margin-top:10px}
+.fs-order{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:10px}
+.fs-order .box{padding:10px 12px}.fs-order .lay-row{padding:5px 6px}
 .ckl-list{list-style:none;margin:6px 0 0;padding:0}
 .ckl-it{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:8px 14px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
 .ckl-it:first-child{border-top:0}
@@ -1197,29 +1201,35 @@ function buildReport(client, eng, prevEng){
 
   /* ---------- statements ---------- */
   const addC = (arr, sec, sign) => custom(sec).forEach(x => { if (nz(cy[x.key], py[x.key])) arr.push(row(x.label, x.key, (sign || 1) * cy[x.key], (sign || 1) * py[x.key])); });
+  /* the order of the lines inside each part of the statements – changed on the Report layout screen ("*" is where custom schedules sit) */
+  const FSO = LAY.fsOrder = LAY.fsOrder || {};
+  const FS_FIELD = {pay: 'payTot', lr: 'lrClose', re: 'reClose', ca: 'caClose'};
+  const FS_ALWAYS = {cap: true, re: true};
+  const fsKeys = (sec, keys) => { const cus = custom(sec).map(x => x.key);
+    const base = keys.reduce((a, k) => a.concat(k === '*' ? cus : [k]), []);
+    const all = base.concat(cus.filter(k => !base.includes(k)));
+    return mergeOrder(FSO[sec], all).filter(k => all.includes(k)); };
+  const fsList = {};
+  const fsRows = (arr, sec, keys, sign) => fsKeys(sec, keys).forEach(k => {
+    const f = FS_FIELD[k] || k, a = (sign || 1) * cy[f], b = (sign || 1) * py[f];
+    const shown = nz(a, b) || !!FS_ALWAYS[k];
+    (fsList[sec] = fsList[sec] || []).push({key: k, label: L(k), shown});
+    if (shown) arr.push(row(L(k), k, a, b)); });
   const sofp = [G('ASSETS'), G('Non-current assets')];
-  if (nz(cy.ppe, py.ppe)) sofp.push(row(L('ppe'), 'ppe', cy.ppe, py.ppe));
-  addC(sofp, 'nca');
+  fsRows(sofp, 'nca', ['ppe', '*']);
   sofp.push(row('Total non-current assets', '', cy.nca, py.nca, 'tot'), GAP, G('Current assets'));
-  ['inv','rec','rprec','cash'].forEach(k => { if (nz(cy[k], py[k])) sofp.push(row(L(k), k, cy[k], py[k])); });
-  addC(sofp, 'ca');
+  fsRows(sofp, 'ca', ['inv', 'rec', 'rprec', 'cash', '*']);
   sofp.push(row('Total current assets', '', cy.caTot, py.caTot, 'tot'), GAP, row('TOTAL ASSETS', '', cy.ta, py.ta, 'grand'), GAP,
-    G('EQUITY AND LIABILITIES'), G('Shareholders’ equity'), row(L('cap'), 'cap', cy.cap, py.cap));
-  if (nz(cy.lrClose, py.lrClose)) sofp.push(row(L('lr'), 'lr', cy.lrClose, py.lrClose));
-  sofp.push(row(L('re'), 're', cy.reClose, py.reClose));
-  if (nz(cy.caClose, py.caClose)) sofp.push(row(L('ca'), 'ca', cy.caClose, py.caClose));
-  addC(sofp, 'eq');
+    G('EQUITY AND LIABILITIES'), G('Shareholders’ equity'));
+  fsRows(sofp, 'eq', ['cap', 'lr', 're', 'ca', '*']);
   sofp.push(row('Total shareholders’ equity', '', cy.eq, py.eq, 'tot'), GAP);
   if (nz(cy.ncl, py.ncl)){
     sofp.push(G('Non-current liabilities'));
-    ['ltl','eosb'].forEach(k => { if (nz(cy[k], py[k])) sofp.push(row(L(k), k, cy[k], py[k])); });
-    addC(sofp, 'ncl');
+    fsRows(sofp, 'ncl', ['ltl', 'eosb', '*']);
     sofp.push(row('Total non-current liabilities', '', cy.ncl, py.ncl, 'tot'), GAP);
   }
   sofp.push(G('Current liabilities'));
-  if (nz(cy.payTot, py.payTot)) sofp.push(row(L('pay'), 'pay', cy.payTot, py.payTot));
-  ['rppay','stb'].forEach(k => { if (nz(cy[k], py[k])) sofp.push(row(L(k), k, cy[k], py[k])); });
-  addC(sofp, 'cl');
+  fsRows(sofp, 'cl', ['pay', 'rppay', 'stb', '*']);
   sofp.push(row('Total current liabilities', '', cy.cl, py.cl, 'tot'), GAP, row('TOTAL LIABILITIES', '', cy.tl, py.tl, 'tot'), GAP,
     row('TOTAL EQUITY AND LIABILITIES', '', cy.tel, py.tel, 'grand'));
   const signLabel = p.statementSignatory || '(Managing Director)';
@@ -1229,13 +1239,10 @@ function buildReport(client, eng, prevEng){
     {k: 'sign', label: signLabel}]});
 
   const soci = [row(L('rev'), 'rev', cy.rev, py.rev), row(L('cor'), 'cor', -cy.cor, -py.cor)];
-  addC(soci, 'dc', -1);
+  fsRows(soci, 'dc', ['*'], -1);
   soci.push(row('Gross profit', '', cy.gp, py.gp, 'tot'), GAP);
-  ['ga','sell'].forEach(k => { if (nz(cy[k], py[k])) soci.push(row(L(k), k, -cy[k], -py[k])); });
-  addC(soci, 'exp', -1);
-  ['dep','fin'].forEach(k => { if (nz(cy[k], py[k])) soci.push(row(L(k), k, -cy[k], -py[k])); });
-  ['gain','oi'].forEach(k => { if (nz(cy[k], py[k])) soci.push(row(L(k), k, cy[k], py[k])); });
-  addC(soci, 'inc');
+  fsRows(soci, 'exp', ['ga', 'sell', '*', 'dep', 'fin'], -1);
+  fsRows(soci, 'inc', ['gain', 'oi', '*']);
   soci.push(GAP, row('Profit before tax', '', cy.pbt, py.pbt, 'tot'), Object.assign(row('Corporate tax', 'ct', -cy.ct, -py.ct), {drill: 'ct'}), GAP,
     row('Profit after tax', '', cy.pat, py.pat, 'tot'), row('Other comprehensive income', '', 0, 0), GAP,
     row('Total comprehensive income for the year', '', cy.pat, py.pat, 'grand'));
@@ -1424,7 +1431,7 @@ function buildReport(client, eng, prevEng){
   byId.index.rows = body.filter(s => !LAY.noIndex[s.id]).map(s => ({id: s.id, title: (SECTION_DEFS.find(d => d.id === s.id) || {}).title || s.id}));
   const ordered = [].concat(LAY.hide.cover ? [] : [byId.cover], LAY.hide.index ? [] : [byId.index], body);
   const noteList = numericNotes.map(k => { const g = items.find(it => it.k === 'group' && it.items[0] && it.items[0].k === 'noteHead' && it.items[0].num === noteNo[k] + '.'); return {key: k, num: noteNo[k], title: g ? g.items[0].title : k}; });
-  return {sections: ordered, allSections: sections, r, v, noteNo, noteList, allNoteKeys: allNoteOrder, layout: LAY, draft: !!eng.settings.draft, client, eng};
+  return {sections: ordered, allSections: sections, r, v, noteNo, noteList, fsLines: fsList, allNoteKeys: allNoteOrder, layout: LAY, draft: !!eng.settings.draft, client, eng};
 }
 /* ============================================================
    OUTPUTS – PDF (pdfmake), Word (HTML .doc), Excel (SheetJS)
@@ -2716,6 +2723,7 @@ function lineRow(en, l, withSchedule){
     <td><input class="w-cap" id="l-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td>
     <td><input class="numi${R(l.amt) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':amt')}" id="l-amt-${l.id}" data-line="${l.id}" data-field="amt"${fxAttrs(en, 'L:' + l.id + ':amt', `{${en.year}:L:${l.id}:amt}`)} value="${fmtSigned(l.amt)}" inputmode="decimal" aria-label="Amount"></td>
     <td><input class="numi${R(l.py) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':py')}" id="l-py-${l.id}" data-line="${l.id}" data-field="py"${fxAttrs(en, 'L:' + l.id + ':py', `{${en.year}:L:${l.id}:py}`)} value="${fmtSigned(l.py)}" inputmode="decimal" aria-label="Prior year"></td>
+    <td><input class="w-cmt" id="l-cmt-${l.id}" data-remark="line:${l.id}" value="${e_(l.remark || '')}" placeholder="Comment" aria-label="Comment"></td>
     <td>${docCell('line', l)}</td>
     <td class="acts">${withSchedule ? '' : `<button class="icon-btn move" data-act="move-line" data-id="${l.id}" title="Move to another schedule">${IC.move}</button>`}<button class="icon-btn" data-act="del-line" data-id="${l.id}" title="Delete line">${IC.trash}</button></td></tr>`;
 }
@@ -2787,13 +2795,13 @@ function vTB(){
     <div class="seg" role="group" aria-label="View"><button class="${UI.tbMode !== 'list' ? 'on' : ''}" data-act="tb-mode" data-mode="sched">By schedule</button><button class="${UI.tbMode === 'list' ? 'on' : ''}" data-act="tb-mode" data-mode="list">All lines</button></div>
     ${UI.tbMode !== 'list' ? `<label class="check-lbl"><input type="checkbox" id="show-empty" ${UI.showEmpty ? 'checked' : ''}> Show empty schedules</label><button class="linkish" data-act="collapse-all">${Object.values(UI.collapsed || {}).some(Boolean) ? 'Expand all' : 'Collapse all'}</button>` : ''}
     ${r.unmapped ? `<button class="btn small" data-act="automap">Auto-assign ${r.unmapped} line(s)</button>` : ''}</div>`;
-  const cols = '<colgroup><col class="c-led"><col class="c-cap"><col class="c-cy"><col class="c-py"><col class="c-doc"><col class="c-act"></colgroup>';
-  const thead = (withSched, narrowOnly) => `<thead${narrowOnly ? ' class="narrow-only"' : ''}><tr><th>Ledger</th>${withSched ? '<th>Schedule</th>' : ''}<th>Wording in notes</th><th class="r">FY${en.year} <span class="sign-hint" title="+ follows the schedule nature, − goes against it">±</span></th><th class="r">FY${en.year - 1}</th><th>Proof</th><th></th></tr></thead>`;
+  const cols = '<colgroup><col class="c-led"><col class="c-cap"><col class="c-cy"><col class="c-py"><col class="c-cmt"><col class="c-doc"><col class="c-act"></colgroup>';
+  const thead = (withSched, narrowOnly) => `<thead${narrowOnly ? ' class="narrow-only"' : ''}><tr><th>Ledger</th>${withSched ? '<th>Schedule</th>' : ''}<th>Wording in notes</th><th class="r">FY${en.year} <span class="sign-hint" title="+ follows the schedule nature, − goes against it">±</span></th><th class="r">FY${en.year - 1}</th><th>Comment</th><th>Proof</th><th></th></tr></thead>`;
 
   if (UI.tbMode === 'list'){
     const rows = en.tb.filter(match).map(l => lineRow(en, l, true)).join('');
-    return head + `<section class="panel flush"><div class="table-wrap"><table class="ui tb">${thead(true)}<tbody>${rows || '<tr><td colspan="7" class="empty">No lines.</td></tr>'}</tbody>
-      <tfoot><tr><td colspan="3">${en.tb.length} lines · difference</td><td class="r ${r.dr === r.cr ? 'ok-t' : 'bad-t'}">${r.dr === r.cr ? 'Balanced' : fmtN(r.dr - r.cr)}</td><td colspan="4"></td></tr></tfoot></table></div>
+    return head + `<section class="panel flush"><div class="table-wrap"><table class="ui tb">${thead(true)}<tbody>${rows || '<tr><td colspan="8" class="empty">No lines.</td></tr>'}</tbody>
+      <tfoot><tr><td colspan="3">${en.tb.length} lines · difference</td><td class="r ${r.dr === r.cr ? 'ok-t' : 'bad-t'}">${r.dr === r.cr ? 'Balanced' : fmtN(r.dr - r.cr)}</td><td colspan="5"></td></tr></tfoot></table></div>
       <div class="sched-foot"><button class="btn small" data-act="add-line">${IC.plus}Add line</button></div></section>`;
   }
   const yearBar = `<div class="yearbar" role="presentation"><span class="yb-name">Schedule / ledger</span><span class="yb-cap">Wording in notes</span><span class="r">FY${en.year} <span class="sign-hint" title="+ follows the schedule nature, − goes against it">±</span></span><span class="r">FY${en.year - 1}</span><span>Proof</span><span></span></div>`;
@@ -2832,8 +2840,8 @@ function vTB(){
         </div>
         ${col ? '' : (isPPE ? ppeMatrix(en, r) + (lines.length ? `<div class="sub-head">Ledger lines (optional – checked against the schedule above)</div><div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${shown.map(l => lineRow(en, l, false)).join('')}</tbody><tfoot><tr><td colspan="2">Total</td><td class="r">${fmtN(amtT)}</td><td class="r">${fmtN(pyT)}</td><td colspan="2"></td></tr></tfoot></table></div>` : '')
             + noteTextBox(en, x, noteNo) + `<div class="sched-foot"><button class="btn small" data-act="add-ppe">${IC.plus}Add asset class</button><button class="linkish" data-act="add-line-to" data-key="ppe">Add ledger line instead</button>${noteTextBtn(x)}</div>`
-          : `<div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${shown.map(l => lineRow(en, l, false)).join('') || `<tr><td colspan="6" class="empty">No lines yet.</td></tr>`}</tbody>
-          ${lines.length ? `<tfoot><tr><td colspan="2">Total</td><td class="r"${fxRefAttr(`{${en.year}:S:${x.key}:cy}`)}>${fmtN(amtT)}</td><td class="r"${fxRefAttr(`{${en.year}:S:${x.key}:py}`)}>${fmtN(pyT)}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>
+          : `<div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${shown.map(l => lineRow(en, l, false)).join('') || `<tr><td colspan="7" class="empty">No lines yet.</td></tr>`}</tbody>
+          ${lines.length ? `<tfoot><tr><td colspan="2">Total</td><td class="r"${fxRefAttr(`{${en.year}:S:${x.key}:cy}`)}>${fmtN(amtT)}</td><td class="r"${fxRefAttr(`{${en.year}:S:${x.key}:py}`)}>${fmtN(pyT)}</td><td colspan="3"></td></tr></tfoot>` : ''}</table></div>
         ${noteTextBox(en, x, noteNo)}
         <div class="sched-foot"><button class="btn small" data-act="add-line-to" data-key="${x.key}">${IC.plus}Add line</button><button class="linkish" data-act="paste-tb" data-key="${x.key}">Paste lines into this schedule</button>${noteTextBtn(x)}</div>`)}
       </section>`;
@@ -2948,7 +2956,7 @@ function vExport(){
       <button class="dl" data-act="print-pdf">${IC.print}<b>Print</b><span>Send the report to your printer · <u data-nav="layout">margins &amp; page numbers</u></span></button>
       <button class="dl" data-act="dl-word">${IC.down}<b>Word document</b><span>Same content and page setup, page numbers in the footer</span></button>
       <button class="dl" data-act="dl-excel">${IC.down}<b>Excel workbook</b><span>Statements and notes – can be retrieved into the software later</span></button>
-      <button class="dl" data-act="obs-xlsx">${IC.down}<b>Observation report</b><span>Your remarks on schedules and lines, failed checks and checklist notes</span></button>
+      <button class="dl" data-act="obs-xlsx">${IC.down}<b>Comments &amp; observations</b><span>Your comments on every schedule and line, failed checks and checklist notes</span></button>
       <button class="dl" data-act="wa-share">${IC.chat}<b>Send on WhatsApp</b><span>The PDF itself on phone and tablet, or a Google Drive link on a computer</span></button>
       <button class="dl" data-act="drive-pdf">${IC.upload}<b>Save PDF to Google Drive</b><span>Into ${e_(DB.settings.rootFolder || 'Fair Tax Clients')} / ${e_(c.name)} / FY${en.year}</span></button>
     </div></section>
@@ -3090,11 +3098,18 @@ function vLayout(){
     <ul class="lay-list" data-list="sec">${secRows}</ul></section>
 
   <section class="panel"><div class="head"><div><h2>Order of notes</h2><p class="sub">Notes 1–4 (legal status, basis of preparation, policies, judgments) stay first. Drag the others; note numbers in the statements follow automatically.</p></div><button class="linkish" data-act="lay-reset-notes">Standard order</button></div>
+    <div class="row"><button class="btn small" data-act="lay-notes-fs">Renumber the notes to follow the statements</button></div>
     <ul class="lay-list" data-list="note">${noteRows}</ul>
     <div class="box ny-box"><h3 class="h3">Year columns (${en.year} · ${en.year - 1}) at the top of notes pages</h3>
       ${[['all', 'Every page', 'standard'], ['amounts', 'Only pages that have amount tables', 'text-only pages such as financial risk, contingent liabilities and approval show just the heading'], ['custom', 'I choose page by page', `open <button class="linkish" data-act="pdf-preview">Preview pages</button> and tick or untick “Show the year columns” above each notes page`]]
         .map(([v, t, d]) => `<label class="radio-row"><input type="radio" name="notes-years" value="${v}" ${(L.notesYears || 'all') === v ? 'checked' : ''}><span><b>${t}</b> – ${d}</span></label>`).join('')}
       ${L.notesYears === 'custom' ? `<p class="small muted">${Object.keys(L.yearsOff || {}).length} page(s) without year columns. If notes move to other pages after changes, check the preview again.</p>` : ''}</div></section>
+
+  <section class="panel"><div class="head"><div><h2>Order of lines in the statements</h2><p class="sub">The order the lines print inside each part of the statement of financial position and the profit or loss. Drag ⋮⋮ or use ▲ ▼. Lines with no amount are greyed – they are kept here so the order is ready when they have figures.</p></div></div>
+    <div class="fs-order">${Object.entries(M.fsLines || {}).filter(([sec, list]) => (list || []).length > 1).map(([sec, list]) => `<div class="box"><h3 class="h3">${e_((SECT[sec] || {}).label || sec)}</h3>
+      <ul class="lay-list" data-list="fs:${sec}">${list.map((x, i) => `<li class="lay-row${x.shown ? '' : ' off'}" draggable="true" data-drag="fs:${sec}" data-id="${e_(x.key)}">
+        <span class="grip" title="Drag up or down">${IC.handle}</span><span class="lay-title">${e_(x.label)}${x.shown ? '' : ' <span class="muted small">(no amount)</span>'}</span>
+        ${updown('fs:' + sec, x.key, i, list.length)}</li>`).join('')}</ul></div>`).join('') || '<p class="small muted">Each part of the statements has only one line, so there is nothing to reorder yet.</p>'}</div></section>
 
   <section class="panel"><h2>Print</h2><p class="sub">Choose what to print. Page numbers stay the same as in the full report.</p>
     <div class="chips print-chips">${printList}</div>
@@ -3182,12 +3197,14 @@ async function printPdf(doc){
 }
 function layMove(en, type, id, targetId, after){
   const L = layoutOf(en);
-  const list = type === 'sec' ? L.order.slice() : buildReport(client(), en, prev()).noteList.map(n => n.key);
+  const fsSec = String(type).startsWith('fs:') ? type.slice(3) : '';
+  const list = fsSec ? ((buildReport(client(), en, prev()).fsLines || {})[fsSec] || []).map(x => x.key)
+    : type === 'sec' ? L.order.slice() : buildReport(client(), en, prev()).noteList.map(n => n.key);
   if (id === targetId || list.indexOf(id) < 0 || list.indexOf(targetId) < 0) return false;
   list.splice(list.indexOf(id), 1);
   const at = list.indexOf(targetId);
   list.splice(after ? at + 1 : at, 0, id);
-  if (type === 'sec') L.order = list; else L.noteOrder = list;
+  if (fsSec){ L.fsOrder = L.fsOrder || {}; L.fsOrder[fsSec] = list; } else if (type === 'sec') L.order = list; else L.noteOrder = list;
   return true;
 }
 
@@ -3395,10 +3412,10 @@ function drillBody(key, yr){
   const lines = en.tb.filter(l => l.fs === k), hl = y => yr === y ? ' q-hl' : '';
   const num = (l, f) => `<input class="numi${R(l[f]) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':' + f)}" id="q-${f}-${l.id}" data-line="${l.id}" data-field="${f}"${fxAttrs(en, 'L:' + l.id + ':' + f, `{${Y}:L:${l.id}:${f}}`)} value="${fmtSigned(l[f])}" inputmode="decimal" aria-label="${f === 'amt' ? 'FY' + Y : 'FY' + PY}">`;
   const isRes = k === 're' || k === 'lr';
-  const linesTable = `<div class="table-wrap"><table class="ui compact q-tab"><colgroup><col><col><col style="width:130px"><col style="width:130px"><col style="width:110px"><col style="width:40px"></colgroup>
-    <thead><tr><th>Ledger</th><th>Wording in notes</th><th class="r${hl('cy')}">FY${Y}${isRes ? ((r.cy.eqModes || {})[k] === 'close' ? ' closing' : ' opening') : ''}</th><th class="r${hl('py')}">FY${PY}${isRes ? ' closing' : ''}</th><th>Proof</th><th></th></tr></thead>
-    <tbody>${lines.map(l => `<tr><td><input id="q-led-${l.id}" data-line="${l.id}" data-field="ledger" value="${e_(l.ledger)}" placeholder="Ledger name" aria-label="Ledger"></td><td><input id="q-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td><td class="${hl('cy')}">${num(l, 'amt')}</td><td class="${hl('py')}">${num(l, 'py')}</td><td>${docCell('line', l)}</td><td><button class="icon-btn" data-act="del-line" data-id="${l.id}" title="Delete line">${IC.trash}</button></td></tr>`).join('') || `<tr><td colspan="6" class="empty">No ledger lines yet.</td></tr>`}</tbody>
-    ${lines.length ? `<tfoot><tr><td colspan="2">Total of the lines</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.amt), 0))}</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.py), 0))}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>
+  const linesTable = `<div class="table-wrap"><table class="ui compact q-tab"><colgroup><col><col><col style="width:120px"><col style="width:120px"><col style="width:150px"><col style="width:100px"><col style="width:40px"></colgroup>
+    <thead><tr><th>Ledger</th><th>Wording in notes</th><th class="r${hl('cy')}">FY${Y}${isRes ? ((r.cy.eqModes || {})[k] === 'close' ? ' closing' : ' opening') : ''}</th><th class="r${hl('py')}">FY${PY}${isRes ? ' closing' : ''}</th><th>Comment</th><th>Proof</th><th></th></tr></thead>
+    <tbody>${lines.map(l => `<tr><td><input id="q-led-${l.id}" data-line="${l.id}" data-field="ledger" value="${e_(l.ledger)}" placeholder="Ledger name" aria-label="Ledger"></td><td><input id="q-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td><td class="${hl('cy')}">${num(l, 'amt')}</td><td class="${hl('py')}">${num(l, 'py')}</td><td><input class="w-cmt" id="q-cmt-${l.id}" data-remark="line:${l.id}" value="${e_(l.remark || '')}" placeholder="Comment" aria-label="Comment"></td><td>${docCell('line', l)}</td><td><button class="icon-btn" data-act="del-line" data-id="${l.id}" title="Delete line">${IC.trash}</button></td></tr>`).join('') || `<tr><td colspan="7" class="empty">No ledger lines yet.</td></tr>`}</tbody>
+    ${lines.length ? `<tfoot><tr><td colspan="2">Total of the lines</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.amt), 0))}</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.py), 0))}</td><td colspan="3"></td></tr></tfoot>` : ''}</table></div>
     <div class="row"><button class="btn small" data-act="q-add-line" data-key="${k}">${IC.plus}Add line</button></div>`;
   const bind = (id, path, v, label) => `<input class="numi${fxCls(en, 'B:' + path)}" id="${id}" data-bind="eng.${path}" data-num="1" inputmode="decimal"${fxAttrs(en, 'B:' + path, '')} value="${fmtIn(v)}" aria-label="${e_(label)}">`;
   let extra = '';
@@ -3443,6 +3460,7 @@ function drillBody(key, yr){
       <div class="q-tot"><span>FY${Y} <b>${fmtN(r.cy[k])}</b></span><span>FY${PY} <b>${fmtN(r.py[k])}</b></span></div></div>
     <p class="sub">Change any figure, wording or line here – the financial statements behind this window update at once. Type = in an amount for a formula.</p>
     ${k === 'ppe' && en.ppe.length ? extra + (lines.length ? `<h3 class="h3">Ledger lines</h3>${linesTable}` : '') : lineNote + linesTable + extra}
+    ${s ? `<div class="field wide q-cmt-box"><label for="q-sched-cmt">Comment / observation on ${e_(s.label)}</label><textarea id="q-sched-cmt" rows="2" data-remark="sched:${e_(k)}" placeholder="Kept with the file and printed in the comments &amp; observations report">${e_(s.remark || '')}</textarea></div>` : ''}
     <div class="foot"><button class="btn" data-act="go-tb-filter" data-key="${k}">Open the Schedules screen</button>${s && s.sec === 'eq' ? `<button class="btn" data-act="sched-props" data-key="${k}">Opening balance &amp; remarks</button>` : ''}<button class="btn primary" data-close>Done</button></div></div>`, true);
   if (k === 'ppe' || lines.length > 6) { const m = document.querySelector('.modal'); if (m) m.classList.add('xwide'); }
 }
@@ -3766,7 +3784,7 @@ function vChecklist(){
     return `<section class="panel"><div class="row between"><h2>${label}</h2><span class="chip ${op ? 'warn' : 'ok'}">${op ? `${op} open` : 'cleared'}</span></div><ul class="ckl-list">${its.map(item).join('')}</ul></section>`; }).join('');
   const ov = (CK.overrides || []).slice().reverse();
   return `<section class="panel"><div class="head"><div><h1>Pre-issue checklist</h1><p class="sub">${e_(c.name)} · FY${en.year} · Clear every item before issuing the final report. Automatic items update as you work; review items need your tick – write the evidence in the note.</p></div>
-      <div class="row"><button class="btn" data-act="ckl-xlsx">${IC.down}Download checklist</button><button class="btn" data-act="obs-xlsx">${IC.down}Observation report</button><button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div>
+      <div class="row"><button class="btn" data-act="ckl-xlsx">${IC.down}Download checklist</button><button class="btn" data-act="obs-xlsx">${IC.down}Comments &amp; observations</button><button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div>
     <div class="ckl-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Checklist cleared"><span style="width:${pct}%"></span></div>
     <div class="row between"><div class="row"><span class="chip bad">${cnt('bad')} issue${cnt('bad') === 1 ? '' : 's'}</span><span class="chip warn">${cnt('warn')} to check</span><span class="chip neutral">${cnt('todo')} to review</span><span class="chip ok">${cleared} of ${list.length} cleared</span></div>
       <button class="linkish" data-act="ckl-filter">${UI.cklOpenOnly ? 'Show all items' : 'Show only open items'}</button></div>
@@ -3830,8 +3848,8 @@ function cklGate(t){
 }
 function obsExcel(c, en){
   const r = compute(en, prev()), sm = SM(en), Y = en.year, PY = Y - 1;
-  const rows = [[`${c.name} – observations and remarks FY${Y}`], [`Printed ${fmtStamp(new Date().toISOString())}`], [],
-    ['Where', 'Item', `FY${Y}`, `FY${PY}`, 'Remark / observation', 'Documents']];
+  const rows = [[`${c.name} – comments and observations FY${Y}`], [`Printed ${fmtStamp(new Date().toISOString())}`], [],
+    ['Where', 'Item', `FY${Y}`, `FY${PY}`, 'Comment / observation', 'Documents']];
   const docN = o => ((o.docs || []).length ? (o.docs || []).map(d => d.name).join('; ') : '');
   ensureSchedules(en).forEach(x => { if (!String(x.remark || '').trim() && !(x.docs || []).length) return;
     rows.push(['Schedule', x.label, R(r.cy[x.key]), R(r.py[x.key]), x.remark || '', docN(x)]); });
@@ -5571,7 +5589,7 @@ document.addEventListener('click', async ev => {
         finally { t.disabled = false; }
         break;
       }
-      case 'obs-xlsx': download(obsExcel(c, en), `${safeName(c.name)}_Observations_${en.year}.xlsx`); break;
+      case 'obs-xlsx': download(obsExcel(c, en), `${safeName(c.name)}_Comments_${en.year}.xlsx`); break;
       case 'ckl-go': closeModal(); UI.view = 'checklist'; save(); render(); window.scrollTo(0, 0); break;
       case 'ckl-override': {
         const reason = ((document.getElementById('ckl-reason') || {}).value || '').trim();
@@ -5673,6 +5691,14 @@ document.addEventListener('click', async ev => {
       case 'lh-remove': layoutOf(en).page.lhImage = ''; save(); render(); break;
       case 'lay-reset-sec': { const L = layoutOf(en); L.order = SECTION_DEFS.map(d => d.id); save(); render(); break; }
       case 'lay-reset-notes': layoutOf(en).noteOrder = []; save(); render(); break;
+      case 'lay-notes-fs': {
+        const M2 = buildReport(c, en, prev()), face = [];
+        ['sofp', 'soci'].forEach(id => { const sec = M2.allSections.find(x => x.id === id); if (!sec) return;
+          (sec.items || []).forEach(it => { if (it.k !== 'fs') return; (it.rows || []).forEach(rw => { const key = rw.fs || (rw.drill === 'ct' ? 'ct' : ''); if (key && !face.includes(key)) face.push(key); }); }); });
+        const all = M2.allNoteKeys || [];
+        layoutOf(en).noteOrder = mergeOrder(face.filter(k => all.includes(k)), all);
+        save(); render(); toast('Notes renumbered in the order they appear in the statements'); break;
+      }
       case 'retrieve': retrieveModal(); break;
       case 'read-docs': await readProfileDocs(t.dataset.mode); break;
       case 'apply-profile': applyProfileSuggestions(); break;
