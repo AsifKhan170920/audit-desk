@@ -2099,6 +2099,11 @@ const Drive = {
     const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {method: 'POST', headers: {Authorization: 'Bearer ' + this.token}, body: form});
     if (!r.ok) throw new Error('Upload failed: ' + r.status + ' ' + (await r.text()).slice(0, 160));
     return r.json();
+  },
+  /* let anyone holding the link open this one file – used when a report is sent on WhatsApp */
+  async shareAnyone(fileId){
+    await this.ensure();
+    return this.api(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?fields=id`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role: 'reader', type: 'anyone'})});
   }
 };
 const folderUrl = id => `https://drive.google.com/drive/folders/${id}`;
@@ -2432,6 +2437,7 @@ const IC = {
   spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
   handle: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-4.2-.9L3 20.5l1.6-4.4A8.3 8.3 0 0 1 3.6 11.5a8.4 8.4 0 0 1 8.4-8.4 8.4 8.4 0 0 1 9 8.4z"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M7.5 8.5l1.5 1.5 3-3M7.5 15l1.5 1.5 3-3M14.5 9h2.5M14.5 15.5h2.5"/></svg>',
   move: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4 3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/></svg>'
 };
@@ -2581,6 +2587,7 @@ function vProfile(){
     ${field('pf-reg', 'Auditor registration no.', p.auditorReg, {bind: b('auditorReg')})}
     ${field('pf-acity', 'Auditor city', p.auditorCity, {bind: b('auditorCity'), ph: 'Dubai'})}
     ${field('pf-date', 'Report / approval date', p.reportDate, {bind: b('reportDate'), ph: '10 June 2026'})}
+    ${field('pf-wa', 'Client WhatsApp number (optional)', p.whatsapp, {bind: b('whatsapp'), ph: '971501234567', hint: 'Used by “Send on WhatsApp” to open the right chat'})}
     ${field('pf-sig', 'Signature label (management report)', p.signatory || 'Authorised Signatory', {bind: b('signatory')})}
     ${field('pf-ssig', 'Signature label (statements)', p.statementSignatory || '(Managing Director)', {bind: b('statementSignatory')})}
     <div class="section-title">This engagement</div>
@@ -2942,6 +2949,7 @@ function vExport(){
       <button class="dl" data-act="dl-word">${IC.down}<b>Word document</b><span>Same content and page setup, page numbers in the footer</span></button>
       <button class="dl" data-act="dl-excel">${IC.down}<b>Excel workbook</b><span>Statements and notes – can be retrieved into the software later</span></button>
       <button class="dl" data-act="obs-xlsx">${IC.down}<b>Observation report</b><span>Your remarks on schedules and lines, failed checks and checklist notes</span></button>
+      <button class="dl" data-act="wa-share">${IC.chat}<b>Send on WhatsApp</b><span>The PDF itself on phone and tablet, or a Google Drive link on a computer</span></button>
       <button class="dl" data-act="drive-pdf">${IC.upload}<b>Save PDF to Google Drive</b><span>Into ${e_(DB.settings.rootFolder || 'Fair Tax Clients')} / ${e_(c.name)} / FY${en.year}</span></button>
     </div></section>
   ${pageSetupPanel(en, M, true)}
@@ -3771,8 +3779,41 @@ function vChecklist(){
   ${ov.length ? `<section class="panel"><h2>Issued with open items</h2><div class="table-wrap"><table class="ui compact"><thead><tr><th>When</th><th>Download</th><th>Reason</th><th class="r">Open items</th></tr></thead><tbody>${ov.map(o => `<tr><td>${e_(fmtStamp(o.at))}</td><td>${e_(o.what || '')}</td><td>${e_(o.reason)}</td><td class="r" title="${e_((o.open || []).join('\n'))}">${(o.open || []).length}</td></tr>`).join('')}</tbody></table></div></section>` : ''}`;
 }
 
+/* ---------- send the report on WhatsApp: the file itself where the device allows it, otherwise a Google Drive link ---------- */
+function waDigits(s){ return String(s || '').replace(/\D/g, ''); }
+function waMessage(c, en){ const p = c.profile || {}; return `${c.name} – financial statements for the year ended ${p.yearEndText || 'December 31'}, ${en.year}${en.settings.draft ? ' (draft for review)' : ''}`; }
+async function waShare(t){
+  const c = client(), en = eng(); if (!c || !en) return;
+  if (cklGate(t)) return;
+  t.disabled = true;
+  try {
+    toast('Preparing the PDF…');
+    const {doc} = await pdfFor(t);
+    const blob = await blobOf(doc);
+    const name = `${safeName(c.name)}_FS_${en.year}.pdf`;
+    let file = null; try { file = new File([blob], name, {type: 'application/pdf'}); } catch (e) {}
+    if (file && navigator.canShare && navigator.canShare({files: [file]})){
+      try { await navigator.share({files: [file], title: name, text: waMessage(c, en)}); return; }
+      catch (err) { if (err && err.name === 'AbortError') return; }
+    }
+    waLinkModal(c, en, blob, name);
+  } catch (err) { toast(err.message || 'Could not prepare the PDF', true); }
+  finally { t.disabled = false; }
+}
+function waLinkModal(c, en, blob, name){
+  UI.waFile = {blob, name};
+  const p = c.profile || {};
+  modal(`<div class="qd"><h2>Send on WhatsApp</h2>
+    <p class="sub">This device cannot hand a file straight to WhatsApp, so the PDF goes into the client's Google Drive folder and WhatsApp opens with the link and your message. On a phone or tablet the file itself is sent.</p>
+    <div class="form-grid"><div class="field"><label for="wa-no">WhatsApp number (optional)</label><input id="wa-no" value="${e_(p.whatsapp || '')}" placeholder="971501234567"></div>
+      <div class="field wide"><label for="wa-msg">Message</label><textarea id="wa-msg" rows="2">${e_(waMessage(c, en))}</textarea></div></div>
+    <p class="small muted">Leave the number blank to pick the chat inside WhatsApp. “Anyone with the link” makes this one file readable by whoever holds the link – use it only for the copy you are sending.</p>
+    <div class="foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn" data-act="wa-go" data-pub="0">Keep the link private</button>
+      <button class="btn primary" data-act="wa-go" data-pub="1">Anyone with the link &amp; open WhatsApp</button></div></div>`, true);
+}
 /* Final report downloads: warn while checklist items are open; issuing anyway needs a reason, kept with the engagement */
-const CKL_WHAT = {'dl-pdf': 'PDF', 'print-pdf': 'Print', 'dl-word': 'Word', 'dl-excel': 'Excel', 'drive-pdf': 'PDF to Google Drive'};
+const CKL_WHAT = {'dl-pdf': 'PDF', 'print-pdf': 'Print', 'dl-word': 'Word', 'dl-excel': 'Excel', 'drive-pdf': 'PDF to Google Drive', 'wa-share': 'WhatsApp'};
 function cklGate(t){
   const c = client(), en = eng(); if (!c || !en) return false;
   if (UI.cklPass){ UI.cklPass = false; return false; }
@@ -5509,6 +5550,27 @@ document.addEventListener('click', async ev => {
         UI.view = 'texts'; UI.textOpen = 'custom'; closeModal(); save(); render(); window.scrollTo(0, 0); toast('Related party note added – fill in the names and amounts'); break;
       }
       case 'ckl-xlsx': download(cklExcel(c, en), `${safeName(c.name)}_Checklist_${en.year}.xlsx`); break;
+      case 'wa-share': await waShare(t); break;
+      case 'wa-go': {
+        const f = UI.waFile; if (!f){ toast('Prepare the PDF again', true); break; }
+        const noRaw = ((document.getElementById('wa-no') || {}).value || '').trim(), no = waDigits(noRaw);
+        const msg = ((document.getElementById('wa-msg') || {}).value || '').trim(), pub = t.dataset.pub === '1';
+        if (noRaw){ c.profile = c.profile || {}; c.profile.whatsapp = noRaw; }
+        t.disabled = true;
+        try {
+          if (!Drive.connected()) await Drive.connect(true);
+          toast('Uploading the PDF to Google Drive…');
+          const d = await Drive.clientFolders(c, en.year);
+          const up = await Drive.upload(f.blob, f.name, d.id);
+          if (pub) await Drive.shareAnyone(up.id);
+          (en.reports = en.reports || []).push({name: up.name, url: up.webViewLink, at: new Date().toISOString(), shared: pub}); save();
+          UI.waFile = null; closeModal(); render();
+          window.open(`https://wa.me/${no}?text=${encodeURIComponent(msg + '\n' + up.webViewLink)}`, '_blank', 'noopener');
+          toast(pub ? 'Uploaded – anyone with the link can open this file' : 'Uploaded – the client needs access to your Drive folder to open it');
+        } catch (err) { toast(err.message || 'Upload failed', true); }
+        finally { t.disabled = false; }
+        break;
+      }
       case 'obs-xlsx': download(obsExcel(c, en), `${safeName(c.name)}_Observations_${en.year}.xlsx`); break;
       case 'ckl-go': closeModal(); UI.view = 'checklist'; save(); render(); window.scrollTo(0, 0); break;
       case 'ckl-override': {
