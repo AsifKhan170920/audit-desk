@@ -486,7 +486,10 @@ function autoMap(ledger, eng){
   for (const [re, k] of AUTOMAP) if (re.test(ledger || '')) return k; return '';
 }
 
-const R = v => Math.round(+v || 0);
+/* amounts: whole dirhams by default, or 2 decimals when chosen in Settings – used by every figure, check and report */
+let AMT_DEC = 0;
+function setAmtDec(){ try { AMT_DEC = (DB && DB.settings && +DB.settings.dec === 2) ? 2 : 0; } catch (e) { AMT_DEC = 0; } return AMT_DEC; }
+const R = v => { const f = AMT_DEC ? 100 : 1; return Math.round((+v || 0) * f) / f; };
 /* amounts are signed by the schedule's own nature: + agrees with the schedule, − is against it */
 function natural(line, eng){ const c = eng ? SM(eng)[line.fs] : CAT[line.fs]; if (!c) return 0; return R(line.amt); }
 function isDrNature(eng, key){ const c = SM(eng)[key]; return c ? !!c.dr : true; } // lines not in a schedule are treated as debit
@@ -558,7 +561,7 @@ function ctPayField(id, en, r, yr){
   return field(id, 'Provision for corporate tax in payables', val, {bind, select: [['auto', auto], ['ledger', 'Typed in payables – do not add'], ['add', 'Add to payables']],
     hint: b.ctInPay ? `Payables show the typed line${b.ctTyped ? ` (${fmtN(b.ctTyped)})` : ''} only – no “Provision for corporate tax” row` : `“Provision for corporate tax” ${fmtN(b.ct)} is added to payables${b.ctTyped ? ` – a corporate tax line of ${fmtN(b.ctTyped)} is also typed there` : ''}`});
 }
-function ctFor(pbt, adj){ return Math.round(Math.max(0, pbt + (adj || 0) - 375000) * 0.09); }
+function ctFor(pbt, adj){ return R(Math.max(0, pbt + (adj || 0) - 375000) * 0.09); }
 const CT_NAME = /corporate\s*tax|income\s*tax|\bCT\s*(payable|provision)|tax\s*(expense|charge)/i;
 function ctPayLines(eng, col){ return (eng.tb || []).filter(l => l.fs === 'pay' && CT_NAME.test(`${l.ledger || ''} ${l.caption || ''}`) && R(l[col || 'amt']) !== 0); }
 
@@ -639,6 +642,22 @@ function compute(eng, prevEng){
   cy.capOpen = py.cap; cy.capIntro = cy.cap - py.cap - cy.capItems;
   cy.caOpen = py.ca; cy.caClose = cy.ca; cy.caMove = cy.caClose - cy.caOpen;
   cy.othOpen = py.xeq; cy.othMove = cy.xeq - py.xeq - cy.othItems;
+  // opening balances typed on a schedule's form win over the figures worked back from the ledger
+  const sOpen = (key, col) => { const s0 = m[key], v = s0 && s0.open ? s0.open[col] : undefined; return v === undefined || v === null || String(v).trim() === '' ? null : R(v); };
+  { const t = sOpen('lr', 'py'); if (t !== null){ py.lrOpen = t; py.lrTransfer = py.lrClose - py.lrOpen - py.lrItems; } }
+  { const t = sOpen('re', 'py'); if (t !== null){ py.reOpen = t; py.reAdj = py.reClose - (py.reOpen + py.pat - py.div - py.lrTransfer + py.reItems); } }
+  { const t = sOpen('cap', 'py'); if (t !== null){ py.capOpen = t; py.capIntro = py.cap - py.capOpen - py.capItems; } }
+  { const t = sOpen('ca', 'py'); if (t !== null){ py.caOpen = t; py.caMove = py.caClose - py.caOpen; } }
+  { const t = sOpen('lr', 'cy'); if (t !== null){ cy.lrOpen = t; if (lrIsClose) cy.lrTransfer = cy.lrClose - cy.lrOpen - cy.lrItems; else cy.lrClose = cy.lrOpen + cy.lrTransfer + cy.lrItems; } }
+  { const t = sOpen('re', 'cy'); if (t !== null){ cy.reOpen = t; if (reIsClose) cy.reAdj = cy.reClose - (cy.reOpen + cy.pat - cy.div - cy.lrTransfer + cy.reItems); else cy.reClose = cy.reOpen + cy.pat - cy.div - cy.lrTransfer + cy.reItems; } }
+  { const t = sOpen('cap', 'cy'); if (t !== null){ cy.capOpen = t; cy.capIntro = cy.cap - cy.capOpen - cy.capItems; } }
+  { const t = sOpen('ca', 'cy'); if (t !== null){ cy.caOpen = t; cy.caMove = cy.caClose - cy.caOpen; } }
+  { const eqc = custom('eq');
+    [['cy', cy], ['py', py]].forEach(([col, b]) => { if (!eqc.some(s0 => sOpen(s0.key, col) !== null)) return;
+      b.othOpen = eqc.reduce((a, s0) => { const t = sOpen(s0.key, col); return a + (t === null ? R(b[s0.key]) : t); }, 0); b.othMove = b.xeq - b.othOpen - b.othItems; }); }
+  cy.lrOpenDiff = EQ.hasPy ? cy.lrOpen - py.lrClose : 0; cy.reOpenDiff = EQ.hasPy ? cy.reOpen - py.reClose : 0;
+  cy.openT = {}; py.openT = {}; ['lr', 're', 'cap', 'ca'].forEach(k => { cy.openT[k] = sOpen(k, 'cy') !== null; py.openT[k] = sOpen(k, 'py') !== null; });
+  cy.openTyped = ['lr', 're', 'cap', 'ca'].some(k => cy.openT[k] || py.openT[k]);
   cy.eqModes = EQ;
   // a trial balance holding closing reserves also still holds this year's profit – take the difference out for the balance check
   const eqTbAdj = (lrIsClose ? cy.lr - cy.lrOpen : 0) + (reIsClose ? cy.re - cy.reOpen : 0);
@@ -715,7 +734,7 @@ function compute(eng, prevEng){
   return {cy, py, dr, cr, crT: cr - eqTbAdj, eqTbAdj, unmapped, docsCount, ppe, ppeT, ppeLines, depLines, cf, cfp, checks};
 }
 
-function fmtN(v){ v = Math.round(v || 0); if (v === 0) return '-'; const s = Math.abs(v).toLocaleString('en-US'); return v < 0 ? `(${s})` : s; }
+function fmtN(v){ v = R(v); if (v === 0) return '-'; const s = Math.abs(v).toLocaleString('en-US', {minimumFractionDigits: AMT_DEC, maximumFractionDigits: AMT_DEC}); return v < 0 ? `(${s})` : s; }
 
 function newEngagement(year, type){
   const e = {
@@ -2368,7 +2387,8 @@ function load(){
   if (!DB || !Array.isArray(DB.clients)){
     DB = {clients: [gillExample()], settings: {clientId: '', rootFolder: 'Fair Tax Clients'}, version: 1};
   }
-  DB.settings = Object.assign({clientId: '', rootFolder: 'Fair Tax Clients'}, DB.settings || {});
+  DB.settings = Object.assign({clientId: '', rootFolder: 'Fair Tax Clients', dec: 0}, DB.settings || {});
+  setAmtDec();
   try { Object.assign(UI, JSON.parse(localStorage.getItem(STORE_KEY + '-ui')) || {}); } catch (e) {}
   UI.preview = false; UI.justAdded = {};
   DB.clients.forEach(c => (c.engagements || []).forEach(en => { ensureSchedules(en); migrateLines(en); layoutOf(en); if (en.texts && typeof en.texts.companyInfo === 'string' && en.texts.companyInfo.includes('issued by the {authority}.') && !en.texts.companyInfo.includes('{licenceValidity}')) en.texts.companyInfo = en.texts.companyInfo.replace('issued by the {authority}.', 'issued by the {authority}{licenceValidity}.'); if (en.texts){ ['companyInfo', 'note1'].forEach(k => { if (typeof en.texts[k] === 'string') en.texts[k] = en.texts[k].replace('was established on {estDate} and', 'was established{estOn} and').replace('United Arab Emirates on {estDate} and', 'United Arab Emirates{estOn} and'); }); } en.pyInfo.cf = Object.assign({otherOp: 0, otherInv: 0, otherFin: 0}, en.pyInfo.cf || {}); }));
@@ -2418,9 +2438,9 @@ const IC = {
 
 /* ---------- helpers ---------- */
 const e_ = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const num = s => { const t = String(s ?? '').replace(/[,\s]/g, '').replace(/^\((.*)\)$/, '-$1'); const v = parseFloat(t); return isNaN(v) ? 0 : Math.round(v); };
-const fmtIn = v => { v = Math.round(v || 0); return v ? v.toLocaleString('en-US') : ''; };
-const fmtSigned = v => { v = Math.round(v || 0); return v ? (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-US') : ''; };
+const num = s => { const t = String(s ?? '').replace(/[,\s]/g, '').replace(/^\((.*)\)$/, '-$1'); const v = parseFloat(t); return isNaN(v) ? 0 : R(v); };
+const fmtIn = v => { v = R(v); return v ? v.toLocaleString('en-US', {minimumFractionDigits: AMT_DEC, maximumFractionDigits: AMT_DEC}) : ''; };
+const fmtSigned = v => { v = R(v); return v ? (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-US', {minimumFractionDigits: AMT_DEC, maximumFractionDigits: AMT_DEC}) : ''; };
 function toast(msg, bad){ document.querySelectorAll('.toast').forEach(x => x.remove()); const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), bad ? 6000 : 3000); }
 const EMBEDDED = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
 function download(blob, name){
@@ -2467,6 +2487,7 @@ function renderNav(){
   document.getElementById('drive-chip').innerHTML = (EMBEDDED ? `<button class="chip warn chip-btn" data-act="embed-help" title="Downloads and printing are blocked in this preview window">Preview window – open in Chrome/Edge to download &amp; print</button> ` : '') + (Drive.connected() ? `<span class="chip ok">Google Drive connected</span>` : `<button class="chip warn chip-btn" data-act="drive-connect">Connect Google Drive</button>`);
 }
 function render(){
+  setAmtDec();
   fxHelpHide(); FX_CATC.clear();
   try { const c0 = client(); if (c0 && cfEnsureClient(c0)){ FX_CATC.clear(); save(); } } catch (e) { console.warn('cash flow', e); }
   try { const c0 = client(); if (c0 && c0.engagements.some(e => !FXERR.has(e))) fxRecalc(c0); } catch (e) { console.warn('formulas', e); }
@@ -2920,6 +2941,7 @@ function vExport(){
       <button class="dl" data-act="print-pdf">${IC.print}<b>Print</b><span>Send the report to your printer · <u data-nav="layout">margins &amp; page numbers</u></span></button>
       <button class="dl" data-act="dl-word">${IC.down}<b>Word document</b><span>Same content and page setup, page numbers in the footer</span></button>
       <button class="dl" data-act="dl-excel">${IC.down}<b>Excel workbook</b><span>Statements and notes – can be retrieved into the software later</span></button>
+      <button class="dl" data-act="obs-xlsx">${IC.down}<b>Observation report</b><span>Your remarks on schedules and lines, failed checks and checklist notes</span></button>
       <button class="dl" data-act="drive-pdf">${IC.upload}<b>Save PDF to Google Drive</b><span>Into ${e_(DB.settings.rootFolder || 'Fair Tax Clients')} / ${e_(c.name)} / FY${en.year}</span></button>
     </div></section>
   ${pageSetupPanel(en, M, true)}
@@ -2933,6 +2955,7 @@ function vSettings(){
   <section class="panel"><h2>Google Drive</h2>
     <div class="form-grid">${field('set-cid', 'Google OAuth Client ID', S.clientId, {bind: 'settings.clientId', wide: true, ph: DEFAULT_GOOGLE_CLIENT_ID ? 'Fair Tax Client ID already built in – leave blank' : '1234567890-abc.apps.googleusercontent.com'})}
     ${field('set-root', 'Main folder name in Drive', S.rootFolder, {bind: 'settings.rootFolder'})}
+    ${field('set-dec', 'Amounts in the statements', String(+S.dec === 2 ? 2 : 0), {bind: 'settings.dec', select: [['0', 'Whole dirhams (no decimals)'], ['2', 'Two decimals – 1,234.56']], hint: 'Two decimals help a trial balance that is out by fils – they can also show small differences that rounding used to hide'})}
     <div class="field"><label>Status</label><div class="row">${Drive.connected() ? '<span class="chip ok">Connected</span>' : '<span class="chip neutral">Not connected</span>'}<button class="btn small primary" data-act="drive-connect">${Drive.connected() ? 'Reconnect' : 'Connect Google Drive'}</button></div></div></div>
     <details class="ph" ${S.clientId || DEFAULT_GOOGLE_CLIENT_ID ? '' : 'open'}><summary>One-time setup (about 10 minutes)</summary><ol class="setup">
       <li>Open <b>console.cloud.google.com</b> and sign in with the Google account that should hold client folders.</li>
@@ -2971,7 +2994,7 @@ function tplFromEngagement(c, en, name){
     fx[key] = rel;
   });
   return {id: uid(), name: name || `${c.name} FY${Y}`, created: new Date().toISOString(), from: `${c.name} · FY${Y}`, type: en.type, data: {
-    schedules: clone(ensureSchedules(en)), tb: en.tb.map(l => ({id: l.id, ledger: l.ledger || '', fs: l.fs || '', caption: l.caption || ''})),
+    schedules: clone(ensureSchedules(en)).map(x => { const y = Object.assign({}, x); delete y.open; delete y.remark; delete y.docs; return y; }), tb: en.tb.map(l => ({id: l.id, ledger: l.ledger || '', fs: l.fs || '', caption: l.caption || ''})),
     ppe: (en.ppe || []).map(p => ({id: p.id, name: p.name || '', life: p.life || ''})), texts: clone(en.texts), customNotes: clone(en.customNotes || []),
     layout: clone(layoutOf(en)), cfLayout: en.cfLayout ? clone(en.cfLayout) : null,
     settings: {deprMethod: en.settings.deprMethod, draft: en.settings.draft, eqTb: en.settings.eqTb || 'auto'},
@@ -3329,16 +3352,17 @@ async function makeFolders(c, year){
 }
 function docsModal(type, id){
   const en = eng(), c = client();
-  const obj = type === 'line' ? en.tb.find(l => l.id === id) : type === 'ppe' ? en.ppe.find(p => p.id === id) : {docs: en.tbDocs = en.tbDocs || [], ledger: 'Trial balance files'};
+  const obj = docTarget(type, id) || {docs: []};
   if (!obj) return;
   obj.docs = obj.docs || [];
-  const label = type === 'line' ? obj.ledger : type === 'ppe' ? obj.name : 'Trial balance';
-  const sub = type === 'line' && SM(en)[obj.fs] ? SM(en)[obj.fs].folder : type === 'ppe' ? '05 Fixed Assets & Inventory' : type === 'tb' ? '02 Trial Balance' : '09 Other';
+  const label = type === 'line' ? obj.ledger : type === 'ppe' ? obj.name : type === 'sched' ? obj.label : 'Trial balance';
+  const sub = type === 'line' && SM(en)[obj.fs] ? SM(en)[obj.fs].folder : type === 'ppe' ? '05 Fixed Assets & Inventory' : type === 'sched' ? (obj.folder || '09 Other') : type === 'tb' ? '02 Trial Balance' : '09 Other';
   const list = obj.docs.map((d, i) => `<li><a href="${e_(d.url)}" target="_blank" rel="noopener">${IC.file}${e_(d.name)}</a>${d.example ? '<span class="chip neutral">example</span>' : ''}<button class="icon-btn" data-act="del-doc" data-type="${type}" data-id="${id}" data-i="${i}" title="Remove link">${IC.trash}</button></li>`).join('');
-  modal(`<h2>Supporting documents</h2><p class="sub">${e_(label)}${type === 'line' ? ` · ${fmtSigned(obj.amt) || '0'} AED` : ''}</p>
+  modal(`<h2>Supporting documents &amp; remarks</h2><p class="sub">${e_(label)}${type === 'line' ? ` · ${fmtSigned(obj.amt) || '0'} AED` : ''}</p>
     <ul class="doclist">${list || '<li class="muted">No documents yet.</li>'}</ul>
-    <div class="box"><h3 class="h3">Upload a file to Google Drive</h3>
-      <div class="form-grid"><div class="field"><label for="up-file">File</label><input id="up-file" type="file"></div>
+    <div class="field wide"><label for="dm-remark">Remarks / observations</label><textarea id="dm-remark" rows="2" data-remark="${type}:${e_(id || '')}" placeholder="What you checked, what is still open – kept in the file and in the observation report">${e_(obj.remark || '')}</textarea></div>
+    <div class="box"><h3 class="h3">Upload files to Google Drive</h3>
+      <div class="form-grid"><div class="field"><label for="up-file">Files – choose one or many</label><input id="up-file" type="file" multiple></div>
       <div class="field"><label for="up-folder">Folder</label><select id="up-folder">${SUBFOLDERS.map(s => `<option${s === sub ? ' selected' : ''}>${s}</option>`).join('')}</select></div></div>
       <p class="small muted">Saved to ${e_(DB.settings.rootFolder || 'Fair Tax Clients')} / ${e_(c.name)} / FY${en.year} / folder above.</p>
       <button class="btn primary" data-act="upload-doc" data-type="${type}" data-id="${id}">${IC.upload}Upload &amp; attach</button></div>
@@ -3396,9 +3420,9 @@ function drillBody(key, yr){
     const modes = `<div class="form-grid">${eqModeFields(en, r, 'q-eq')}</div>`;
     const reDiff = r.cy.reAdj || r.py.reAdj ? fig(eqDiffLabel(Math.abs(r.cy.reAdj) + Math.abs(r.py.reAdj)), fmtN(r.cy.reAdj), fmtN(r.py.reAdj)) : '';
     const openChk = (d, pyClose) => d ? fig(`<span class="bad-t">FY${Y} opening differs from FY${PY} closing ${fmtN(pyClose)} by</span>`, `<b class="bad-t">${fmtN(d)}</b>`, '') : '';
-    if (k === 're') extra = `<h3 class="h3">How retained earnings are worked out</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.reOpen) + (E.re === 'close' ? muted('FY' + PY + ' closing') : ''), fmtN(r.py.reOpen) + pyOpenTag) + fig('Total comprehensive income for the year', fmtN(r.cy.pat), fmtN(r.py.pat)) + fig('Dividend paid', fmtN(-r.cy.div), fmtN(-r.py.div)) + fig('Transfer to legal reserve', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.reItems), fmtN(r.py.reItems)) + reDiff + fig('Balance at the end of the year', fmtN(r.cy.reClose), fmtN(r.py.reClose), 'tot') + openChk(r.cy.reOpenDiff, r.py.reClose))}`;
-    if (k === 'lr') extra = `<h3 class="h3">How the legal reserve is worked out</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.lrOpen) + (E.lr === 'close' ? muted('FY' + PY + ' closing') : ''), fmtN(r.py.lrOpen) + pyOpenTag) + fig('Transfer for the year', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.lrItems), fmtN(r.py.lrItems)) + fig('Balance at the end of the year', fmtN(r.cy.lrClose), fmtN(r.py.lrClose), 'tot') + openChk(r.cy.lrOpenDiff, r.py.lrClose))}`;
-    if (k === 'ca') extra = `<h3 class="h3">Current account movement</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.caOpen), E.firstPy ? fmtN(0) + muted('first year') : bind('q-ca-open', 'pyInfo.caOpen', en.pyInfo.caOpen, 'Current account at start of FY' + PY)) + fig('Net movement during the year', fmtN(r.cy.caMove - r.cy.caItems), fmtN(r.py.caMove - r.py.caItems)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.caItems), fmtN(r.py.caItems)) + fig('Balance at the end of the year', fmtN(r.cy.caClose), fmtN(r.py.caClose), 'tot'))}`;
+    if (k === 're') extra = `<h3 class="h3">How retained earnings are worked out</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.reOpen) + (r.cy.openT && r.cy.openT.re ? muted('typed opening') : E.re === 'close' ? muted('FY' + PY + ' closing') : ''), fmtN(r.py.reOpen) + (r.py.openT && r.py.openT.re ? muted('typed opening') : pyOpenTag)) + fig('Total comprehensive income for the year', fmtN(r.cy.pat), fmtN(r.py.pat)) + fig('Dividend paid', fmtN(-r.cy.div), fmtN(-r.py.div)) + fig('Transfer to legal reserve', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.reItems), fmtN(r.py.reItems)) + reDiff + fig('Balance at the end of the year', fmtN(r.cy.reClose), fmtN(r.py.reClose), 'tot') + openChk(r.cy.reOpenDiff, r.py.reClose))}`;
+    if (k === 'lr') extra = `<h3 class="h3">How the legal reserve is worked out</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.lrOpen) + (r.cy.openT && r.cy.openT.lr ? muted('typed opening') : E.lr === 'close' ? muted('FY' + PY + ' closing') : ''), fmtN(r.py.lrOpen) + (r.py.openT && r.py.openT.lr ? muted('typed opening') : pyOpenTag)) + fig('Transfer for the year', trIn, trInPy) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.lrItems), fmtN(r.py.lrItems)) + fig('Balance at the end of the year', fmtN(r.cy.lrClose), fmtN(r.py.lrClose), 'tot') + openChk(r.cy.lrOpenDiff, r.py.lrClose))}`;
+    if (k === 'ca') extra = `<h3 class="h3">Current account movement</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.cy.caOpen) + (r.cy.openT && r.cy.openT.ca ? muted('typed opening') : ''), r.py.openT && r.py.openT.ca ? fmtN(r.py.caOpen) + muted('typed opening') : E.firstPy ? fmtN(0) + muted('first year') : bind('q-ca-open', 'pyInfo.caOpen', en.pyInfo.caOpen, 'Current account at start of FY' + PY)) + fig('Net movement during the year', fmtN(r.cy.caMove - r.cy.caItems), fmtN(r.py.caMove - r.py.caItems)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.caItems), fmtN(r.py.caItems)) + fig('Balance at the end of the year', fmtN(r.cy.caClose), fmtN(r.py.caClose), 'tot'))}`;
     if (k === 'cap') extra = `<h3 class="h3">Share capital</h3>${modes}${figT(fig('Balance at the beginning of the year', fmtN(r.py.cap), fmtN(r.py.capOpen) + pyOpenTag) + fig(`Share capital introduced`, fmtN(r.cy.capIntro), fmtN(r.py.capIntro)) + fig(`Other movements (${itemsBtn})`, fmtN(r.cy.capItems), fmtN(r.py.capItems)) + fig('Balance at the end of the year', fmtN(r.cy.cap), fmtN(r.py.cap), 'tot'))}
       <p class="small muted">${E.firstPy ? `FY${PY} is the first year, so all FY${PY} share capital shows as introduced.` : `If the company started in FY${PY}, choose “Yes” for the first year above. If an existing company introduced capital in FY${PY}, add it as an item for FY${PY}.`}</p>`;
   } else if (k === 'pay' && (r.cy.ct || r.py.ct)){
@@ -3411,7 +3435,7 @@ function drillBody(key, yr){
       <div class="q-tot"><span>FY${Y} <b>${fmtN(r.cy[k])}</b></span><span>FY${PY} <b>${fmtN(r.py[k])}</b></span></div></div>
     <p class="sub">Change any figure, wording or line here – the financial statements behind this window update at once. Type = in an amount for a formula.</p>
     ${k === 'ppe' && en.ppe.length ? extra + (lines.length ? `<h3 class="h3">Ledger lines</h3>${linesTable}` : '') : lineNote + linesTable + extra}
-    <div class="foot"><button class="btn" data-act="go-tb-filter" data-key="${k}">Open the Schedules screen</button><button class="btn primary" data-close>Done</button></div></div>`, true);
+    <div class="foot"><button class="btn" data-act="go-tb-filter" data-key="${k}">Open the Schedules screen</button>${s && s.sec === 'eq' ? `<button class="btn" data-act="sched-props" data-key="${k}">Opening balance &amp; remarks</button>` : ''}<button class="btn primary" data-close>Done</button></div></div>`, true);
   if (k === 'ppe' || lines.length > 6) { const m = document.querySelector('.modal'); if (m) m.classList.add('xwide'); }
 }
 function taxModal(){ liveModal(taxBody); }
@@ -3734,7 +3758,7 @@ function vChecklist(){
     return `<section class="panel"><div class="row between"><h2>${label}</h2><span class="chip ${op ? 'warn' : 'ok'}">${op ? `${op} open` : 'cleared'}</span></div><ul class="ckl-list">${its.map(item).join('')}</ul></section>`; }).join('');
   const ov = (CK.overrides || []).slice().reverse();
   return `<section class="panel"><div class="head"><div><h1>Pre-issue checklist</h1><p class="sub">${e_(c.name)} · FY${en.year} · Clear every item before issuing the final report. Automatic items update as you work; review items need your tick – write the evidence in the note.</p></div>
-      <div class="row"><button class="btn" data-act="ckl-xlsx">${IC.down}Download checklist</button><button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div>
+      <div class="row"><button class="btn" data-act="ckl-xlsx">${IC.down}Download checklist</button><button class="btn" data-act="obs-xlsx">${IC.down}Observation report</button><button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div>
     <div class="ckl-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Checklist cleared"><span style="width:${pct}%"></span></div>
     <div class="row between"><div class="row"><span class="chip bad">${cnt('bad')} issue${cnt('bad') === 1 ? '' : 's'}</span><span class="chip warn">${cnt('warn')} to check</span><span class="chip neutral">${cnt('todo')} to review</span><span class="chip ok">${cleared} of ${list.length} cleared</span></div>
       <button class="linkish" data-act="ckl-filter">${UI.cklOpenOnly ? 'Show all items' : 'Show only open items'}</button></div>
@@ -3762,6 +3786,26 @@ function cklGate(t){
     <div class="field"><label for="ckl-reason">Reason for issuing with open items</label><textarea id="ckl-reason" rows="2" placeholder="e.g. Bank copy needed today – items cleared before the signed copy"></textarea></div>
     <div class="foot"><button class="btn" data-close>Cancel</button><button class="btn" data-act="ckl-go">Open the checklist</button><button class="btn primary" data-act="ckl-override" data-what="${e_(t.dataset.act)}">Issue anyway</button></div></div>`, true);
   return true;
+}
+function obsExcel(c, en){
+  const r = compute(en, prev()), sm = SM(en), Y = en.year, PY = Y - 1;
+  const rows = [[`${c.name} – observations and remarks FY${Y}`], [`Printed ${fmtStamp(new Date().toISOString())}`], [],
+    ['Where', 'Item', `FY${Y}`, `FY${PY}`, 'Remark / observation', 'Documents']];
+  const docN = o => ((o.docs || []).length ? (o.docs || []).map(d => d.name).join('; ') : '');
+  ensureSchedules(en).forEach(x => { if (!String(x.remark || '').trim() && !(x.docs || []).length) return;
+    rows.push(['Schedule', x.label, R(r.cy[x.key]), R(r.py[x.key]), x.remark || '', docN(x)]); });
+  (en.tb || []).forEach(l => { if (!String(l.remark || '').trim()) return;
+    rows.push(['Ledger line', `${l.ledger || l.caption || ''}${sm[l.fs] ? ` (${sm[l.fs].label})` : ''}`, R(l.amt), R(l.py), l.remark || '', docN(l)]); });
+  (en.ppe || []).forEach(x => { if (!String(x.remark || '').trim()) return; rows.push(['Asset class', x.name || '', '', '', x.remark || '', docN(x)]); });
+  if (en.tbDocs && String((en.tbDocs.remark) || '').trim()) rows.push(['Trial balance', 'Trial balance files', '', '', en.tbDocs.remark, '']);
+  const bad = r.checks.filter(k => k.level !== 'ok' && k.level !== 'info');
+  if (bad.length){ rows.push([], ['Checks that need attention'], ['Level', 'Check']); bad.forEach(k => rows.push([k.level === 'bad' ? 'Issue' : 'Warning', k.text])); }
+  let list = []; try { list = cklEval(c, en); } catch (e) {}
+  const open = list.filter(i => ['bad', 'warn', 'todo'].includes(i.st) || String(i.note || '').trim());
+  if (open.length){ rows.push([], ['Pre-issue checklist'], ['Status', 'Item', 'Finding', 'Note']); open.forEach(i => rows.push([CKL_CHIP[i.st][1], i.text, i.auto.msg || '', i.note || ''])); }
+  const ws = XLSX.utils.aoa_to_sheet(rows); ws['!cols'] = [{wch: 16}, {wch: 46}, {wch: 16}, {wch: 16}, {wch: 60}, {wch: 34}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Observations');
+  return new Blob([XLSX.write(wb, {bookType: 'xlsx', type: 'array'})], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 function cklExcel(c, en){
   const list = cklEval(c, en), CK = en.checklist || {};
@@ -4017,9 +4061,13 @@ function schedModal(key){
       <div class="field"><label for="sc-shownote">Separate note in the report</label><select id="sc-shownote"><option value="1"${!x || x.showNote !== false ? ' selected' : ''}>Yes – show a note with its lines</option><option value="0"${x && x.showNote === false ? ' selected' : ''}>No – statement line only</option></select></div>
       <div class="field"><label for="sc-folder">Google Drive folder for its documents</label><select id="sc-folder">${SUBFOLDERS.map(f => `<option${(x ? x.folder : '09 Other') === f ? ' selected' : ''}>${f}</option>`).join('')}</select></div>
       <div class="field"><label>Balance type</label><div class="static">${x ? (x.dr ? 'Debit balance (asset / expense)' : 'Credit balance (liability / equity / income)') : 'Set by where it appears'}</div></div>
+      <div class="field"><label for="sc-open-cy">Opening balance FY${en.year}</label><input id="sc-open-cy" inputmode="decimal" value="${x && x.open ? e_(x.open.cy ?? '') : ''}" placeholder="blank = worked out"></div>
+      <div class="field"><label for="sc-open-py">Opening balance FY${en.year - 1}</label><input id="sc-open-py" inputmode="decimal" value="${x && x.open ? e_(x.open.py ?? '') : ''}" placeholder="blank = worked out"></div>
+      <div class="field wide"><label for="sc-remark">Remarks / observations (kept with the file, not printed)</label><textarea id="sc-remark" rows="2" placeholder="e.g. Opening reserve agreed to the signed FY2024 report">${e_(x ? x.remark || '' : '')}</textarea></div>
       <div class="field wide"><label for="sc-above">Text in the note – above the table (optional)</label><textarea id="sc-above" rows="2">${e_(x ? x.textAbove || '' : '')}</textarea></div>
       <div class="field wide"><label for="sc-below">Text in the note – below the table (optional)</label><textarea id="sc-below" rows="3">${e_(x ? x.textBelow || '' : '')}</textarea></div>
     </div>
+    <p class="note">Opening balances are used in the statement of changes in equity (share capital, legal reserve, retained earnings, current account and other equity schedules). Leave them blank to let the software work the opening back from the ledger.${x ? ` <button class="btn small" data-docs="sched:${x.key}">${IC.clip}Documents (${((x.docs || []).length)})</button>` : ''}</p>
     ${x && x.hint ? `<p class="note">${e_(x.hint)}</p>` : ''}
     ${isNew ? '<p class="note">Current assets and liabilities flow into working capital in the cash flow; non-current assets into investing; non-current liabilities and equity into financing.</p>' : ''}
     <div class="foot">${x && x.custom ? `<button class="btn danger" data-act="del-sched" data-key="${x.key}">Delete schedule</button><span style="flex:1"></span>` : ''}
@@ -4041,6 +4089,10 @@ function saveSched(key){
   x.label = label; x.note = (key && noteIn === oldNote && label !== oldLabel && defaultNote) ? '' : noteIn;
   x.showNote = document.getElementById('sc-shownote').value === '1'; x.folder = document.getElementById('sc-folder').value;
   x.textAbove = document.getElementById('sc-above').value; x.textBelow = document.getElementById('sc-below').value;
+  x.remark = document.getElementById('sc-remark').value;
+  const oCy = document.getElementById('sc-open-cy').value.trim(), oPy = document.getElementById('sc-open-py').value.trim();
+  x.open = {}; if (oCy !== '') x.open.cy = num(oCy); if (oPy !== '') x.open.py = num(oPy);
+  if (x.open.cy === undefined && x.open.py === undefined) delete x.open;
   if (x.custom && document.getElementById('sc-sec')) x.sec = document.getElementById('sc-sec').value;
   ensureSchedules(en); save(); closeModal(); UI.view = 'tb'; UI.tbMode = 'sched'; render();
   const el = document.getElementById('sch-' + x.key); if (el) el.scrollIntoView({block: 'start'});
@@ -5396,13 +5448,19 @@ document.addEventListener('click', async ev => {
       case 'del-cn': en.customNotes.splice(+t.dataset.i, 1); save(); render(); break;
       case 'reset-text': if (confirm('Replace this section with the standard wording?')){ en.texts[t.dataset.key] = DEFAULT_TEXTS[t.dataset.key]; save(); render(); } break;
       case 'upload-doc': {
-        const f = document.getElementById('up-file').files[0]; if (!f){ toast('Choose a file first', true); break; }
+        const files = [...(document.getElementById('up-file').files || [])]; if (!files.length){ toast('Choose one or more files first', true); break; }
         const folderName = document.getElementById('up-folder').value;
-        t.disabled = true; t.textContent = 'Uploading…';
+        t.disabled = true;
         const fid = await Drive.subFolderId(c, en.year, folderName);
-        const up = await Drive.upload(f, f.name, fid);
-        const obj = docTarget(t.dataset.type, t.dataset.id); obj.docs.push({name: up.name, url: up.webViewLink, fileId: up.id, folder: folderName});
-        save(); toast('Uploaded to Google Drive and attached'); docsModal(t.dataset.type, t.dataset.id); render(); break;
+        const obj = docTarget(t.dataset.type, t.dataset.id); obj.docs = obj.docs || [];
+        let done = 0;
+        try {
+          for (const f of files){ t.textContent = `Uploading ${done + 1} of ${files.length}…`;
+            const up = await Drive.upload(f, f.name, fid);
+            obj.docs.push({name: up.name, url: up.webViewLink, fileId: up.id, folder: folderName}); done++; save(); }
+        } catch (err) { toast(err.message || 'Upload failed', true); }
+        toast(done === 1 ? 'Uploaded to Google Drive and attached' : `${done} of ${files.length} files uploaded and attached`);
+        docsModal(t.dataset.type, t.dataset.id); render(); break;
       }
       case 'link-doc': {
         const name = document.getElementById('ln-name').value.trim(), url = document.getElementById('ln-url').value.trim();
@@ -5451,6 +5509,7 @@ document.addEventListener('click', async ev => {
         UI.view = 'texts'; UI.textOpen = 'custom'; closeModal(); save(); render(); window.scrollTo(0, 0); toast('Related party note added – fill in the names and amounts'); break;
       }
       case 'ckl-xlsx': download(cklExcel(c, en), `${safeName(c.name)}_Checklist_${en.year}.xlsx`); break;
+      case 'obs-xlsx': download(obsExcel(c, en), `${safeName(c.name)}_Observations_${en.year}.xlsx`); break;
       case 'ckl-go': closeModal(); UI.view = 'checklist'; save(); render(); window.scrollTo(0, 0); break;
       case 'ckl-override': {
         const reason = ((document.getElementById('ckl-reason') || {}).value || '').trim();
@@ -5591,7 +5650,7 @@ document.addEventListener('click', async ev => {
     }
   } catch (err) { console.error(err); toast(err.message || String(err), true); t.disabled = false; }
 });
-function docTarget(type, id){ const en = eng(); if (type === 'line') return en.tb.find(l => l.id === id); if (type === 'ppe') return en.ppe.find(p => p.id === id); en.tbDocs = en.tbDocs || []; return {get docs(){ return en.tbDocs; }}; }
+function docTarget(type, id){ const en = eng(); if (type === 'line') return en.tb.find(l => l.id === id); if (type === 'ppe') return en.ppe.find(p => p.id === id); if (type === 'sched'){ const x = SM(en)[id]; if (x){ x.docs = x.docs || []; return x; } } en.tbDocs = en.tbDocs || []; return {get docs(){ return en.tbDocs; }}; }
 
 document.addEventListener('change', async ev => {
   const el = ev.target, c = client(), en = eng();
@@ -5652,6 +5711,7 @@ document.addEventListener('change', async ev => {
   }
   if (el.id === 'show-empty'){ UI.showEmpty = el.checked; save(); render(); return; }
   if (el.dataset.ui){ UI[el.dataset.ui] = el.value; render(); return; }
+  if (el.dataset.remark){ const [ty, rid] = el.dataset.remark.split(':'); const o = docTarget(ty, rid); if (o){ o.remark = el.value; save(); } return; }
   if (el.dataset.cklNote !== undefined){ const CK = en.checklist = en.checklist || {}; (CK.notes = CK.notes || {})[el.dataset.cklNote] = el.value; save(); return; }
   if (el.dataset.line){ const l = en.tb.find(x => x.id === el.dataset.line); const f = el.dataset.field; if (f === 'fs'){ moveLine(en, l, el.value); UI.justAdded[el.value] = true; } else if (['amt', 'py'].includes(f)){ try { fxInput(c, en, `L:${l.id}:${f}`, el.value, v => { l[f] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
     else l[f] = el.value;
