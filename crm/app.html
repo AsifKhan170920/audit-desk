@@ -82,10 +82,12 @@ table.cl-tbl .sub2{color:var(--muted);font-size:12px}
 /* ---------- the AI assistant page ---------- */
 .ai-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
 #ai-dock{display:flex;overflow:hidden;padding:0}
-body.ai-page #cai .body{flex:0 1 auto;max-height:calc(100vh - 330px)}
-body.ai-page #cai{position:static!important;inset:auto!important;display:flex!important;width:100%!important;max-width:none!important;height:auto!important;flex:1;border:0!important;border-radius:var(--radius)!important;box-shadow:none!important}
-body.ai-page #cai-fab{display:none!important}
-body.ai-page #cai .hd .ib:last-child{display:none}
+/* these only bite while the panel is genuinely sitting inside the dock on the
+   AI page - anywhere else it stays the small corner panel, whatever the body class says */
+#ai-dock > #cai .body{flex:0 1 auto;max-height:calc(100vh - 330px)}
+#ai-dock > #cai{position:static!important;inset:auto!important;display:flex!important;width:100%!important;max-width:none!important;height:auto!important;flex:1;border:0!important;border-radius:var(--radius)!important;box-shadow:none!important}
+body:has(#ai-dock > #cai) #cai-fab{display:none!important}
+#ai-dock > #cai .hd .ib:last-child{display:none}
 #cai .hd{background:var(--nav)!important}
 #cai .m.user,#cai .send{background:var(--blue)!important}
 #cai .mic,#cai .conv{background:var(--blue-soft)!important;color:var(--blue-d)!important}
@@ -530,10 +532,12 @@ function pageTitle(){
 function undockAI(){
   document.body.classList.remove('ai-page');
   const cai=document.getElementById('cai');
-  if(cai&&cai.parentElement&&cai.parentElement.id==='ai-dock'){
+  if(cai&&cai.parentElement&&cai.parentElement.id!=='ai-dock') return;
+  if(cai){
     document.body.appendChild(cai); cai.classList.remove('open');
-    const f=document.getElementById('cai-fab'); if(f) f.style.display='';
+    cai.removeAttribute('style');
   }
+  const f=document.getElementById('cai-fab'); if(f) f.style.display='';
 }
 function remRows(){
   if(!window.FTReminders) return '<tr><td colspan="3" class="empty">Reminders are not loaded on this page.</td></tr>';
@@ -665,6 +669,7 @@ const LEAD_STAGES=['New','Contacted','Quotation Sent','Follow-up','Closed'];
 const STAGE_DOT={'New':'#3b82f6','Contacted':'#f59e0b','Quotation Sent':'#7c3aed','Follow-up':'#0ea5e9','Closed':'#10b981'};
 let leadSearch='';
 function renderLeads(){
+  undockAI();
   const db=load();
   const q=leadSearch.toLowerCase();
   const list=db.leads.filter(l=>l.name.toLowerCase().includes(q)||(l.services||[]).join(' ').toLowerCase().includes(q))
@@ -753,6 +758,7 @@ function svcCell(c){
 }
 const staffSel=(db,obj,kind)=>`<select data-cl="${kind}" data-id="${obj.id}" aria-label="Assigned user"><option value="">— nobody —</option>${(db.team||[]).map(t=>`<option${(kind==='staff'?(obj.staff||[])[0]:kind==='assignees'?(obj.assignees||[])[0]:obj.assignedTo)===t?' selected':''}>${esc(t)}</option>`).join('')}</select>`;
 function renderClients(){
+  undockAI();
   const db=load();
   const q=clientSearch.toLowerCase();
   const list=db.clients.filter(c=>(clientFilter==='All'||c.status===clientFilter)&&c.name.toLowerCase().includes(q))
@@ -852,6 +858,7 @@ const TS_DOT={'Not Started':'#3b82f6','In Progress':'#f59e0b','Pending to Client
 let taskFilter='All';
 let taskSearch='';
 function renderTasks(){
+  undockAI();
   const db=load();
   const q=taskSearch.toLowerCase(), today=ymd(new Date());
   const list=db.tasks.filter(t=>(taskFilter==='All'||t.type===taskFilter)&&(!q||t.title.toLowerCase().includes(q)))
