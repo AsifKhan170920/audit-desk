@@ -439,6 +439,15 @@ tr.sfix td .muted{font-weight:400}
 input.fs-note{width:100%;text-align:center;padding-left:4px;padding-right:4px}
 tr.fs-line.off th[scope=row] input,tr.fs-line.off td{opacity:.55}
 tr.fs-user th[scope=row] input{font-weight:600}
+.ai-find{border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:10px;padding:12px 14px;margin:10px 0;background:var(--surface)}
+.ai-find.bad{border-left-color:var(--bad)}.ai-find.warn{border-left-color:var(--warn)}.ai-find.neutral{border-left-color:var(--line)}
+.ai-find-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.ai-find p{margin:4px 0}
+.ai-ul{margin:6px 0 0 18px}.ai-ul li{margin-bottom:6px}
+.ai-chat{max-height:380px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface)}
+.ai-msg{margin-bottom:12px}.ai-msg b{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
+.ai-msg.you div{background:var(--blue-soft);border-radius:10px;padding:8px 11px;display:inline-block}
+.ai-ask{gap:10px}.ai-ask input{flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit}
 .sub-box .note-text-head{gap:10px;flex-wrap:wrap}
 input.sb-title{flex:1;min-width:200px;font-weight:600}
 .sub-box table.tb tfoot td{font-weight:700}
@@ -939,6 +948,7 @@ function rollForward(client, eng){
   n.schedules = JSON.parse(JSON.stringify(ensureSchedules(eng))); ensureSchedules(n);
   /* a sub-table keeps its lines; this year's figures become next year's comparatives */
   n.schedules.forEach(sx => (sx.subs || []).forEach(sb => (sb.rows || []).forEach(rw => { rw.py = rw.cy; rw.cy = ''; })));
+  n.schedules.forEach(sx => { delete sx.remark; });
   const incomeOrExpense = s => ['inc', 'dc', 'exp'].includes(s.sec);
   const m = SM(eng);
   n.tb = eng.tb.map(l => {
@@ -2778,7 +2788,7 @@ function renderNav(){
     h += `<div class="side-label">Current client</div><div class="side-client">${e_(c.name)}</div>
       <div class="side-year"><select id="year-select" aria-label="Financial year">${c.engagements.slice().sort((a, b) => b.year - a.year).map(x => `<option value="${x.id}"${x.id === en.id ? ' selected' : ''}>FY${x.year} · ${e_(x.type)}</option>`).join('')}</select>
       <button class="linkish" data-act="add-year" title="Next year, an earlier year, or last year’s statements from Excel">+ Add financial year</button></div>`;
-    [['profile', 'Company profile', IC.id], ['tb', 'Schedules', IC.grid], ['adjust', 'Tax, reserve & prior year', IC.sliders], ['statements', 'Financial statements', IC.chart], ['texts', 'Policies & report text', IC.doc], ['layout', 'Report layout & print', IC.print], ['checklist', 'Pre-issue checklist', IC.check], ['export', 'Download reports', IC.down]]
+    [['profile', 'Company profile', IC.id], ['tb', 'Schedules', IC.grid], ['adjust', 'Tax, reserve & prior year', IC.sliders], ['statements', 'Financial statements', IC.chart], ['airev', 'AI review', IC.spark], ['texts', 'Policies & report text', IC.doc], ['layout', 'Report layout & print', IC.print], ['checklist', 'Pre-issue checklist', IC.check], ['export', 'Download reports', IC.down]]
       .forEach(([k, l, i]) => { h += `<button class="nav-btn" data-nav="${k}" aria-current="${UI.view === k}">${i}${l}</button>`; });
   }
   document.getElementById('nav').innerHTML = h;
@@ -2793,7 +2803,7 @@ function render(){
   const scrollY = window.scrollY;
   if (!client() && !['clients', 'settings', 'wizard'].includes(UI.view)) UI.view = 'clients';
   renderNav();
-  const views = {clients: vClients, settings: vSettings, profile: vProfile, tb: vTB, adjust: vAdjust, statements: vStatements, texts: vTexts, layout: vLayout, checklist: vChecklist, export: vExport, wizard: vWizard};
+  const views = {clients: vClients, settings: vSettings, profile: vProfile, tb: vTB, adjust: vAdjust, statements: vStatements, airev: vAiReview, texts: vTexts, layout: vLayout, checklist: vChecklist, export: vExport, wizard: vWizard};
   document.getElementById('main').innerHTML = (views[UI.view] || vClients)();
   pageTitle();
   refreshModal();
@@ -4894,6 +4904,153 @@ function finIntPanel(en, r){
       </tbody></table></div>`;
 }
 
+
+/* ============================================================
+   AI REVIEW – Claude looks at this engagement's figures the way a reviewer
+   would: what moved, what does not hang together, what to ask the client and
+   what to test. Nothing is changed in the file; the findings are notes.
+   ============================================================ */
+function aiPack(c, en){
+  const r = compute(en, prevOf(c, en)), Y = en.year, PY = Y - 1, p = c.profile || {};
+  const N = v => Math.round(R(v));
+  const mv = (a, b) => { a = N(a); b = N(b); return b ? Math.round((a - b) / Math.abs(b) * 1000) / 10 : (a ? null : 0); };
+  const two = (a, b) => ({[Y]: N(a), [PY]: N(b), change_pct: mv(a, b)});
+  const FSF = {pay: 'payTot', lr: 'lrClose', re: 'reClose', ca: 'caClose'};
+  const sm = SM(en);
+  const schedules = schedulesInOrder(en).map(x => {
+    const f = FSF[x.key] || x.key, cy = R(r.cy[f]), py = R(r.py[f]);
+    const lines = en.tb.filter(l => l.fs === x.key);
+    if (!N(cy) && !N(py) && !lines.length) return null;
+    const o = Object.assign({name: x.label, part: (SECT[x.sec] || {}).label || x.sec}, two(cy, py));
+    if (lines.length > 1 || (lines.length === 1 && (lines[0].caption || lines[0].ledger) !== x.label))
+      o.lines = lines.map(l => Object.assign({name: (l.caption || l.ledger || '').trim()}, two(l.amt, l.py)));
+    (x.subs || []).forEach(sb => { const rws = (sb.rows || []).filter(rw => String(rw.label || '').trim());
+      if (rws.length) (o.tables = o.tables || []).push({title: sb.title || 'table', rows: rws.map(rw => Object.assign({name: rw.label}, two(subVal(rw, 'cy'), subVal(rw, 'py')))) }); });
+    if ((x.textAbove || '').trim() || (x.textBelow || '').trim()) o.note_text = `${x.textAbove || ''} ${x.textBelow || ''}`.trim().slice(0, 400);
+    if ((x.remark || '').trim()) o.our_remark = x.remark.slice(0, 300);
+    return o;
+  }).filter(Boolean);
+  const T = r.ppeT || {};
+  const pack = {
+    entity: {name: c.name, legal_form: p.legalForm || '', emirate: p.emirate || '', activities: (p.activities || '').slice(0, 300),
+      year_end: `${p.yearEndText || 'December 31'}, ${Y}`, comparative_year: PY, first_year: !!(r.cy.eqModes || {}).firstPy,
+      engagement: en.type || 'Audit', currency: 'AED'},
+    profit_or_loss: {revenue: two(r.cy.rev, r.py.rev), cost_of_revenue: two(r.cy.cor + r.cy.xdc, r.py.cor + r.py.xdc),
+      gross_profit: two(r.cy.gp, r.py.gp), gross_margin_pct: {[Y]: r.cy.rev ? Math.round(r.cy.gp / r.cy.rev * 1000) / 10 : null, [PY]: r.py.rev ? Math.round(r.py.gp / r.py.rev * 1000) / 10 : null},
+      general_and_admin: two(r.cy.ga, r.py.ga), selling: two(r.cy.sell, r.py.sell), depreciation: two(r.cy.dep, r.py.dep),
+      finance_costs: two(r.cy.fin, r.py.fin), interest_part: two(r.cy.interest, r.py.interest),
+      other_income: two(r.cy.oi + r.cy.gain, r.py.oi + r.py.gain),
+      profit_before_tax: two(r.cy.pbt, r.py.pbt), corporate_tax: two(r.cy.ct, r.py.ct), profit_for_the_year: two(r.cy.pat, r.py.pat)},
+    financial_position: {non_current_assets: two(r.cy.nca, r.py.nca), current_assets: two(r.cy.caTot, r.py.caTot), total_assets: two(r.cy.ta, r.py.ta),
+      equity: two(r.cy.eq, r.py.eq), non_current_liabilities: two(r.cy.ncl, r.py.ncl), current_liabilities: two(r.cy.cl, r.py.cl),
+      total_equity_and_liabilities: two(r.cy.tel, r.py.tel), balances: N(r.cy.ta) === N(r.cy.tel)},
+    ppe_movement: r.ppe && r.ppe.length ? {cost_opening: N(T.costOpen), additions: N(T.add), disposals_at_cost: N(T.disp), cost_closing: N(T.costClose),
+      depreciation_opening: N(T.depOpen), charge_for_the_year: N(T.charge), depreciation_closing: N(T.depClose),
+      net_book_value: two(T.nbv, T.nbvPy), classes: r.ppe.map(x => ({name: x.name || 'class', useful_life_years: x.life || '', nbv: N(x.nbv), additions: N(x.add), charge: N(x.charge)}))} : null,
+    equity_movement: {share_capital: two(r.cy.cap, r.py.cap), legal_reserve: two(r.cy.lrClose, r.py.lrClose), transfer_to_legal_reserve: two(r.cy.lrTransfer, r.py.lrTransfer),
+      retained_earnings_opening: two(r.cy.reOpen, r.py.reOpen), dividend_paid: two(r.cy.div, r.py.div), retained_earnings_closing: two(r.cy.reClose, r.py.reClose),
+      shareholder_current_account: two(r.cy.caClose, r.py.caClose)},
+    cash_flow: {operating: two(r.cf.op, r.cfp.op), investing: two(r.cf.invTot, r.cfp.invTot), financing: two(r.cf.finTot, r.cfp.finTot),
+      net_movement: two(r.cf.net, r.cfp.net), closing_cash: two(r.cf.close, r.cfp.close), agrees_with_balance_sheet: !r.cf.diff},
+    ratios: ratioList(r).map(x => ({name: x.d.name, how: x.d.how, [Y]: ratioFmt(x.d, x.a.v), [PY]: ratioFmt(x.d, x.b.v)})),
+    schedules,
+    software_checks: (r.checks || []).filter(k => !k.ok).map(k => k.text),
+    accounting_policies: (en.texts.policies || []).filter(x => x.mode !== 'off').map(x => x.title),
+    related_parties: {due_from: two(r.cy.rprec, r.py.rprec), due_to: two(r.cy.rppay, r.py.rppay), current_account: two(r.cy.caClose, r.py.caClose)},
+    tax: {mode: en.settings.ctMode || 'auto', adjustments: N(r.cy.ctAdj), charge: two(r.cy.ct, r.py.ct), booked_in_ledger: !!r.cy.ctLedger}
+  };
+  return pack;
+}
+const AI_REVIEW_PROMPT = `You are a UAE audit manager reviewing a set of draft financial statements prepared under IFRS for SMEs, before the partner signs. The JSON below holds the figures for the year and the comparative, the schedules behind them, the ratios and the software's own checks. Figures are in AED. "change_pct" is already worked out for you.
+
+Review them the way an experienced reviewer would: analytical review under ISA 520, risk of material misstatement under ISA 315, and disclosure completeness. Look for movements that do not make sense against each other (revenue against receivables and margin, payroll against staff numbers implied, depreciation against additions and useful lives, finance costs against borrowings, tax against profit), balances that look stale or unusual, figures that contradict another part of the file, and disclosures a UAE SME set should carry but this one does not.
+
+Be specific and quote the figures you are reasoning from. Do not invent anything that is not in the JSON - if something is missing, say it is missing and ask for it. Do not repeat the software's own checks unless you can add something. Rank by what would actually change the audit opinion or the file, not by what is easy to say.
+
+Return ONLY one JSON object, nothing before { or after }:
+{
+  "overview": "three or four sentences: what these statements say about the year, and the shape of the audit risk",
+  "findings": [
+    {"title": "short heading",
+     "severity": "high | medium | low",
+     "area": "the schedule or statement it concerns, in the words used in the JSON",
+     "observation": "what the figures show, with the numbers",
+     "why": "why it matters for the audit or the accounts",
+     "action": "what to ask the client, what to test, or what to change"}
+  ],
+  "questions_for_client": ["direct questions, each one sentence"],
+  "disclosure_gaps": ["a disclosure a UAE SME set should carry that is missing or thin here"]
+}
+Write strict JSON: double quotes, a comma between every pair of items, no trailing commas, no line breaks inside a value.`;
+
+async function aiReviewRun(){
+  const c = client(), en = eng();
+  if (!AI.key()){ aiKeyModal(() => aiReviewRun()); return; }
+  UI.aiBusy = true; render();
+  try {
+    const pack = aiPack(c, en);
+    const text = await AI.call([{type: 'text', text: AI_REVIEW_PROMPT + '\n\n' + JSON.stringify(pack)}], 8000);
+    let out;
+    try { out = AI.json(text); }
+    catch (err) {
+      if (!err.badJson) throw err;
+      const again = await AI.call([{type: 'text', text: 'This should be one JSON object but it does not parse. Return the same content as valid JSON, nothing before { or after }, changing no wording.\n\n' + err.badJson}], 8000);
+      out = AI.json(again);
+    }
+    en.aiReview = {at: new Date().toISOString(), model: AI.model(), overview: out.overview || '',
+      findings: (out.findings || []).map(f => Object.assign({id: uid()}, f)),
+      questions: out.questions_for_client || [], gaps: out.disclosure_gaps || []};
+    save(); toast(`${(en.aiReview.findings || []).length} point(s) raised`);
+  } catch (err) { toast(err.message || 'Claude could not finish the review', true); }
+  UI.aiBusy = false; render();
+}
+async function aiReviewAsk(){
+  const c = client(), en = eng(), box = document.getElementById('ai-q');
+  const q = ((box && box.value) || '').trim(); if (!q) return;
+  if (!AI.key()){ aiKeyModal(() => aiReviewAsk()); return; }
+  en.aiChat = en.aiChat || [];
+  en.aiChat.push({role: 'you', text: q}); if (box) box.value = '';
+  UI.aiBusy = true; save(); render();
+  try {
+    const pack = aiPack(c, en);
+    const hist = en.aiChat.slice(-8).map(m => `${m.role === 'you' ? 'Auditor' : 'You'}: ${m.text}`).join('\n\n');
+    const text = await AI.call([{type: 'text', text: `You are a UAE audit manager working on the file below (IFRS for SMEs, figures in AED). Answer the auditor's question from these figures only. Quote the numbers you use. If the file does not hold the answer, say so and say what is needed. Answer in plain sentences, short paragraphs, no JSON and no markdown tables.\n\nFILE:\n${JSON.stringify(pack)}\n\nCONVERSATION SO FAR:\n${hist}\n\nAnswer the last question from the auditor.`}], 2000);
+    en.aiChat.push({role: 'ai', text: String(text || '').trim()});
+  } catch (err) { en.aiChat.push({role: 'ai', text: 'Could not answer: ' + (err.message || 'error')}); }
+  UI.aiBusy = false; save(); render();
+  { const l = document.getElementById('ai-chat'); if (l) l.scrollTop = l.scrollHeight; }
+}
+const AI_SEV = {high: ['bad', 'Needs attention'], medium: ['warn', 'Worth a look'], low: ['neutral', 'Minor']};
+function vAiReview(){
+  const c = client(), en = eng(), A = en.aiReview, Y = en.year;
+  const hasKey = !!AI.key();
+  const sev = f => AI_SEV[String(f.severity || 'low').toLowerCase()] || AI_SEV.low;
+  const ord = f => ({high: 0, medium: 1, low: 2})[String(f.severity || 'low').toLowerCase()] ?? 2;
+  const schedKey = area => { const a = String(area || '').toLowerCase(); const hit = ensureSchedules(en).find(x => a.includes(String(x.label).toLowerCase())); return hit ? hit.key : ''; };
+  const card = f => { const [cls, lbl] = sev(f), k = schedKey(f.area);
+    return `<div class="ai-find ${cls}">
+      <div class="ai-find-h"><span class="chip ${cls === 'bad' ? 'warn' : cls === 'warn' ? 'neutral' : 'neutral'}">${lbl}</span><b>${e_(f.title || 'Point')}</b>${f.area ? `<span class="muted small">${e_(f.area)}</span>` : ''}</div>
+      <p>${e_(f.observation || '')}</p>
+      ${f.why ? `<p class="muted">${e_(f.why)}</p>` : ''}
+      ${f.action ? `<p><b>Next:</b> ${e_(f.action)}</p>` : ''}
+      <div class="row">${k ? `<button class="btn small" data-act="ai-go" data-key="${e_(k)}">Open ${e_(schedLabel(en, k))}</button>` : ''}
+        ${k ? `<button class="btn small" data-act="ai-remark" data-id="${f.id}" data-key="${e_(k)}">Save as a remark</button>` : ''}
+        <button class="linkish" data-act="ai-drop" data-id="${f.id}">Remove</button></div></div>`; };
+  const list = (A && A.findings || []).slice().sort((a, b) => ord(a) - ord(b)).map(card).join('');
+  const chat = (en.aiChat || []).map(m => `<div class="ai-msg ${m.role}"><b>${m.role === 'you' ? 'You' : 'Claude'}</b><div>${e_(m.text).replace(/\n/g, '<br>')}</div></div>`).join('');
+  return `<section class="panel"><div class="head"><div><h1>AI review FY${Y}</h1><p class="sub">Claude reads this engagement's figures – the schedules, the statements, the ratios and the checks – and raises what a reviewer would raise. Nothing in the file is changed; these are notes for you.</p></div>
+      <div class="row">${UI.aiBusy ? '<span class="chip neutral"><span class="spinner"></span> Working…</span>' : `<button class="btn primary" data-act="ai-review">${IC.spark}${A ? 'Review again' : 'Review the figures'}</button>`}</div></div>
+    ${hasKey ? '' : '<div class="banner warn">Add a Claude API key in <button class="linkish" data-nav="settings">Settings &amp; backup</button> to use the review.</div>'}
+    ${A ? `<p class="small muted">Last reviewed ${e_(fmtStamp(A.at))}. The review is a second pair of eyes, not an audit procedure – judge every point yourself.</p>` : ''}</section>
+  ${A && A.overview ? `<section class="panel"><h2>Overview</h2><p>${e_(A.overview)}</p></section>` : ''}
+  ${list ? `<section class="panel"><div class="head"><h2>Points raised</h2><span class="muted small">${(A.findings || []).length} point(s)</span></div>${list}</section>` : A ? '<section class="panel"><p class="small muted">No points raised.</p></section>' : ''}
+  ${A && (A.questions || []).length ? `<section class="panel"><h2>To ask the client</h2><ul class="ai-ul">${A.questions.map(q => `<li>${e_(q)}</li>`).join('')}</ul></section>` : ''}
+  ${A && (A.gaps || []).length ? `<section class="panel"><h2>Disclosures to look at</h2><ul class="ai-ul">${A.gaps.map(q => `<li>${e_(q)}</li>`).join('')}</ul></section>` : ''}
+  <section class="panel"><h2>Ask about this engagement</h2><p class="sub">Claude answers from the figures in this file – e.g. “why did the gross margin fall?”, “does the PPE note hang together?”, “what should I test on receivables?”.</p>
+    ${chat ? `<div class="ai-chat" id="ai-chat">${chat}</div>` : ''}
+    <div class="row ai-ask"><input id="ai-q" placeholder="Ask a question about these figures…" aria-label="Question"><button class="btn primary" data-act="ai-ask"${UI.aiBusy ? ' disabled' : ''}>Ask</button>${(en.aiChat || []).length ? '<button class="linkish" data-act="ai-clear">Clear</button>' : ''}</div></section>`;
+}
+
 function schedModal(key){
   const en = eng(); const x = key ? SM(en)[key] : null;
   const isNew = !x;
@@ -5293,6 +5450,7 @@ document.addEventListener('input', ev => {
   if (/^\s*=/.test(el.value)) fxHelpShow(el); else fxHelpHide();
 });
 document.addEventListener('keyup', ev => { if (FXH.el && ev.target === FXH.el && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) fxHelpShow(FXH.el); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target && ev.target.id === 'ai-q'){ ev.preventDefault(); aiReviewAsk(); } });
 document.addEventListener('keydown', ev => {
   const el = ev.target;
   if (!el.dataset || !el.dataset.fxKey) return;
@@ -6646,6 +6804,17 @@ document.addEventListener('click', async ev => {
       case 'ai-key-remove': if (confirm('Remove the Claude API key from this browser?')){ AI.setKey(''); render(); } break;
       case 'note-text': { UI.noteText = UI.noteText || {}; UI.noteText[t.dataset.key] = true; UI.collapsed = UI.collapsed || {}; UI.collapsed[t.dataset.key] = false; render(); const el = document.getElementById('nt-b-' + t.dataset.key); if (el) el.focus(); break; }
       case 'note-text-above': { UI.noteTextAbove = UI.noteTextAbove || {}; UI.noteTextAbove[t.dataset.key] = true; render(); const el = document.getElementById('nt-a-' + t.dataset.key); if (el) el.focus(); break; }
+      /* ---- AI review ---- */
+      case 'ai-review': aiReviewRun(); break;
+      case 'ai-ask': aiReviewAsk(); break;
+      case 'ai-clear': if (confirm('Clear the questions and answers on this engagement?')){ en.aiChat = []; save(); render(); } break;
+      case 'ai-drop': { const A = en.aiReview; if (A) A.findings = (A.findings || []).filter(f => f.id !== t.dataset.id); save(); render(); break; }
+      case 'ai-go': UI.view = 'tb'; UI.tbMode = 'sched'; save(); render(); { const el = document.getElementById('sch-' + t.dataset.key); if (el) el.scrollIntoView({block: 'start'}); } break;
+      case 'ai-remark': { const A = en.aiReview, f = A && (A.findings || []).find(y => y.id === t.dataset.id), x = SM(en)[t.dataset.key];
+        if (!f || !x) break;
+        const line = `${f.title}: ${f.observation || ''}${f.action ? ' – ' + f.action : ''}`.replace(/\s+/g, ' ').trim();
+        x.remark = ((x.remark || '').trim() ? x.remark.trim() + '\n' : '') + line;
+        save(); render(); toast('Saved to the remarks on ' + x.label); break; }
       /* ---- sub-tables inside a note ---- */
       case 'sub-add': { const x = SM(en)[t.dataset.key]; if (!x) break;
         const sb = {id: uid(), title: '', tie: true, rows: [{id: uid(), label: '', cy: '', py: ''}]};
