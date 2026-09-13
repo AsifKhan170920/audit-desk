@@ -135,6 +135,9 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
     if (window.FTAI) FTAI.mount();
     var next = params.get('next');
     if (next && FT.canOpen(me, next)){ location.href = next + '/'; return; }
+    /* the software opens straight in the CRM; the portal page is only the login and the admin screens */
+    if (params.get('go') !== 'users' && FT.canOpen(me, 'crm')){ location.href = 'crm/'; return; }
+    if (params.get('go') === 'users' && me.role === 'admin'){ users(); return; }
     dashboard();
   }
   /* every client the signed-in person may see, from the CRM and the Audit Desk, merged by name */
