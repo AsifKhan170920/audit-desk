@@ -694,6 +694,32 @@ function ctFor(pbt, adj){ return R(Math.max(0, pbt + (adj || 0) - 375000) * 0.09
 const CT_NAME = /corporate\s*tax|income\s*tax|\bCT\s*(payable|provision)|tax\s*(expense|charge)/i;
 function ctPayLines(eng, col){ return (eng.tb || []).filter(l => l.fs === 'pay' && CT_NAME.test(`${l.ledger || ''} ${l.caption || ''}`) && R(l[col || 'amt']) !== 0); }
 
+/* Finance costs usually hold interest on borrowings together with bank charges,
+   commission and similar fees. Interest cover must use only the interest part, so
+   each line of the schedule is read by name; the choice can be set line by line in
+   the Interest cover panel (eng.settings.finInt). */
+const FIN_INT_RE = /interest|mark\s*-?\s*up|murabah|ijarah|profit\s+(?:on|rate)\s+(?:the\s+)?(?:loan|facilit|finance|bank|term)|finance\s+charge|loan\s+charge|lease\s+(?:interest|finance)|\bibor\b|hire\s*purchase/i;
+const FIN_FEE_RE = /bank\s*charge|commission|\bl\s*\/?\s*c\b|letter\s+of\s+credit|guarantee|processing|arrangement|service\s*(?:charge|fee)|remittance|swift|cheque|exchange\s+(?:loss|difference)|penalt|\bfee\b/i;
+/* a line counts as interest unless its name is clearly only a charge or a fee – a line
+   that names both ("bank charges and interest on loans") stays in, so interest is never
+   quietly dropped; split it in the schedule, or set it by hand, to be exact */
+function finAuto(l){
+  const t = `${l.ledger || ''} ${l.caption || ''}`;
+  const fee = FIN_FEE_RE.test(t), int = FIN_INT_RE.test(t);
+  return {interest: !(fee && !int), both: fee && int};
+}
+function finLineIsInterest(eng, l){
+  const set = ((eng.settings || {}).finInt || {})[l.id];
+  if (set === 'yes') return true;
+  if (set === 'no') return false;
+  return finAuto(l).interest;
+}
+function finSplit(eng){
+  const lines = (eng.tb || []).filter(l => l.fs === 'fin');
+  const int = lines.filter(l => finLineIsInterest(eng, l)), fee = lines.filter(l => !finLineIsInterest(eng, l));
+  return {lines, int, fee};
+}
+
 function compute(eng, prevEng){
   const S = eng.settings, PYI = eng.pyInfo;
   const scheds = ensureSchedules(eng), m = SM(eng);
@@ -776,6 +802,12 @@ function compute(eng, prevEng){
       const s0 = m[ctKey]; if (s0.custom) b['x' + s0.sec] = custom(s0.sec).reduce((a, s2) => a + b[s2.key], 0);
     }
   }
+  /* the interest part of the finance costs – bank charges and fees are left out.
+     A schedule with no ledger lines behind it is taken as interest in full. */
+  { const F = finSplit(eng);
+    cy.interest = F.lines.length ? F.int.reduce((a, l) => a + R(l.amt), 0) : R(cy.fin);
+    py.interest = F.lines.length ? F.int.reduce((a, l) => a + R(l.py), 0) : R(py.fin);
+    cy.finFees = R(cy.fin) - cy.interest; py.finFees = R(py.fin) - py.interest; }
   cy.pat = cy.pbt - cy.ct; py.pat = py.pbt - py.ct;
   const eqIt = (yr, col) => (eng.soceItems || []).filter(x => x.yr === yr).reduce((a, x) => a + R(x[col]), 0);
   ['cap', 'lr', 're', 'ca', 'oth'].forEach(col => { cy[col + 'Items'] = eqIt('cy', col); py[col + 'Items'] = eqIt('py', col); });
@@ -4726,6 +4758,7 @@ function ratioDefs(){
   const C = (label, f, drill) => ({label, f, drill});
   const rev = C('Revenue', b => b.rev, 'rev'), gp = C('Gross profit', b => b.gp), pat = C('Profit for the year', b => b.pat), ta = C('Total assets', b => b.ta), eq = C('Total equity', b => b.eq);
   const cl = C('Current liabilities', b => b.cl), caT = C('Current assets', b => b.caTot), cost = C('Cost of revenue', b => b.cor + b.xdc, 'cor'), pbt = C('Profit before tax', b => b.pbt), fin = C('Finance costs', b => b.fin, 'fin');
+  const intr = C('Interest on borrowings', b => b.interest, 'fin');
   return [
     {id: 'gpm', g: 'prof', name: 'Gross profit margin', how: 'Gross profit ÷ revenue', kind: 'pct', num: [gp], den: [rev], means: 'How much of each dirham of sales is left after direct costs.'},
     {id: 'ebitda', g: 'prof', name: 'EBITDA margin', how: '(Profit before tax + finance costs + depreciation) ÷ revenue', kind: 'pct', num: [pbt, fin, C('Depreciation', b => b.dep, 'dep')], den: [rev], means: 'Operating profit before financing costs and depreciation.'},
@@ -4743,7 +4776,7 @@ function ratioDefs(){
     {id: 'de', g: 'solv', name: 'Debt to equity', how: 'Borrowings ÷ total equity', kind: 'times', num: [C('Long term loans', b => b.ltl, 'ltl'), C('Short term borrowings', b => b.stb, 'stb')], den: [eq], means: 'Borrowings for each dirham of equity.'},
     {id: 'tlta', g: 'solv', name: 'Liabilities to total assets', how: 'Total liabilities ÷ total assets', kind: 'pct', num: [C('Total liabilities', b => b.tl)], den: [ta], means: 'Share of the assets financed by liabilities.'},
     {id: 'eqr', g: 'solv', name: 'Equity ratio', how: 'Total equity ÷ total assets', kind: 'pct', num: [eq], den: [ta], means: 'Share of the assets financed by the shareholders.'},
-    {id: 'icov', g: 'solv', name: 'Interest cover', how: '(Profit before tax + finance costs) ÷ finance costs', kind: 'times', num: [pbt, fin], den: [fin], means: 'How many times profit covers the finance costs.'}
+    {id: 'icov', g: 'solv', name: 'Interest cover', how: '(Profit before tax + interest) ÷ interest', kind: 'times', num: [pbt, intr], den: [intr], means: 'How many times profit covers the interest on borrowings. Bank charges, commission and similar fees inside finance costs are left out.'}
   ];
 }
 function ratioVal(d, b){
@@ -4775,8 +4808,31 @@ function ratioBody(id){
   modal(`<div class="qd"><h2>${e_(d.name)}</h2><p class="sub">${e_(d.how)}${d.kind === 'days' ? '' : ''}. ${e_(d.means)}</p>
     <div class="table-wrap"><table class="ui compact q-fig"><colgroup><col><col style="width:150px"><col style="width:150px"></colgroup><thead><tr><th></th><th class="r">FY${Y}</th><th class="r">FY${PY}</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${ch !== null && Math.abs(ch) > 0.004 ? `<p class="small">Change from FY${PY}: <b>${ch > 0 ? '+' : '−'}${d.kind === 'pct' ? Math.abs(ch).toFixed(1) + ' percentage points' : d.kind === 'days' ? Math.round(Math.abs(ch)) + ' days' : Math.abs(ch).toFixed(2)}</b></p>` : ''}
+    ${id === 'icov' ? finIntPanel(en, r) : ''}
     <p class="small muted">Click a figure’s name to open its schedule and change it. Ratios use year-end balances; “n/a” means the bottom of the calculation is nil or negative.</p>
     <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
+}
+
+/* which lines of the finance costs schedule are interest for interest cover */
+function finIntPanel(en, r){
+  const F = finSplit(en), Y = en.year;
+  if (!F.lines.length) return `<p class="small muted">The finance costs schedule has no ledger lines, so the whole figure is taken as interest. Add the lines in <b>Schedules</b> to keep bank charges out of this ratio.</p>`;
+  const set = (en.settings.finInt || {});
+  const row = l => { const A = finAuto(l), v = set[l.id] || 'auto';
+    return `<tr><th scope="row">${e_(l.caption || l.ledger || 'Line')}${A.both && v === 'auto' ? '<div class="muted small">names interest and charges together – split it into two lines, or set it here</div>' : ''}</th>
+      <td class="r">${fmtN(R(l.amt))}</td><td class="r">${fmtN(R(l.py))}</td>
+      <td><select class="sel" data-finint="${e_(l.id)}" aria-label="Counts as interest">
+        <option value="auto"${v === 'auto' ? ' selected' : ''}>Auto – ${A.interest ? 'interest' : 'not interest'}</option>
+        <option value="yes"${v === 'yes' ? ' selected' : ''}>Interest</option>
+        <option value="no"${v === 'no' ? ' selected' : ''}>Bank charge / fee</option></select></td></tr>`; };
+  return `<h3 class="h3">What counts as interest</h3>
+    <p class="small muted">Finance costs often hold bank charges and commission as well as interest. Only the lines marked as interest are used for this ratio – the note and the statement of profit or loss still show the whole finance cost.</p>
+    <div class="table-wrap"><table class="ui compact"><colgroup><col><col style="width:110px"><col style="width:110px"><col style="width:190px"></colgroup>
+      <thead><tr><th>Line in finance costs</th><th class="r">FY${Y}</th><th class="r">FY${Y - 1}</th><th>Counts as</th></tr></thead>
+      <tbody>${F.lines.map(row).join('')}
+        <tr class="tot"><th scope="row">Interest used in this ratio</th><td class="r">${fmtN(r.cy.interest)}</td><td class="r">${fmtN(r.py.interest)}</td><td></td></tr>
+        <tr><th scope="row" class="muted">Bank charges and fees left out</th><td class="r muted">${fmtN(r.cy.finFees)}</td><td class="r muted">${fmtN(r.py.finFees)}</td><td></td></tr>
+      </tbody></table></div>`;
 }
 
 function schedModal(key){
@@ -6625,6 +6681,9 @@ document.addEventListener('change', async ev => {
   if (el.dataset.bulk !== undefined){ UI.bulkTarget = UI.bulkTarget || {}; UI.bulkTarget[el.dataset.bulk] = el.value; bulkModal(); return; }
   if (el.id === 'wz-file' && el.files.length){ UI.wz = UI.wz || {}; UI.wz.file = el.files[0]; UI.wz.cmp = 'excel'; render(); return; }
   if (el.id === 'bulk-files' && el.files.length){ UI.bulkFiles = [...el.files]; UI.bulkTarget = {}; UI.bulkFiles.forEach((f, i) => { const g = bulkGuess(en, f.name); if (g) UI.bulkTarget[i] = g; }); bulkModal(); return; }
+  if (el.dataset.finint !== undefined){ const S = en.settings.finInt = en.settings.finInt || {};
+    if (el.value === 'auto') delete S[el.dataset.finint]; else S[el.dataset.finint] = el.value;
+    save(); scheduleRender(); return; }
   if (el.dataset.fslabel !== undefined){ const L = fsLayoutOf(en), k = el.dataset.fslabel, v = el.value.trim();
     if (v) L.labels[k] = v; else delete L.labels[k];
     const u = fsUserLine(en, k); if (u) u.label = v || 'New line';
