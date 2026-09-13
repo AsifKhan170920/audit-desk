@@ -2048,7 +2048,8 @@ function htmlBlocks(item, tokens, o){
 }
 function htmlFs(it, o){
   const amt = (r, v, yr) => { const d = o.interactive && typeof v === 'number' ? (r.drill || (r.cf ? 'cf:' + r.cf : '') || r.fs || it.drill || it.fs || '') : ''; return d ? `<button class="amt-btn" data-drill="${esc(d)}" data-yr="${yr}" title="Click to see and change">${nf(v)}</button>` : nf(v); };
-  let h = `<table class="rfs">${it.noHead ? '' : `<thead><tr><td></td>${it.noteCol ? '<td class="c">Note</td>' : ''}<td class="r yr">${it.years[0]}</td><td class="r yr">${it.years[1]}</td></tr><tr><td></td>${it.noteCol ? '<td></td>' : ''}<td class="r aed">AED</td><td class="r aed">AED</td></tr></thead>`}<tbody>`;
+  const cg = it.noteCol ? '<colgroup><col><col class="cn"><col class="ca"><col class="ca"></colgroup>' : '<colgroup><col><col class="ca"><col class="ca"></colgroup>';
+  let h = `<table class="rfs">${cg}${it.noHead ? '' : `<thead><tr><td></td>${it.noteCol ? '<td class="c">Note</td>' : ''}<td class="r yr">${it.years[0]}</td><td class="r yr">${it.years[1]}</td></tr><tr><td></td>${it.noteCol ? '<td></td>' : ''}<td class="r aed">AED</td><td class="r aed">AED</td></tr></thead>`}<tbody>`;
   it.rows.forEach(r => {
     const cols = it.noteCol ? 4 : 3;
     if (r.style === 'gap'){ h += `<tr class="gap"><td colspan="${cols}"></td></tr>`; return; }
@@ -2112,7 +2113,10 @@ const REPORT_CSS = `
 .rp table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;margin:2px 0 8px}
 .rp table td,.rp table th{padding:1.5px 4px;vertical-align:bottom;background:#fff;color:#000;border:0;text-transform:none;letter-spacing:0;font-size:10.5pt}
 .rp .rfs thead td{font-weight:700}.rp .rfs td.yr{border-bottom:1px solid #000}.rp .aed{font-weight:400!important;font-size:9.5pt!important}
-.rp .rfs td:first-child{width:58%}.rp .rfs td.c{width:8%}
+/* the year columns keep the same width in every statement and note, so a nil in one
+   year can never push the other year's figure sideways */
+.rp .rfs{table-layout:fixed}.rp .rfs col.ca{width:17%}.rp .rfs col.cn{width:8%}
+.rp .rfs td:first-child{word-wrap:break-word;overflow-wrap:break-word}
 .rp tr.grp td{font-weight:700;padding-top:6px}.rp tr.gap td{height:6px;padding:0}
 .rp tr.tot td,.rp tr.grand td,.rp tr.bold td{font-weight:700}.rp tr.tot td.a{border-top:1px solid #000}.rp tr.grand td.a{border-top:1px solid #000;border-bottom:3px double #000}
 .rp .rgrid.boxed th,.rp .rgrid.boxed td{border:1px solid #888;padding:3px 6px}.rp .rgrid.boxed th{background:#D9D9D9;font-weight:700}
