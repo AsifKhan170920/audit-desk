@@ -2338,15 +2338,60 @@ const AI = {
       if (/credit|billing|balance/i.test(msg)) throw new Error('The Anthropic account has no credit – add credit at console.anthropic.com');
       throw new Error('Claude could not read the documents: ' + msg);
     }
+    AI.lastStop = body.stop_reason || '';
     return (body.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
   },
+  /* Claude sometimes writes JSON a person would read fine but JSON.parse will not:
+     a missing comma between two list items, a trailing comma, a line break inside a
+     sentence, or an answer that was cut short. Repair those instead of giving up. */
   json(text){
-    const s = String(text || '').replace(/```(?:json)?/g, '');
-    const a = s.indexOf('{'), b = s.lastIndexOf('}');
-    if (a < 0 || b < a) throw new Error('Claude did not return the details in the expected form – please try again');
-    return JSON.parse(s.slice(a, b + 1));
+    const s = String(text || '').replace(/```(?:json)?/gi, '');
+    const a = s.indexOf('{');
+    if (a < 0) throw new Error('Claude did not return the details in the expected form – please try again');
+    const b = s.lastIndexOf('}');
+    const cut = s.slice(a, b > a ? b + 1 : undefined);
+    try { return JSON.parse(cut); } catch (e1) {
+      const fixed = jsonRepair(cut);
+      try { return JSON.parse(fixed); } catch (e2) {
+        const err = new Error('Claude’s answer was not in readable form (' + e1.message + ')');
+        err.badJson = cut; throw err;
+      }
+    }
   }
 };
+/* put a nearly-valid JSON answer right: escape line breaks inside text, put back a
+   missing comma between two items, drop a comma before a closing bracket, and close
+   anything the answer left open because it was cut short */
+function jsonRepair(src){
+  let out = '', inStr = false, esc = false, prev = '';
+  const stack = [];
+  const needsComma = () => prev === '"' || prev === '}' || prev === ']' || /[\w]/.test(prev);
+  const trimComma = () => { out = out.replace(/,(\s*)$/, '$1'); };
+  for (let i = 0; i < src.length; i++){
+    const ch = src[i];
+    if (inStr){
+      if (esc){ out += ch; esc = false; continue; }
+      if (ch === '\\'){ out += ch; esc = true; continue; }
+      if (ch === '"'){ inStr = false; out += ch; prev = '"'; continue; }
+      if (ch === '\n'){ out += '\\n'; continue; }
+      if (ch === '\r'){ out += '\\r'; continue; }
+      if (ch === '\t'){ out += '\\t'; continue; }
+      if (ch < ' '){ continue; }
+      out += ch; continue;
+    }
+    if (ch === '"'){ if (needsComma()) out += ','; inStr = true; out += ch; prev = ''; continue; }
+    if (ch === '{' || ch === '['){ if (needsComma()) out += ','; stack.push(ch === '{' ? '}' : ']'); out += ch; prev = ch; continue; }
+    if (ch === '}' || ch === ']'){ trimComma(); stack.pop(); out += ch; prev = ch; continue; }
+    if (ch === ',' || ch === ':'){ out += ch; prev = ch; continue; }
+    if (/\s/.test(ch)){ out += ch; continue; }
+    if (/[-\w.+]/.test(ch)){ if (prev === '"' || prev === '}' || prev === ']') out += ','; out += ch; prev = ch; continue; }
+    out += ch; prev = ch;
+  }
+  if (inStr) out += '"';
+  trimComma();
+  while (stack.length) out += stack.pop();
+  return out;
+}
 
 const PROFILE_PROMPT = `You are helping a UAE audit firm prepare financial statements. The attached documents are the company's trade licence and possibly its Memorandum of Association (MOA). They may be in Arabic, English or both.
 
@@ -2376,13 +2421,23 @@ Read them carefully and return ONLY one JSON object (no other text) with exactly
   "local_law": "local emirate law referred to in the MOA or licence, if any",
   "financial_year_end": "e.g. December 31, from the MOA if stated",
   "doubts": ["short notes on anything unclear, unreadable or inconsistent between the documents"]
-}`;
+}
+
+Write strict JSON: double quotes everywhere, a comma between every pair of list items and between every pair of keys, no trailing comma before } or ], no comments, no line breaks inside a value, and nothing at all before { or after }. Keep every note in "doubts" short.`;
 
 async function aiReadProfile(files){
   const blocks = [];
   for (const f of files) blocks.push(await AI.block(f));
   blocks.push({type: 'text', text: PROFILE_PROMPT});
-  return AI.json(await AI.call(blocks, 4000));
+  const text = await AI.call(blocks, 8000);
+  if (AI.lastStop === 'max_tokens') throw new Error('Claude ran out of room before finishing – upload the licence and MOA separately, or fewer pages at a time');
+  try { return AI.json(text); }
+  catch (err) {
+    if (!err.badJson) throw err;
+    /* one more try: hand the broken answer back and ask only for valid JSON */
+    const again = await AI.call([{type: 'text', text: 'This should be one JSON object but it does not parse. Return the same information as valid JSON – nothing before { or after }, a comma between every pair of items, no trailing commas, no line breaks inside a value. Change no wording and invent nothing.\n\n' + err.badJson}], 8000);
+    return AI.json(again);
+  }
 }
 
 /* ---------- basic reading without AI: English labels in digital PDFs ---------- */
