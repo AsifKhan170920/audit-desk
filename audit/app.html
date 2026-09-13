@@ -148,12 +148,12 @@ details.ph{margin-top:10px}details.ph summary{cursor:pointer;color:var(--accent)
 .sec-title .muted{text-transform:none;letter-spacing:0;font-size:13px;font-weight:400}
 .sched{border-left:3px solid var(--primary)}
 .sched.unassigned{border-left-color:var(--warn)}
-.sched-head{display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.sched-head{display:flex;align-items:center;gap:14px;padding:9px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .sched.collapsed .sched-head{border-bottom:0}
 .sched-toggle{all:unset;cursor:pointer;width:24px;height:24px;display:grid;place-items:center;border-radius:5px;color:var(--muted)}
 .sched-toggle:hover{background:var(--hover)}
 .sched-title{flex:1;min-width:220px}
-.sched-title b{font-size:15.5px;margin-right:8px}
+.sched-title b{font-size:14.5px;margin-right:8px}
 .sched-title .chip{margin-right:6px;vertical-align:1px}
 .chip.accent{background:var(--accent-soft);color:var(--accent)}
 .sched-tot{text-align:right;min-width:92px}
@@ -161,7 +161,7 @@ details.ph{margin-top:10px}details.ph summary{cursor:pointer;color:var(--accent)
 .sched-tot b{font-variant-numeric:tabular-nums;font-size:15px}
 .icon-btn.gear:hover{background:var(--hover);color:var(--primary)}
 .icon-btn.move:hover{background:var(--hover);color:var(--primary)}
-.sched-foot{display:flex;gap:14px;align-items:center;padding:10px 14px;background:var(--surface-2);border-top:1px solid var(--line)}
+.sched-foot{display:flex;gap:14px;align-items:center;padding:6px 14px;background:var(--surface-2);border-top:1px solid var(--line);font-size:13px}
 td.acts{white-space:nowrap}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .chip-add{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px dashed var(--line);border-radius:99px;font-size:13.5px;font-weight:600;color:var(--ink)}
@@ -196,15 +196,16 @@ table.matrix tr.msub th{color:var(--muted);font-size:12.5px;text-transform:upper
 table.matrix tr.mband th{background:var(--primary);color:#fff;text-transform:none}
 /* single year header for all schedules */
 .yearbar,.sched:not(.unassigned) .sched-head,.sec-title{display:grid;grid-template-columns:var(--sg-name) var(--sg-cy) var(--sg-py) var(--sg-doc) var(--sg-act);gap:0;align-items:center}
-main{--sg-led:23%;--sg-cap:23%;--sg-name:46%;--sg-cy:13%;--sg-py:13%;--sg-cmt:16%;--sg-doc:9%;--sg-act:5%}
+main{--sg-led:23%;--sg-cap:22%;--sg-name:45%;--sg-cy:13%;--sg-py:13%;--sg-cmt:16%;--sg-doc:8%;--sg-act:8%}
 .yearbar{grid-template-columns:var(--sg-led) var(--sg-cap) var(--sg-cy) var(--sg-py) var(--sg-doc) var(--sg-act);position:sticky;top:0;z-index:5;background:var(--primary);color:#fff;border-radius:10px;border-left:3px solid var(--primary);font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:9px 0;box-shadow:0 2px 6px rgba(0,0,0,.08)}
 .yearbar>span{padding:0 11px}.yearbar .r{text-align:right}.yearbar .sign-hint{background:rgba(255,255,255,.2);color:#fff}
-.sched:not(.unassigned) .sched-head{padding:10px 0;gap:0;flex-wrap:nowrap}
-.sched-name{display:flex;align-items:flex-start;gap:8px;padding-left:10px;min-width:0}
+.sched:not(.unassigned) .sched-head{padding:7px 0;gap:0;flex-wrap:nowrap}
+.sched-name{display:flex;align-items:center;gap:6px;padding-left:8px;min-width:0}
 .sched-name .sched-title{min-width:0}
 .sched:not(.unassigned) .sched-tot{min-width:0;padding-right:11px}
 .sched-proof{padding-left:11px;font-variant-numeric:tabular-nums}
 .sched:not(.unassigned) .sched-head .gear{justify-self:center}
+.sched-acts{display:flex;align-items:center;justify-content:flex-end;gap:2px;padding-right:8px}
 .sec-title{grid-template-columns:var(--sg-name) var(--sg-cy) 1fr;margin:8px 0 -4px;border-left:3px solid transparent}
 .sec-title .sec-tot{text-align:right;padding-right:11px;color:var(--ink);letter-spacing:0;font-size:13px;font-variant-numeric:tabular-nums}
 table.ui.tb.sch{table-layout:fixed;width:100%}
@@ -360,6 +361,28 @@ body.fx-picking [data-ref]:not(:focus):hover{outline:2px dashed var(--ok);outlin
 .gs-bar .gs-ic{font-size:17px;color:var(--ok);font-weight:700}
 .gs-bar .gs-txt{flex:1;min-width:220px}
 .gs-bar label.linkish{display:inline}
+/* the same information as a small chip, so the Schedules screen stays short */
+.mini-bar{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:10px}
+.mini{display:inline-flex;align-items:center;gap:7px;padding:3px 11px;border:1px solid var(--line);border-radius:99px;background:var(--surface-2);font-size:12.5px;line-height:1.65}
+.mini.on{border-color:#BFE0CC;background:#F1F8F4}
+.mini .mi{font-weight:700;color:var(--accent)}
+.mini a{color:var(--primary);text-decoration:none}
+.mini .linkish,.mini label.linkish{font-size:12.5px;display:inline}
+/* the buttons that are not needed every day, folded into one small menu */
+.tools{position:relative}
+.tools>summary{list-style:none;cursor:pointer}
+.tools>summary::-webkit-details-marker{display:none}
+.tools-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:252px;display:flex;flex-direction:column;gap:2px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.16)}
+.tools-menu .btn{width:100%;justify-content:flex-start;border-color:transparent;background:transparent;font-weight:500}
+.tools-menu .btn:hover{background:var(--hover);border-color:var(--line)}
+/* move a schedule up or down */
+.sched-move{display:flex;flex-direction:column;gap:1px;flex:none;opacity:.45;transition:opacity .12s}
+.sched:hover .sched-move,.sched-move:focus-within{opacity:1}
+.sched-move .mv{all:unset;cursor:pointer;width:15px;height:10px;font-size:8px;line-height:10px;text-align:center;color:var(--muted);border-radius:3px}
+.sched-move .mv:hover{background:var(--hover);color:var(--primary)}
+.kpis.slim{gap:8px}
+.kpis.slim .kpi{padding:6px 11px;display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.kpis.slim .kpi b{display:inline;font-size:14.5px}
 table.cfpy td input.numi{width:100%;min-width:0}
 table.cfpy th[scope=row]{font-weight:400}
 .fsi-table{max-height:260px;overflow:auto;margin:10px 0}
@@ -475,10 +498,25 @@ function ensureSchedules(eng){
 }
 function SM(eng){ return Object.fromEntries(ensureSchedules(eng).map(s => [s.key, s])); }
 function schedLabel(eng, key){ const s = SM(eng)[key]; return s ? s.label : key; }
+/* position inside the section: the one the user set with the arrows, otherwise the standard order */
+const schedOrd = s => typeof s.ord === 'number' ? s.ord : (s.builtin ? CATALOG.findIndex(c => c.key === s.key) : 9000);
 function schedulesInOrder(eng){
   const list = ensureSchedules(eng);
-  return SECTIONS.flatMap(sec => list.filter(s => s.sec === sec.key && s.builtin).sort((a, b) => CATALOG.findIndex(c => c.key === a.key) - CATALOG.findIndex(c => c.key === b.key))
-    .concat(list.filter(s => s.sec === sec.key && s.custom)));
+  return SECTIONS.flatMap(sec => list.filter(s => s.sec === sec.key).map((s, i) => [s, i])
+    .sort((a, b) => (schedOrd(a[0]) - schedOrd(b[0])) || (a[1] - b[1])).map(p => p[0]));
+}
+/* move one schedule up or down past the schedule shown next to it on screen */
+function schedMove(en, key, dir){
+  const s = SM(en)[key]; if (!s) return false;
+  const all = schedulesInOrder(en).filter(x => x.sec === s.sec);
+  const seen = ((UI.schedVis || {})[s.sec] || []).filter(k => all.some(x => x.key === k));
+  const vis = seen.length ? all.filter(x => seen.includes(x.key)) : all;
+  const vi = vis.findIndex(x => x.key === key); if (vi < 0) return false;
+  const tgt = vis[vi + dir]; if (!tgt) return false;
+  const i = all.findIndex(x => x.key === key), j = all.findIndex(x => x.key === tgt.key);
+  all.splice(i, 1); all.splice(j, 0, s);
+  all.forEach((x, p) => { x.ord = p * 10; });
+  return true;
 }
 
 const AUTOMAP = [
@@ -2807,11 +2845,18 @@ function vTB(){
   const match = l => !q || (l.ledger + ' ' + (l.caption || '')).toLowerCase().includes(q);
   const bal = r.dr === r.cr;
   const tbDocs = (en.tbDocs || []).map(d => `<a class="doc-link" href="${e_(d.url)}" target="_blank" rel="noopener">${IC.file}<span>${e_(d.name)}</span></a>`).join(' ');
-  const head = `<section class="panel"><div class="head"><div><h1>Schedules FY${en.year}</h1><p class="sub">Each schedule is one line in the statements and one note. Enter amounts as <b>+</b> when they follow the schedule’s nature and <b>−</b> when they go against it (e.g. accumulated depreciation, closing stock). FY${en.year - 1} = last year’s figure, same sign rule.</p></div>
-    <div class="row"><button class="btn" data-act="paste-tb">${IC.grid}Paste from Excel</button><label class="btn" for="xlsx-in" title="Trial balance: ledger names with amounts">${IC.upload}Import trial balance</label><input id="xlsx-in" type="file" accept=".xlsx,.xls,.csv" hidden><label class="btn" for="fs-in" title="Last year’s or this year’s financial statements in the Fair Tax Excel format – fills the schedules">${IC.upload}Import financial statements</label><input id="fs-in" type="file" accept=".xlsx,.xls" hidden>
-    <button class="btn" data-act="tb-file">${IC.clip}Attach TB file</button><button class="btn" data-act="bulk-open">${IC.clip}Attach files in bulk</button><button class="btn" data-act="retrieve">${IC.down}Retrieve previous statements</button><button class="btn primary" data-act="new-sched">${IC.plus}New schedule</button></div></div>
-    ${tbDocs ? `<div class="row" style="margin-top:10px"><span class="muted small">Trial balance files:</span>${tbDocs}</div>` : ''}${yearLinkBar(c, en)}${gsPanel(c, en)}</section>
-  <div class="kpis">
+  const head = `<section class="panel"><div class="head"><div><h1>Schedules FY${en.year}</h1><p class="sub">One schedule = one line in the statements and one note. Amounts are <b>+</b> when they follow the schedule’s nature and <b>−</b> when they go against it (accumulated depreciation, closing stock). FY${en.year - 1} follows the same sign rule.</p></div>
+    <div class="row"><button class="btn primary" data-act="new-sched">${IC.plus}New schedule</button>
+      <details class="tools"><summary class="btn">${IC.upload}Import &amp; attach ▾</summary><div class="tools-menu">
+        <button class="btn" data-act="paste-tb">${IC.grid}Paste from Excel</button>
+        <label class="btn" for="xlsx-in" title="Trial balance: ledger names with amounts">${IC.upload}Import trial balance</label>
+        <label class="btn" for="fs-in" title="Last year’s or this year’s financial statements in the Fair Tax Excel format – fills the schedules">${IC.upload}Import financial statements</label>
+        <button class="btn" data-act="retrieve">${IC.down}Retrieve previous statements</button>
+        <button class="btn" data-act="tb-file">${IC.clip}Attach TB file</button>
+        <button class="btn" data-act="bulk-open">${IC.clip}Attach files in bulk</button></div></details></div></div>
+    <input id="xlsx-in" type="file" accept=".xlsx,.xls,.csv" hidden><input id="fs-in" type="file" accept=".xlsx,.xls" hidden>
+    <div class="mini-bar">${yearLinkChip(c, en)}${gsChip(c, en)}${tbDocs ? `<span class="mini"><span class="mi">${'⊕'}</span><span class="muted">Trial balance files</span>${tbDocs}</span>` : ''}</div></section>
+  <div class="kpis slim">
     <div class="kpi"><small>Assets, expenses &amp; dividends</small><b>${fmtN(r.dr)}</b></div><div class="kpi"><small>Liabilities, equity &amp; income</small><b>${fmtN(r.cr)}</b></div>
     <div class="kpi"><small>Difference</small><b class="${bal ? 'ok-t' : 'bad-t'}">${bal ? 'Balanced' : fmtN(r.dr - r.cr)}</b></div>
     <div class="kpi"><small>Lines with proof</small><b>${r.docsCount} / ${en.tb.length}</b></div></div>
@@ -2839,14 +2884,21 @@ function vTB(){
       <div class="table-wrap"><table class="ui tb">${thead(true)}<tbody>${un.filter(match).map(l => lineRow(en, l, true)).join('')}</tbody></table></div></section>`;
   }
   body += yearBar;
+  UI.schedVis = {};
   SECTIONS.forEach(sec => {
     const list = schedulesInOrder(en).filter(x => x.sec === sec.key);
-    const cards = list.map(x => {
+    /* the schedules actually on screen – the arrows move a schedule past the one next to it, not past a hidden one */
+    const vis = list.filter(x => {
       const lines = en.tb.filter(l => l.fs === x.key);
-      if (!lines.length && !(x.key === 'ppe' && en.ppe.length) && !UI.showEmpty && !UI.justAdded?.[x.key]) return '';
-      if (x.key === 'dep' && en.ppe.length && !lines.length && !UI.justAdded?.dep) return '';
+      if (!lines.length && !(x.key === 'ppe' && en.ppe.length) && !UI.showEmpty && !UI.justAdded?.[x.key]) return false;
+      if (x.key === 'dep' && en.ppe.length && !lines.length && !UI.justAdded?.dep) return false;
+      if (q && !lines.filter(match).length) return false;
+      return true;
+    });
+    UI.schedVis[sec.key] = vis.map(x => x.key);
+    const cards = vis.map(x => {
+      const lines = en.tb.filter(l => l.fs === x.key);
       const shown = lines.filter(match);
-      if (q && !shown.length) return '';
       const col = !!UI.collapsed[x.key] && !q;
       const amtT = lines.reduce((a, l) => a + R(l.amt), 0), pyT = lines.reduce((a, l) => a + R(l.py), 0);
       const isPPE = x.key === 'ppe', isDepAuto = x.key === 'dep' && en.ppe.length && !lines.length;
@@ -2854,14 +2906,13 @@ function vTB(){
       const docTotal = lines.length + (x.key === 'ppe' ? en.ppe.length : 0);
       return `<section class="panel flush sched${col ? ' collapsed' : ''}" id="sch-${x.key}">
         <div class="sched-head">
-          <div class="sched-name"><button class="sched-toggle" data-act="toggle-sched" data-key="${x.key}" aria-expanded="${!col}" title="${col ? 'Expand' : 'Collapse'}">${col ? '▸' : '▾'}</button>
-          <div class="sched-title" data-act="toggle-sched" data-key="${x.key}" title="Click to expand or collapse"><b>${e_(x.label)}</b>${noteNo[x.key] ? `<button class="chip neutral chip-btn" data-act="note-num" data-key="${x.key}" title="Change or swap this note number">Note ${noteNo[x.key]} ✎</button>` : ''}${x.custom ? '<span class="chip accent">Custom</span>' : ''}
-            <div class="muted small">${e_(sec.label)}${x.hint ? ' · ' + e_(x.hint) : ''}</div></div></div>
+          <div class="sched-name"><div class="sched-move"><button class="mv" data-act="sched-move" data-key="${x.key}" data-dir="-1" title="Move up" aria-label="Move ${e_(x.label)} up">▲</button><button class="mv" data-act="sched-move" data-key="${x.key}" data-dir="1" title="Move down" aria-label="Move ${e_(x.label)} down">▼</button></div>
+          <button class="sched-toggle" data-act="toggle-sched" data-key="${x.key}" aria-expanded="${!col}" title="${col ? 'Expand' : 'Collapse'}">${col ? '▸' : '▾'}</button>
+          <div class="sched-title" data-act="toggle-sched" data-key="${x.key}" title="${e_(x.hint || sec.label)} – click to expand or collapse"><b>${e_(x.label)}</b>${noteNo[x.key] ? `<button class="chip neutral chip-btn" data-act="note-num" data-key="${x.key}" title="Change or swap this note number">Note ${noteNo[x.key]} ✎</button>` : ''}${x.custom ? '<span class="chip accent">Custom</span>' : ''}</div></div>
           <div class="sched-tot" title="FY${en.year}"${fxRefAttr(`{${en.year}:S:${x.key}:cy}`)}><b>${fmtN(r.cy[x.key])}</b></div>
           <div class="sched-tot" title="FY${en.year - 1}"${fxRefAttr(`{${en.year}:S:${x.key}:py}`)}><b>${fmtN(r.py[x.key])}</b></div>
           <div class="sched-proof" title="Lines with proof"><b class="${docTotal && docs === docTotal ? 'ok-t' : ''}">${docs}/${docTotal}</b></div>
-          <button class="icon-btn${wsHas(en, 'sched:' + x.key) ? ' on' : ''}" data-act="ws-open" data-key="sched:${x.key}" title="Working sheet">${IC.grid}</button>
-          <button class="icon-btn gear" data-act="sched-props" data-key="${x.key}" title="Schedule settings">${IC.gear}</button>
+          <div class="sched-acts"><button class="icon-btn${wsHas(en, 'sched:' + x.key) ? ' on' : ''}" data-act="ws-open" data-key="sched:${x.key}" title="Working sheet">${IC.grid}</button><button class="icon-btn gear" data-act="sched-props" data-key="${x.key}" title="Schedule settings">${IC.gear}</button></div>
         </div>
         ${col ? '' : (isPPE ? ppeMatrix(en, r) + (lines.length ? `<div class="sub-head">Ledger lines (optional – checked against the schedule above)</div><div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${shown.map(l => lineRow(en, l, false)).join('')}</tbody><tfoot><tr><td colspan="2">Total</td><td class="r">${fmtN(amtT)}</td><td class="r">${fmtN(pyT)}</td><td colspan="2"></td></tr></tfoot></table></div>` : '')
             + noteTextBox(en, x, noteNo) + `<div class="sched-foot"><button class="btn small" data-act="add-ppe">${IC.plus}Add asset class</button><button class="linkish" data-act="add-line-to" data-key="ppe">Add ledger line instead</button>${noteTextBtn(x)}</div>`
@@ -3896,7 +3947,8 @@ function wsBody(key){
   modal(`<div class="qd ws-wrap"><div class="row between"><h2>Working sheet – ${e_(label)}</h2>
       <div class="row"><button class="btn small" data-act="ws-row">${IC.plus}Row</button><button class="btn small" data-act="ws-col">${IC.plus}Column</button>
         <button class="btn small" data-act="ws-xlsx">${IC.down}Excel</button></div></div>
-    <p class="sub">Type figures, or a formula starting with <b>=</b> – for example <b>=SUM(B2:B13)</b>, <b>=B14-C14</b>, <b>=ROUND(D5*0.05,2)</b>. Click a cell to see its formula.</p>
+    <p class="sub">Type figures, or a formula starting with <b>=</b> – for example <b>=SUM(B2:B13)</b>, <b>=B14-C14</b>, <b>=ROUND(D5*0.05,2)</b>. Click a cell to see its formula.<br>
+      <span class="muted">Move around with the <b>arrow keys</b>, <b>Enter</b> (down), <b>Shift+Enter</b> (up) and <b>Tab</b>. Going down past the last row adds a row.</span></p>
     <div class="table-wrap ws-scroll"><table class="ws"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${totals}</tfoot></table></div>
     <div class="row ws-take"><label class="small" for="ws-cell">Take the figure in cell</label><input id="ws-cell" value="${e_(sh.cell || '')}" placeholder="B14" style="width:80px">
       ${isLine ? `<button class="btn small" data-act="ws-take" data-yr="cy">→ FY${en.year} amount</button><button class="btn small" data-act="ws-take" data-yr="py">→ FY${en.year - 1} amount</button>`
@@ -4734,11 +4786,11 @@ function fxClearPyLinks(en){
   Object.keys(en.fx || {}).forEach(k => { if (/:py$/.test(k) || /^B:(pyInfo|ppePy)/.test(k) || k.startsWith('CFP:') || /:(costOpen|depOpen)$/.test(k) || (/^L:/.test(k) && /\{\d{4}:C:(re|lr)Close/.test(en.fx[k]))) delete en.fx[k]; });
   delete en.linkedTo;
 }
-function yearLinkBar(c, en){
+function yearLinkChip(c, en){
   const pe = prevOf(c, en), n = fxLinkedCount(en), PY = en.year - 1;
-  if (!pe) return `<div class="gs-bar"><span class="gs-ic" aria-hidden="true">⇄</span><div class="gs-txt"><b>FY${PY} comparatives</b> <span class="muted small">– FY${PY} is not in the software. Type the figures, <button class="linkish" data-act="retrieve">retrieve saved statements</button>, <label class="linkish" for="fs-in">import last year’s Excel statements</label> or <button class="linkish" data-act="add-year">add FY${PY}</button>.</span></div></div>`;
-  if (n) return `<div class="gs-bar on"><span class="gs-ic" aria-hidden="true">⇄</span><div class="gs-txt"><b>Linked live to FY${pe.year}</b> <span class="muted small">– ${n} figures (FY${PY} column, PPE opening balances, reserves, tax) follow FY${pe.year}. Change FY${pe.year} and this year updates.</span></div><button class="btn small" data-act="fx-link-prev">Relink</button><button class="linkish" data-act="fx-unlink">Unlink</button></div>`;
-  return `<div class="gs-bar"><span class="gs-ic" aria-hidden="true">⇄</span><div class="gs-txt"><b>FY${pe.year} is in the software</b> <span class="muted small">– link the FY${PY} column and opening balances to it, so any change in FY${pe.year} flows here.</span></div><button class="btn small" data-act="fx-link-prev">Link to FY${pe.year}</button></div>`;
+  if (!pe) return `<span class="mini" title="FY${PY} is not in the software – type the figures, retrieve saved statements, import last year’s Excel statements, or add FY${PY} as its own year"><span class="mi" aria-hidden="true">⇄</span><b>FY${PY} typed by hand</b><button class="linkish" data-act="retrieve">Retrieve</button><label class="linkish" for="fs-in">Import</label><button class="linkish" data-act="add-year">Add FY${PY}</button></span>`;
+  if (n) return `<span class="mini on" title="${n} figures (FY${PY} column, PPE opening balances, reserves, tax) follow FY${pe.year} – change FY${pe.year} and this year updates"><span class="mi" aria-hidden="true">⇄</span><b>Linked live to FY${pe.year}</b> <span class="muted">${n} figures</span><button class="linkish" data-act="fx-link-prev">Relink</button><button class="linkish" data-act="fx-unlink">Unlink</button></span>`;
+  return `<span class="mini" title="Link the FY${PY} column and the opening balances to FY${pe.year}, so any change there flows into this year"><span class="mi" aria-hidden="true">⇄</span><b>FY${pe.year} is in the software</b><button class="linkish" data-act="fx-link-prev">Link to it</button></span>`;
 }
 const fxLinkedCount = en => Object.values(en.fx || {}).filter(f => [...String(f).matchAll(/\{(\d{4}):/g)].some(m => +m[1] !== en.year)).length;
 
@@ -5612,11 +5664,11 @@ function gsHelpModal(){
       <li>Click <b>Enable</b> and wait a minute.</li><li>Come back and click <b>Create Google Sheet</b> again.</li></ol>
     <div class="foot"><button class="btn primary" data-close>OK</button></div>`);
 }
-function gsPanel(c, en){
+function gsChip(c, en){
   const G = en.gsheet;
-  if (!G) return `<div class="gs-bar"><span class="gs-ic" aria-hidden="true">▦</span><div class="gs-txt"><b>Google Sheet</b> <span class="muted small">– prepare these schedules in Google Sheets too. Formulas and changes go both ways with Sync.</span></div><button class="btn small" data-act="gs-create">Create Google Sheet</button></div>`;
+  if (!G) return `<span class="mini" title="Prepare these schedules in Google Sheets as well – formulas and changes go both ways with Sync"><span class="mi" aria-hidden="true">▦</span><b>Google Sheet</b><button class="linkish" data-act="gs-create">Create</button></span>`;
   const when = G.syncedAt ? new Date(G.syncedAt).toLocaleString('en-GB', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : 'not yet';
-  return `<div class="gs-bar on"><span class="gs-ic" aria-hidden="true">▦</span><div class="gs-txt"><a href="${e_(G.url)}" target="_blank" rel="noopener"><b>Open the Google Sheet ↗</b></a> <span class="muted small">· last synced ${e_(when)}</span></div><button class="btn small primary" data-act="gs-sync">⟳ Sync with Google Sheet</button><button class="linkish" data-act="gs-unlink">Unlink</button></div>`;
+  return `<span class="mini on" title="Last synced ${e_(when)}"><span class="mi" aria-hidden="true">▦</span><a href="${e_(G.url)}" target="_blank" rel="noopener"><b>Google Sheet ↗</b></a><button class="linkish" data-act="gs-sync">⟳ Sync</button><button class="linkish" data-act="gs-unlink">Unlink</button></span>`;
 }
 
 /* ---------- events ---------- */
@@ -5754,6 +5806,13 @@ document.addEventListener('click', async ev => {
           toast(pub ? 'Uploaded – anyone with the link can open this file' : 'Uploaded – the client needs access to your Drive folder to open it');
         } catch (err) { toast(err.message || 'Upload failed', true); }
         finally { t.disabled = false; }
+        break;
+      }
+      case 'sched-move': {
+        const key = t.dataset.key, up = +t.dataset.dir < 0;
+        if (!schedMove(en, key, +t.dataset.dir)){ toast(`Already ${up ? 'first' : 'last'} in this group`); break; }
+        save(); render();
+        const el = document.getElementById('sch-' + key); if (el) el.scrollIntoView({block: 'center', behavior: 'smooth'});
         break;
       }
       case 'ws-open': wsModal(t.dataset.key); break;
@@ -6053,6 +6112,41 @@ document.addEventListener('change', async ev => {
     save(); scheduleRender();
   }
 });
+/* working sheet: move between cells with the keyboard, like a spreadsheet */
+function wsFocus(key, r, c){
+  const el = [...document.querySelectorAll('[data-ws]')].find(x => { const p = x.dataset.ws.split('|'); return p[0] === key && +p[1] === r && +p[2] === c; });
+  if (!el) return false;
+  el.focus(); try { el.select(); } catch (e) {}
+  return true;
+}
+document.addEventListener('keydown', ev => {
+  const el = ev.target;
+  if (!el || !el.dataset || el.dataset.ws === undefined || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  let dr = 0, dc = 0;
+  if (ev.key === 'ArrowUp') dr = -1;
+  else if (ev.key === 'ArrowDown') dr = 1;
+  else if (ev.key === 'Enter') dr = ev.shiftKey ? -1 : 1;
+  else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight'){
+    const a = el.selectionStart, b = el.selectionEnd;
+    if (ev.key === 'ArrowLeft'){ if (a === 0 && b === 0) dc = -1; else return; }
+    else { if (a === el.value.length && b === el.value.length) dc = 1; else return; }
+  } else return;
+  const p = el.dataset.ws.split('|'), key = p[0], r = +p[1] + dr, c = +p[2] + dc;
+  if (r < 0 || c < 0) return;
+  ev.preventDefault();
+  const en = eng(); if (!en) return;
+  const sh = wsGet(en, key, true);
+  if (c >= Math.max(wsCols(sh), 4)) return;
+  if (r >= sh.rows.length){ sh.rows.push(Array(Math.max(wsCols(sh), 4)).fill('')); save(); refreshModal(); }
+  wsFocus(key, r, c);
+});
+/* a click anywhere closes the little Import & attach menu */
+document.addEventListener('click', ev => {
+  document.querySelectorAll('details.tools[open]').forEach(d => {
+    const menu = d.querySelector('.tools-menu');
+    if (!d.contains(ev.target) || (menu && menu.contains(ev.target))) d.open = false;
+  });
+}, true);
 /* working sheet: show the formula while a cell has focus, the answer when it does not */
 document.addEventListener('focusin', ev => { const el = ev.target; if (el && el.dataset && el.dataset.ws !== undefined && el.dataset.raw !== undefined){ el.value = el.dataset.raw; try { el.select(); } catch (e) {} } });
 document.addEventListener('focusout', ev => { const el = ev.target; if (!el || !el.dataset || el.dataset.ws === undefined) return;
