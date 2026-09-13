@@ -425,6 +425,20 @@ a.chip{text-decoration:none}
 .sched-do .linkish svg{width:11px;height:11px;vertical-align:-1px;margin-right:3px}
 /* rows the software puts in a schedule: a typed opening balance, the tax provision */
 tr.sfix td .muted{font-weight:400}
+.fs-tbl th[scope=row]{font-weight:400}
+.fs-nm{display:flex;align-items:center;gap:8px;min-width:0}
+.fs-nm input{flex:1;min-width:0}
+.nowrap{white-space:nowrap}
+.fs-hint{margin-left:10px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:11.5px}
+.fs-tbl .cf-add{margin-left:12px}
+.fs-cell{display:flex;align-items:center;gap:6px}
+.fs-cell input.numi{flex:1;min-width:96px}
+.fs-auto{display:flex;align-items:center;justify-content:flex-end;gap:6px;padding-right:4px;font-variant-numeric:tabular-nums}
+.fs-cell .auto-i,.fs-auto .auto-i{margin-left:0;flex:none}
+.fs-rst{flex:none}
+input.fs-note{width:100%;text-align:center;padding-left:4px;padding-right:4px}
+tr.fs-line.off th[scope=row] input,tr.fs-line.off td{opacity:.55}
+tr.fs-user th[scope=row] input{font-weight:600}
 .auto-i{display:inline-block;vertical-align:middle;margin-left:7px;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:help}
 table.cfpy td input.numi{width:100%;min-width:0}
 table.cfpy th[scope=row]{font-weight:400}
@@ -703,6 +717,17 @@ function compute(eng, prevEng){
     cy[s.key] += a || 0; py[s.key] += b || 0;
     if (isDrNature(eng, s.key)) dr += a || 0; else cr += a || 0;
   });
+  /* a statement line hidden on the Report layout screen, or given a figure of its own there */
+  if (eng.fsLayout){
+    const FSL = eng.fsLayout, hid = FSL.hidden || {};
+    scheds.forEach(s => {
+      if (s.sec === 'eq') return;
+      if (hid[s.key]){ cy[s.key] = 0; py[s.key] = 0; return; }
+      const a = fsTypedOf(eng, s.key, 'cy'), b = fsTypedOf(eng, s.key, 'py');
+      if (a !== null) cy[s.key] = a;
+      if (b !== null) py[s.key] = b;
+    });
+  }
   // PPE movement schedule (asset classes) drives the PPE figure and, when no ledger lines exist, depreciation
   const ppe = ppeRows(eng);
   const ppeT = PPE_KEYS.reduce((a, k) => (a[k] = ppe.reduce((s2, p) => s2 + p[k], 0), a), {});
@@ -721,7 +746,8 @@ function compute(eng, prevEng){
   }
   const custom = sec => scheds.filter(s => s.custom && s.sec === sec);
   for (const b of [cy, py]){
-    ['nca', 'ca', 'eq', 'ncl', 'cl', 'inc', 'dc', 'exp'].forEach(sec => { b['x' + sec] = custom(sec).reduce((a, s) => a + b[s.key], 0); });
+    const col = b === cy ? 'cy' : 'py';
+    ['nca', 'ca', 'eq', 'ncl', 'cl', 'inc', 'dc', 'exp'].forEach(sec => { b['x' + sec] = custom(sec).reduce((a, s) => a + b[s.key], 0) + (sec === 'eq' ? 0 : fsUserSum(eng, sec, col)); });
     b.gp = b.rev - b.cor - b.xdc;
     b.pbt = b.gp - b.ga - b.sell - b.dep - b.fin - b.xexp + b.gain + b.oi + b.xinc;
   }
@@ -888,6 +914,7 @@ function rollForward(client, eng){
   n.ppePy = {add: r.ppeT.add, disp: r.ppeT.dispWdv, charge: r.ppeT.charge};
   n.layout = JSON.parse(JSON.stringify(layoutOf(eng)));
   if (eng.cfLayout) n.cfLayout = JSON.parse(JSON.stringify(eng.cfLayout));
+  if (eng.fsLayout) n.fsLayout = JSON.parse(JSON.stringify(eng.fsLayout));
   return n;
 }
 function prevOf(client, eng){ return (client.engagements || []).find(e => e.year === eng.year - 1) || null; }
@@ -1323,17 +1350,26 @@ function buildReport(client, eng, prevEng){
   /* the order of the lines inside each part of the statements – changed on the Report layout screen ("*" is where custom schedules sit) */
   const FSO = LAY.fsOrder = LAY.fsOrder || {};
   const FS_FIELD = {pay: 'payTot', lr: 'lrClose', re: 'reClose', ca: 'caClose'};
-  const FS_ALWAYS = {cap: true, re: true};
-  const fsKeys = (sec, keys) => { const cus = custom(sec).map(x => x.key);
+  const FS_ALWAYS = {cap: true, re: true, rev: true};
+  const FSL = fsLayoutOf(eng);
+  const fsKeys = (sec, keys) => { const cus = custom(sec).map(x => x.key), usr = fsUserIn(eng, sec).map(x => x.key);
     const base = keys.reduce((a, k) => a.concat(k === '*' ? cus : [k]), []);
-    const all = base.concat(cus.filter(k => !base.includes(k)));
+    const all = base.concat(cus.filter(k => !base.includes(k)), usr);
     return mergeOrder(FSO[sec], all).filter(k => all.includes(k)); };
   const fsList = {};
+  /* one line of a statement: its own figure when the user added it or typed over the schedule */
   const fsRows = (arr, sec, keys, sign) => fsKeys(sec, keys).forEach(k => {
-    const f = FS_FIELD[k] || k, a = (sign || 1) * cy[f], b = (sign || 1) * py[f];
-    const shown = nz(a, b) || !!FS_ALWAYS[k];
-    (fsList[sec] = fsList[sec] || []).push({key: k, label: L(k), shown});
-    if (shown) arr.push(row(L(k), k, a, b)); });
+    const u = fsUserLine(eng, k), f = FS_FIELD[k] || k, sg = sign || 1;
+    const typed = u || (!fsFigureFixed(eng, k) && fsTypedOf(eng, k, 'cy') !== null) || (!fsFigureFixed(eng, k) && fsTypedOf(eng, k, 'py') !== null);
+    const a = sg * (u ? R(fsTypedOf(eng, k, 'cy') || 0) : cy[f]), b = sg * (u ? R(fsTypedOf(eng, k, 'py') || 0) : py[f]);
+    const label = FSL.labels[k] || (u ? (u.label || 'New line') : L(k));
+    const hidden = !!FSL.hidden[k];
+    const shown = !hidden && (nz(a, b) || !!FS_ALWAYS[k] || !!u);
+    (fsList[sec] = fsList[sec] || []).push({key: k, label, shown, hidden, user: !!u, typed: !!typed, fixed: fsFigureFixed(eng, k), cy: a, py: b});
+    if (!shown) return;
+    const rw = row(label, u ? '' : k, a, b);
+    const nt = FSL.notes[k]; if (nt !== undefined && String(nt).trim() !== '') rw.note = String(nt).trim();
+    arr.push(rw); });
   const sofp = [G('ASSETS'), G('Non-current assets')];
   fsRows(sofp, 'nca', ['ppe', '*']);
   sofp.push(row('Total non-current assets', '', cy.nca, py.nca, 'tot'), GAP, G('Current assets'));
@@ -1357,8 +1393,9 @@ function buildReport(client, eng, prevEng){
     {k: 'small', text: `The financial statements were approved by management on ${p.reportDate || '…'}. The accompanying notes form an integral part of these financial statements.${isAudit && !LAY.hide.ar ? ' The report of the auditor is set out on pages {{AR_PAGES}}.' : ''}`},
     {k: 'sign', label: signLabel}]});
 
-  const soci = [row(L('rev'), 'rev', cy.rev, py.rev), row(L('cor'), 'cor', -cy.cor, -py.cor)];
-  fsRows(soci, 'dc', ['*'], -1);
+  const soci = [];
+  fsRows(soci, 'inc', ['rev']);
+  fsRows(soci, 'dc', ['cor', '*'], -1);
   soci.push(row('Gross profit', '', cy.gp, py.gp, 'tot'), GAP);
   fsRows(soci, 'exp', ['ga', 'sell', '*', 'dep', 'fin'], -1);
   fsRows(soci, 'inc', ['gain', 'oi', '*']);
@@ -1427,7 +1464,12 @@ function buildReport(client, eng, prevEng){
   const T = (rows) => ({k: 'fs', rows, noteCol: false, years: [Y, PY], noHead: true});
   const openVal = (key, col) => { const s0 = SMAP[key], v = s0 && s0.open ? s0.open[col] : undefined; return v === undefined || v === null || String(v).trim() === '' ? 0 : R(v); };
   const openNoteRow = key => { const a = openVal(key, 'cy'), b = openVal(key, 'py'); return nz(a, b) ? [row('Balance at the beginning of the year', '', a, b)] : []; };
-  const subRows = (key, extra) => { const s = subLines(eng, key).filter(x => Math.round(x.cy || 0) || Math.round(x.py || 0)).map(x => row(x.caption, '', x.cy, x.py)); return openNoteRow(key).concat(s, extra || []); };
+  const subRows = (key, extra) => { const s = subLines(eng, key).filter(x => Math.round(x.cy || 0) || Math.round(x.py || 0)).map(x => row(x.caption, '', x.cy, x.py));
+    const out = openNoteRow(key).concat(s, extra || []);
+    /* a figure typed over this line in the statements: the note carries the difference so it still adds up */
+    const dc = R(cy[FS_FIELD[key] || key]) - out.reduce((a, x) => a + R(x.cy), 0), dp = R(py[FS_FIELD[key] || key]) - out.reduce((a, x) => a + R(x.py), 0);
+    if (nz(dc, dp) && out.length) out.push(row('Others', '', dc, dp));
+    return out; };
   const total = (label, a, b) => row(label || '', '', a, b, 'tot');
   /* the corporate tax provision prints inside whichever schedule holds it */
   const ctNoteRow = key => (cy.ctKey === key && nz(cy.ctProv, py.ctProv)) ? [row('Provision for corporate tax', '', cy.ctProv, py.ctProv)] : [];
@@ -3411,7 +3453,7 @@ function tplFromEngagement(c, en, name){
   return {id: uid(), name: name || `${c.name} FY${Y}`, created: new Date().toISOString(), from: `${c.name} · FY${Y}`, type: en.type, data: {
     schedules: clone(ensureSchedules(en)).map(x => { const y = Object.assign({}, x); delete y.open; delete y.remark; delete y.docs; return y; }), tb: en.tb.map(l => ({id: l.id, ledger: l.ledger || '', fs: l.fs || '', caption: l.caption || ''})),
     ppe: (en.ppe || []).map(p => ({id: p.id, name: p.name || '', life: p.life || ''})), texts: clone(en.texts), customNotes: clone(en.customNotes || []),
-    layout: clone(layoutOf(en)), cfLayout: en.cfLayout ? clone(en.cfLayout) : null,
+    layout: clone(layoutOf(en)), cfLayout: en.cfLayout ? clone(en.cfLayout) : null, fsLayout: en.fsLayout ? clone(en.fsLayout) : null,
     settings: {deprMethod: en.settings.deprMethod, draft: en.settings.draft, eqTb: en.settings.eqTb || 'auto'},
     soceItems: (en.soceItems || []).map(x => ({id: x.id, yr: x.yr, label: x.label || ''})), soceOrder: en.soceOrder ? clone(en.soceOrder) : null, fx}};
 }
@@ -3432,6 +3474,7 @@ function tplApply(c, en, t, merge){
   en.customNotes = clone(T.customNotes || []);
   if (T.layout) en.layout = clone(T.layout); layoutOf(en);
   if (T.cfLayout) en.cfLayout = clone(T.cfLayout); else delete en.cfLayout;
+  if (T.fsLayout) en.fsLayout = clone(T.fsLayout); else delete en.fsLayout;
   Object.assign(en.settings, T.settings || {});
   if (!merge) en.soceItems = [];
   (T.soceItems || []).forEach(x => { en.soceItems = en.soceItems || []; const hit = en.soceItems.find(i => i.yr === x.yr && (i.label || '') === (x.label || '')); if (hit) itemMap[x.id] = hit.id; else { const n = {id: uid(), yr: x.yr, label: x.label, cap: 0, lr: 0, re: 0, ca: 0, oth: 0}; en.soceItems.push(n); itemMap[x.id] = n.id; } });
@@ -3504,15 +3547,37 @@ function vLayout(){
         .map(([v, t, d]) => `<label class="radio-row"><input type="radio" name="notes-years" value="${v}" ${(L.notesYears || 'all') === v ? 'checked' : ''}><span><b>${t}</b> – ${d}</span></label>`).join('')}
       ${L.notesYears === 'custom' ? `<p class="small muted">${Object.keys(L.yearsOff || {}).length} page(s) without year columns. If notes move to other pages after changes, check the preview again.</p>` : ''}</div></section>
 
-  <section class="panel"><div class="head"><div><h2>Order of lines in the statements</h2><p class="sub">The order the lines print inside each part of the statement of financial position and the profit or loss. Drag ⋮⋮ or use ▲ ▼. Lines with no amount are greyed – they are kept here so the order is ready when they have figures.</p></div></div>
-    <div class="fs-order">${Object.entries(M.fsLines || {}).filter(([sec, list]) => (list || []).length > 1).map(([sec, list]) => `<div class="box"><h3 class="h3">${e_((SECT[sec] || {}).label || sec)}</h3>
-      <ul class="lay-list" data-list="fs:${sec}">${list.map((x, i) => `<li class="lay-row${x.shown ? '' : ' off'}" draggable="true" data-drag="fs:${sec}" data-id="${e_(x.key)}">
-        <span class="grip" title="Drag up or down">${IC.handle}</span><span class="lay-title">${e_(x.label)}${x.shown ? '' : ' <span class="muted small">(no amount)</span>'}</span>
-        ${updown('fs:' + sec, x.key, i, list.length)}</li>`).join('')}</ul></div>`).join('') || '<p class="small muted">Each part of the statements has only one line, so there is nothing to reorder yet.</p>'}</div></section>
+  ${fsLinesPanel(en, M)}
 
   <section class="panel"><h2>Print</h2><p class="sub">Choose what to print. Page numbers stay the same as in the full report.</p>
     <div class="chips print-chips">${printList}</div>
     <div class="row" style="margin-top:12px"><button class="btn primary" data-act="print-pdf" data-sel="1">${IC.print}Print selected</button><button class="btn" data-act="pdf-preview" data-sel="1">${IC.eye}Preview selected</button><button class="btn" data-act="dl-pdf" data-sel="1">${IC.down}Download selected as PDF</button></div></section>`;
+}
+/* ---------- the lines of the statements: name, note number, figures, order ---------- */
+function fsLinesPanel(en, M){
+  const FSL = fsLayoutOf(en), Y = en.year, PY = Y - 1, lists = M.fsLines || {};
+  const noteNo = M.noteNo || {};
+  const inp = (k, col, x) => { const key = (col === 'cy' ? 'FSC:' : 'FSP:') + k, t = fsTypedOf(en, k, col), auto = t === null && !x.user;
+    if (x.fixed) return `<div class="fs-auto" title="This figure comes from the statement of changes in equity">${fmtN(col === 'cy' ? x.cy : x.py)}<span class="auto-i">auto</span></div>`;
+    return `<div class="fs-cell"><input class="numi${fxCls(en, key)}" id="fsv-${col}-${k}" data-fs${col}="${e_(k)}"${fxAttrs(en, key, '')} value="${auto ? '' : fmtSigned(col === 'cy' ? x.cy : x.py)}" placeholder="${e_(fmtN(col === 'cy' ? x.cy : x.py))}" inputmode="decimal" aria-label="${e_(x.label)} FY${col === 'cy' ? Y : PY}">${auto ? '<span class="auto-i">auto</span>' : `<button class="icon-btn fs-rst" data-act="fs-auto" data-k="${e_(k)}" data-col="${col}" title="Back to the schedule figure">↺</button>`}</div>`; };
+  const line = (sec, x, i, len) => `<tr class="fs-line${x.hidden ? ' off' : ''}${x.user ? ' fs-user' : ''}">
+      <td class="cf-h"><button class="icon-btn cf-mv" data-act="fs-move" data-sec="${sec}" data-k="${e_(x.key)}" data-dir="-1" title="Move up" aria-label="Move up">▲</button><button class="icon-btn cf-mv" data-act="fs-move" data-sec="${sec}" data-k="${e_(x.key)}" data-dir="1" title="Move down" aria-label="Move down">▼</button></td>
+      <th scope="row"><div class="fs-nm"><input class="cf-label" id="fsl-${x.key}" data-fslabel="${e_(x.key)}" value="${e_(x.label)}" placeholder="Line name" aria-label="Line name">${x.hidden ? '<span class="chip warn">Left out</span>' : x.shown ? '' : '<span class="muted small nowrap">no amount</span>'}</div></th>
+      <td><input class="fs-note" id="fsn-${x.key}" data-fsnote="${e_(x.key)}" value="${e_(FSL.notes[x.key] || '')}" placeholder="${e_(noteNo[x.key] ? String(noteNo[x.key]) : '–')}" aria-label="Note number"></td>
+      <td>${inp(x.key, 'cy', x)}</td><td>${inp(x.key, 'py', x)}</td>
+      <td class="cf-acts"><button class="icon-btn" data-act="fs-${x.hidden ? 'restore' : 'del'}" data-k="${e_(x.key)}" title="${x.hidden ? 'Put this line back' : x.user ? 'Delete this line' : 'Leave this line out of the statements'}">${x.hidden ? '↺' : IC.trash}</button></td></tr>`;
+  const table = (title, secs) => { const body = secs.filter(sec => (lists[sec] || []).length).map(sec => {
+      const list = lists[sec], canAdd = sec !== 'eq';
+      return `<tr class="msub"><th colspan="6">${e_((SECT[sec] || {}).label || sec)}${canAdd ? `<button class="linkish cf-add" data-act="fs-add" data-sec="${sec}">+ Add line</button>` : '<span class="fs-hint">figures come from the statement of changes in equity</span>'}</th></tr>`
+        + list.map((x, i) => line(sec, x, i, list.length)).join(''); }).join('');
+    if (!body) return '';
+    return `<h3 class="h3">${e_(title)}</h3><div class="table-wrap"><table class="ui matrix cfpy cfman fs-tbl"><colgroup><col style="width:62px"><col><col style="width:62px"><col style="width:196px"><col style="width:196px"><col style="width:44px"></colgroup>
+      <thead><tr><th></th><th>Line</th><th>Note</th><th class="r">FY${Y}</th><th class="r">FY${PY}</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`; };
+  const changed = Object.keys(FSL.labels).length || Object.keys(FSL.hidden).length || Object.keys(FSL.notes).length || (FSL.custom || []).length || Object.keys(layoutOf(en).fsOrder || {}).length;
+  return `<section class="panel"><div class="head"><div><h2>Lines of the statements</h2><p class="sub">Every line of the statements. The figure comes from its schedule – marked <b>auto</b>; type a figure or a formula (start with <b>=</b>) to use your own, ↺ puts it back. Click a line name to rename it, type a note number to print your own, <b>+ Add line</b> for a line with no schedule, 🗑 leaves a line out, ▲ ▼ sets the printing order.</p></div>${changed ? '<button class="linkish" data-act="fs-reset">Standard lines</button>' : ''}</div>
+    ${table('Statement of financial position', ['nca', 'ca', 'eq', 'ncl', 'cl'])}
+    ${table('Statement of profit or loss', ['inc', 'dc', 'exp'])}
+    <p class="small muted">The statement of changes in equity has its own rows – add, rename and reorder them on <b>Tax, reserve &amp; prior year</b>.</p></section>`;
 }
 function selectedSections(){ return [...document.querySelectorAll('.print-sec')].filter(x => x.checked).map(x => x.value); }
 async function pdfFor(t, letterhead){
@@ -4848,6 +4913,8 @@ function fxGet(en, key){
   if (k[0] === 'CFP'){ return R((en.cfPy || {})[k[1]]); }
   if (k[0] === 'CFC'){ return R((en.cfCy || {})[k[1]]); }
   if (k[0] === 'SO'){ const x = (en.schedules || []).find(y => y.key === k[1]); return x && x.open ? R(x.open[k[2]]) : undefined; }
+  if (k[0] === 'FSC'){ return R((en.fsCy || {})[k[1]]); }
+  if (k[0] === 'FSP'){ return R((en.fsPy || {})[k[1]]); }
   if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o && o[parts[i]]; } return o ? R(o[parts[parts.length - 1]]) : undefined; }
 }
 function fxSet(en, key, v){
@@ -4857,6 +4924,8 @@ function fxSet(en, key, v){
   if (k[0] === 'CFP'){ (en.cfPy = en.cfPy || {})[k[1]] = v; return; }
   if (k[0] === 'CFC'){ (en.cfCy = en.cfCy || {})[k[1]] = v; return; }
   if (k[0] === 'SO'){ const x = (en.schedules || []).find(y => y.key === k[1]); if (x){ x.open = x.open || {}; x.open[k[2]] = v; } return; }
+  if (k[0] === 'FSC'){ (en.fsCy = en.fsCy || {})[k[1]] = v; return; }
+  if (k[0] === 'FSP'){ (en.fsPy = en.fsPy || {})[k[1]] = v; return; }
   if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o[parts[i]] = o[parts[i]] || {}; } o[parts[parts.length - 1]] = v; }
 }
 function fxTargetExists(en, key){
@@ -4865,6 +4934,7 @@ function fxTargetExists(en, key){
   if (k[0] === 'P') return (en.ppe || []).some(x => x.id === k[1]);
   if (k[0] === 'SO') return (en.schedules || []).some(x => x.key === k[1] && x.open && (x.open.cy !== undefined || x.open.py !== undefined));
   if ((k[0] === 'CFC' || k[0] === 'CFP') && /^u/.test(k[1])) return ((en.cfLayout || {}).custom || []).some(u => u.key === k[1]);
+  if ((k[0] === 'FSC' || k[0] === 'FSP') && /^f/.test(k[1])) return ((en.fsLayout || {}).custom || []).some(u => u.key === k[1]);
   return true;
 }
 /* recalculate every formula of a client (all years) until nothing changes */
@@ -5138,6 +5208,28 @@ const CF_STD = {pat: ['adj', 'Profit for the year'], dep: ['adj', 'Depreciation 
   shareCap: ['fin', 'Proceeds from issue of share capital'], loans: ['fin', 'Net movement in loans and borrowings'], ca: ['fin', 'Net movement in shareholder’s current account'], div: ['fin', 'Dividend paid'], otherFin: ['fin', 'Other financing movements']};
 const CF_ALWAYS = ['pat', 'dep', 'rec', 'pay', 'additions'];
 const CF_NOTE = {dep: 'dep', gain: 'gain', eosb: 'eosb', additions: 'ppe', ca: 'ca', div: 're'};
+/* ============================================================
+   STATEMENT LINES – rename, reorder, hide, note number, typed figures, extra lines
+   Every line of the statement of financial position and the statement of profit or
+   loss is listed on the Report layout screen. A line's figure comes from its schedule
+   (marked AUTO); typing a figure or a formula takes over, and a line you add carries
+   its own figure. Equity lines keep their figures – those come from the statement of
+   changes in equity, edited on "Tax, reserve & prior year".
+   ============================================================ */
+const FS_SECS = [['nca', 'sofp'], ['ca', 'sofp'], ['eq', 'sofp'], ['ncl', 'sofp'], ['cl', 'sofp'], ['inc', 'soci'], ['dc', 'soci'], ['exp', 'soci']];
+const fsLayoutOf = eng => { const L = eng.fsLayout = eng.fsLayout || {}; L.labels = L.labels || {}; L.hidden = L.hidden || {}; L.notes = L.notes || {}; L.custom = L.custom || []; return L; };
+const fsUserLine = (eng, key) => ((eng.fsLayout || {}).custom || []).find(x => x.key === key) || null;
+const fsUserIn = (eng, sec) => ((eng.fsLayout || {}).custom || []).filter(x => x.sec === sec);
+/* a figure typed (or worked out by a formula) for a statement line; null = the schedule figure */
+function fsTypedOf(eng, key, col){
+  const st = col === 'py' ? eng.fsPy : eng.fsCy, v = st ? st[key] : undefined;
+  return v === undefined || v === null || String(v).trim() === '' ? null : R(v);
+}
+/* the figures of the lines a user added to a part of the statements */
+const fsUserSum = (eng, sec, col) => fsUserIn(eng, sec).reduce((a, x) => a + R(fsTypedOf(eng, x.key, col) || 0), 0);
+/* equity figures stay with the statement of changes in equity */
+const fsFigureFixed = (eng, key) => { const x = SM(eng)[key]; return !!x && x.sec === 'eq'; };
+
 const cfLayoutOf = eng => { const L = eng.cfLayout = eng.cfLayout || {}; L.order = L.order || []; L.labels = L.labels || {}; L.hidden = L.hidden || {}; L.custom = L.custom || []; return L; };
 function cfLines(eng){
   const L = eng.cfLayout || {}, labels = L.labels || {}, hidden = L.hidden || {}, info = {}, bySec = {adj: [], wc: [], inv: [], fin: []};
@@ -5368,6 +5460,7 @@ function copyStructure(from, n){
   n.texts = JSON.parse(JSON.stringify(from.texts)); n.customNotes = JSON.parse(JSON.stringify(from.customNotes || []));
   n.layout = JSON.parse(JSON.stringify(layoutOf(from))); n.settings.deprMethod = from.settings.deprMethod;
   if (from.cfLayout) n.cfLayout = JSON.parse(JSON.stringify(from.cfLayout));
+  if (from.fsLayout) n.fsLayout = JSON.parse(JSON.stringify(from.fsLayout));
 }
 /* keep a year's prior-year cash flow exactly as it is before it gets linked to a new earlier year */
 function freezeCfPy(c, en){
@@ -6274,6 +6367,32 @@ document.addEventListener('click', async ev => {
         else L.hidden[k] = true;
         save(); render(); toast(x.kind === 'user' ? 'Line deleted' : 'Line removed – restore it below the table'); break; }
       case 'cf-restore': delete cfLayoutOf(en).hidden[t.dataset.k]; save(); render(); break;
+      /* ---- the lines of the statement of financial position and the profit or loss ---- */
+      case 'fs-add': { const L = fsLayoutOf(en), sec = t.dataset.sec, key = 'f' + uid();
+        L.custom.push({key, sec, label: 'New line'});
+        const LAY = layoutOf(en), M0 = buildReport(c, en, prev()), list = ((M0.fsLines || {})[sec] || []).map(x => x.key);
+        (LAY.fsOrder = LAY.fsOrder || {})[sec] = list;
+        save(); render();
+        { const el = document.getElementById('fsl-' + key); if (el){ el.focus(); el.select(); el.scrollIntoView({block: 'center'}); } } break; }
+      case 'fs-move': { const sec = t.dataset.sec, k = t.dataset.k, d = +t.dataset.dir, LAY = layoutOf(en);
+        const M0 = buildReport(c, en, prev()), list = ((M0.fsLines || {})[sec] || []).map(x => x.key);
+        const i = list.indexOf(k), j = i + d; if (i < 0 || j < 0 || j >= list.length) break;
+        list.splice(i, 1); list.splice(j, 0, k); (LAY.fsOrder = LAY.fsOrder || {})[sec] = list; save(); render();
+        { const b2 = document.querySelector(`[data-act=fs-move][data-k="${k}"][data-dir="${t.dataset.dir}"]`); if (b2) b2.focus(); } break; }
+      case 'fs-del': { const k = t.dataset.k, L = fsLayoutOf(en), u = fsUserLine(en, k);
+        if (u){ L.custom = L.custom.filter(x => x.key !== k); delete L.labels[k]; delete L.notes[k];
+          if (en.fsCy) delete en.fsCy[k]; if (en.fsPy) delete en.fsPy[k]; if (en.fx){ delete en.fx['FSC:' + k]; delete en.fx['FSP:' + k]; }
+          save(); render(); toast('Line deleted'); break; }
+        const r0 = compute(en, prev()), f = ({pay: 'payTot', lr: 'lrClose', re: 'reClose', ca: 'caClose'})[k] || k;
+        if ((R(r0.cy[f]) || R(r0.py[f])) && !confirm(`“${schedLabel(en, k)}” has figures (FY${en.year}: ${fmtN(r0.cy[f])} · FY${en.year - 1}: ${fmtN(r0.py[f])}). Leaving it out takes those figures out of the statements. Leave it out?`)) break;
+        L.hidden[k] = true; save(); render(); toast('Line left out – ↺ puts it back'); break; }
+      case 'fs-restore': delete fsLayoutOf(en).hidden[t.dataset.k]; save(); render(); break;
+      case 'fs-auto': { const k = t.dataset.k, col = t.dataset.col, st = col === 'py' ? en.fsPy : en.fsCy;
+        if (st) delete st[k]; if (en.fx) delete en.fx[(col === 'cy' ? 'FSC:' : 'FSP:') + k]; save(); render(); break; }
+      case 'fs-reset': if (confirm('Go back to the standard statement lines? Names, note numbers, order, figures you typed and lines you added are all cleared.')){
+        delete en.fsLayout; delete en.fsCy; delete en.fsPy;
+        Object.keys(en.fx || {}).forEach(k => { if (/^FS[CP]:/.test(k)) delete en.fx[k]; });
+        delete layoutOf(en).fsOrder; save(); render(); } break;
       case 'cf-reset-layout': if (confirm('Go back to the standard cash flow lines? Names, order and removed lines are reset, and lines you added are deleted with their figures.')){
         cfLayoutOf(en).custom.forEach(u => { if (en.cfCy) delete en.cfCy[u.key]; if (en.cfPy) delete en.cfPy[u.key]; if (en.fx){ delete en.fx['CFC:' + u.key]; delete en.fx['CFP:' + u.key]; } });
         delete en.cfLayout; save(); render(); } break;
@@ -6441,6 +6560,18 @@ document.addEventListener('change', async ev => {
   if (el.dataset.bulk !== undefined){ UI.bulkTarget = UI.bulkTarget || {}; UI.bulkTarget[el.dataset.bulk] = el.value; bulkModal(); return; }
   if (el.id === 'wz-file' && el.files.length){ UI.wz = UI.wz || {}; UI.wz.file = el.files[0]; UI.wz.cmp = 'excel'; render(); return; }
   if (el.id === 'bulk-files' && el.files.length){ UI.bulkFiles = [...el.files]; UI.bulkTarget = {}; UI.bulkFiles.forEach((f, i) => { const g = bulkGuess(en, f.name); if (g) UI.bulkTarget[i] = g; }); bulkModal(); return; }
+  if (el.dataset.fslabel !== undefined){ const L = fsLayoutOf(en), k = el.dataset.fslabel, v = el.value.trim();
+    if (v) L.labels[k] = v; else delete L.labels[k];
+    const u = fsUserLine(en, k); if (u) u.label = v || 'New line';
+    save(); scheduleRender(); return; }
+  if (el.dataset.fsnote !== undefined){ const L = fsLayoutOf(en), k = el.dataset.fsnote, v = el.value.trim();
+    if (v) L.notes[k] = v; else delete L.notes[k]; save(); scheduleRender(); return; }
+  if (el.dataset.fscy !== undefined || el.dataset.fspy !== undefined){
+    const col = el.dataset.fscy !== undefined ? 'cy' : 'py', k = col === 'cy' ? el.dataset.fscy : el.dataset.fspy;
+    const st = col === 'cy' ? (en.fsCy = en.fsCy || {}) : (en.fsPy = en.fsPy || {}), fk = (col === 'cy' ? 'FSC:' : 'FSP:') + k;
+    if (el.value.trim() === ''){ delete st[k]; if (en.fx) delete en.fx[fk]; }
+    else { try { fxInput(c, en, fk, el.value, v => { st[k] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
+    save(); scheduleRender(); return; }
   if (el.dataset.sopen){ const [sk, scol] = el.dataset.sopen.split('|'); const s0 = SM(en)[sk]; const fk = `SO:${sk}:${scol}`;
     if (s0){ s0.open = s0.open || {};
       if (el.value.trim() === ''){ s0.open[scol] = ''; if (en.fx) delete en.fx[fk]; }
