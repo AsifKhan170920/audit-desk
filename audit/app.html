@@ -444,6 +444,9 @@ tr.fs-user th[scope=row] input{font-weight:600}
 .ai-find-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .ai-find p{margin:4px 0}
 .ai-ul{margin:6px 0 0 18px}.ai-ul li{margin-bottom:6px}
+.ai-find.ok{border-left-color:var(--ok)}
+.ai-new{border-left:3px solid var(--ok);background:var(--ok-soft,#EEF6F1);padding:9px 12px;border-radius:0 8px 8px 0;margin:6px 0;white-space:pre-wrap}
+.ai-prev{margin:4px 0}.ai-prev summary{cursor:pointer;color:var(--muted);font-size:13px}
 .ai-chat{max-height:380px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface)}
 .ai-msg{margin-bottom:12px}.ai-msg b{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
 .ai-msg.you div{background:var(--blue-soft);border-radius:10px;padding:8px 11px;display:inline-block}
@@ -4955,7 +4958,8 @@ function aiPack(c, en){
     ratios: ratioList(r).map(x => ({name: x.d.name, how: x.d.how, [Y]: ratioFmt(x.d, x.a.v), [PY]: ratioFmt(x.d, x.b.v)})),
     schedules,
     software_checks: (r.checks || []).filter(k => !k.ok).map(k => k.text),
-    accounting_policies: (en.texts.policies || []).filter(x => x.mode !== 'off').map(x => x.title),
+    accounting_policies: (en.texts.policies || []).map(x => ({title: x.title, printed: x.mode !== 'off', text: String(x.text || '').slice(0, 900)})),
+    other_notes: (en.customNotes || []).map(x => ({title: x.title || '', text: String(x.text || '').slice(0, 900)})),
     related_parties: {due_from: two(r.cy.rprec, r.py.rprec), due_to: two(r.cy.rppay, r.py.rppay), current_account: two(r.cy.caClose, r.py.caClose)},
     tax: {mode: en.settings.ctMode || 'auto', adjustments: N(r.cy.ctAdj), charge: two(r.cy.ct, r.py.ct), booked_in_ledger: !!r.cy.ctLedger}
   };
@@ -4979,8 +4983,17 @@ Return ONLY one JSON object, nothing before { or after }:
      "action": "what to ask the client, what to test, or what to change"}
   ],
   "questions_for_client": ["direct questions, each one sentence"],
-  "disclosure_gaps": ["a disclosure a UAE SME set should carry that is missing or thin here"]
+  "disclosure_gaps": ["a disclosure a UAE SME set should carry that is missing or thin here"],
+  "changes": [
+    {"target": "policy", "name": "the title of an existing policy, copied exactly from accounting_policies", "mode": "replace", "text": "the full policy paragraph as it should now read", "reason": "one line on what this fixes"},
+    {"target": "new_policy", "name": "title of a policy that is missing", "after": "title of the policy it should follow, or empty", "text": "the full paragraph", "reason": ""},
+    {"target": "note_text", "name": "the name of a schedule, copied exactly from schedules", "where": "below", "mode": "replace", "text": "the paragraph to print under that note", "reason": ""},
+    {"target": "new_note", "name": "title of a new note at the end", "text": "the paragraph", "reason": ""}
+  ]
 }
+
+About "changes": these are written straight into the file when the auditor accepts them, so put the finished wording there, not advice about what to write. Use the entity's own figures and the words used in this file. "mode" is "replace" to rewrite the whole paragraph or "append" to add a sentence to the end. "where" is "below" or "above" the note's table. Only propose a change you would be willing to see printed. Leave "changes" empty if the wording is already right - never propose a change for something that is a figure or a control problem rather than wording.
+
 Write strict JSON: double quotes, a comma between every pair of items, no trailing commas, no line breaks inside a value.`;
 
 async function aiReviewRun(){
@@ -4999,7 +5012,8 @@ async function aiReviewRun(){
     }
     en.aiReview = {at: new Date().toISOString(), model: AI.model(), overview: out.overview || '',
       findings: (out.findings || []).map(f => Object.assign({id: uid()}, f)),
-      questions: out.questions_for_client || [], gaps: out.disclosure_gaps || []};
+      questions: out.questions_for_client || [], gaps: out.disclosure_gaps || [],
+      changes: (out.changes || []).filter(x => x && String(x.text || '').trim() && String(x.name || '').trim()).map(x => Object.assign({id: uid()}, x))};
     save(); toast(`${(en.aiReview.findings || []).length} point(s) raised`);
   } catch (err) { toast(err.message || 'Claude could not finish the review', true); }
   UI.aiBusy = false; render();
@@ -5019,6 +5033,59 @@ async function aiReviewAsk(){
   } catch (err) { en.aiChat.push({role: 'ai', text: 'Could not answer: ' + (err.message || 'error')}); }
   UI.aiBusy = false; save(); render();
   { const l = document.getElementById('ai-chat'); if (l) l.scrollTop = l.scrollHeight; }
+}
+/* ---------- wording Claude proposes, written into the file only when accepted ---------- */
+function aiTargetOf(en, ch){
+  const nm = String(ch.name || '').trim().toLowerCase();
+  if (ch.target === 'policy'){ const p = (en.texts.policies || []).find(x => String(x.title || '').trim().toLowerCase() === nm);
+    return p ? {kind: 'policy', obj: p, where: 'Material accounting policies – ' + p.title, current: p.text || ''} : null; }
+  if (ch.target === 'new_policy') return {kind: 'new_policy', where: 'A new policy: ' + ch.name, current: ''};
+  if (ch.target === 'note_text'){ const x = ensureSchedules(en).find(y => String(y.label || '').trim().toLowerCase() === nm);
+    const f = ch.where === 'above' ? 'textAbove' : 'textBelow';
+    return x ? {kind: 'note_text', obj: x, field: f, where: `Note text ${ch.where === 'above' ? 'above' : 'below'} – ${x.label}`, current: x[f] || ''} : null; }
+  if (ch.target === 'new_note'){ const hit = (en.customNotes || []).find(x => String(x.title || '').trim().toLowerCase() === nm);
+    return hit ? {kind: 'note', obj: hit, where: 'Note – ' + hit.title, current: hit.text || ''} : {kind: 'new_note', where: 'A new note: ' + ch.name, current: ''}; }
+  return null;
+}
+function aiApplyChange(en, ch){
+  const t = aiTargetOf(en, ch); if (!t) throw new Error('Could not find “' + (ch.name || '') + '” in this file');
+  const txt = String(ch.text || '').trim();
+  const joined = cur => ch.mode === 'append' && String(cur || '').trim() ? String(cur).trim() + ' ' + txt : txt;
+  if (t.kind === 'policy'){ ch.prev = {text: t.obj.text, mode: t.obj.mode}; t.obj.text = joined(t.obj.text); if (t.obj.mode === 'off') t.obj.mode = 'on'; }
+  else if (t.kind === 'new_policy'){ const list = en.texts.policies = en.texts.policies || [];
+    const p = {id: 'u' + uid(), title: ch.name, mode: 'on', text: txt};
+    const at = list.findIndex(x => String(x.title || '').trim().toLowerCase() === String(ch.after || '').trim().toLowerCase());
+    if (at >= 0) list.splice(at + 1, 0, p); else list.push(p);
+    ch.prev = {newPolicyId: p.id};
+  } else if (t.kind === 'note_text'){ ch.prev = {text: t.obj[t.field]}; t.obj[t.field] = joined(t.obj[t.field]); }
+  else if (t.kind === 'note'){ ch.prev = {text: t.obj.text}; t.obj.text = joined(t.obj.text); }
+  else if (t.kind === 'new_note'){ const nn = {id: uid(), title: ch.name, text: txt}; (en.customNotes = en.customNotes || []).push(nn); ch.prev = {newNoteId: nn.id}; }
+  ch.applied = true; ch.at = new Date().toISOString();
+}
+function aiUndoChange(en, ch){
+  const p = ch.prev || {};
+  if (p.newPolicyId) en.texts.policies = (en.texts.policies || []).filter(x => x.id !== p.newPolicyId);
+  else if (p.newNoteId) en.customNotes = (en.customNotes || []).filter(x => x.id !== p.newNoteId);
+  else { const t = aiTargetOf(en, ch); if (t && t.obj){ if (t.kind === 'note_text') t.obj[t.field] = p.text || ''; else { t.obj.text = p.text || ''; if (p.mode !== undefined) t.obj.mode = p.mode; } } }
+  ch.applied = false; delete ch.prev; delete ch.at;
+}
+function aiChangesPanel(en, A){
+  const list = (A && A.changes) || []; if (!list.length) return '';
+  const open = list.filter(x => !x.applied).length;
+  const card = ch => { const t = aiTargetOf(en, ch), gone = !t;
+    return `<div class="ai-find ${ch.applied ? 'ok' : 'neutral'}">
+      <div class="ai-find-h"><span class="chip ${ch.applied ? 'ok' : 'neutral'}">${ch.applied ? 'Written in' : ch.mode === 'append' ? 'Adds a sentence' : 'Rewrites'}</span><b>${e_(gone ? ch.name : t.where)}</b>${ch.reason ? `<span class="muted small">${e_(ch.reason)}</span>` : ''}</div>
+      ${gone ? `<p class="bad-t small">Could not find “${e_(ch.name)}” in this file – nothing was changed.</p>` : `
+      ${!ch.applied && String(t.current || '').trim() && ch.mode !== 'append' ? `<details class="ai-prev"><summary>What it says now</summary><p class="muted">${e_(t.current)}</p></details>` : ''}
+      <div class="ai-new">${e_(ch.text || '')}</div>`}
+      <div class="row">${gone ? '' : ch.applied
+        ? `<button class="btn small" data-act="ai-undo" data-id="${ch.id}">Undo</button><button class="linkish" data-act="ai-open-text">Open Policies &amp; report text</button>`
+        : `<button class="btn small primary" data-act="ai-apply" data-id="${ch.id}">Write this in</button>`}
+        <button class="linkish" data-act="ai-chdrop" data-id="${ch.id}">Remove</button></div></div>`; };
+  return `<section class="panel"><div class="head"><div><h2>Wording Claude can write in</h2><p class="sub">Each one is finished wording for this file. Nothing changes until you accept it, and every change can be undone here.</p></div>
+      ${open ? `<button class="btn" data-act="ai-apply-all">Write in all ${open}</button>` : ''}</div>
+    ${list.map(card).join('')}
+    <p class="small muted">Figures, the cash flow and missing supporting documents are not wording – those are in the points above and have to be put right in the schedules.</p></section>`;
 }
 const AI_SEV = {high: ['bad', 'Needs attention'], medium: ['warn', 'Worth a look'], low: ['neutral', 'Minor']};
 function vAiReview(){
@@ -5045,6 +5112,7 @@ function vAiReview(){
   ${A && A.overview ? `<section class="panel"><h2>Overview</h2><p>${e_(A.overview)}</p></section>` : ''}
   ${list ? `<section class="panel"><div class="head"><h2>Points raised</h2><span class="muted small">${(A.findings || []).length} point(s)</span></div>${list}</section>` : A ? '<section class="panel"><p class="small muted">No points raised.</p></section>' : ''}
   ${A && (A.questions || []).length ? `<section class="panel"><h2>To ask the client</h2><ul class="ai-ul">${A.questions.map(q => `<li>${e_(q)}</li>`).join('')}</ul></section>` : ''}
+  ${aiChangesPanel(en, A)}
   ${A && (A.gaps || []).length ? `<section class="panel"><h2>Disclosures to look at</h2><ul class="ai-ul">${A.gaps.map(q => `<li>${e_(q)}</li>`).join('')}</ul></section>` : ''}
   <section class="panel"><h2>Ask about this engagement</h2><p class="sub">Claude answers from the figures in this file – e.g. “why did the gross margin fall?”, “does the PPE note hang together?”, “what should I test on receivables?”.</p>
     ${chat ? `<div class="ai-chat" id="ai-chat">${chat}</div>` : ''}
@@ -6809,6 +6877,20 @@ document.addEventListener('click', async ev => {
       case 'ai-ask': aiReviewAsk(); break;
       case 'ai-clear': if (confirm('Clear the questions and answers on this engagement?')){ en.aiChat = []; save(); render(); } break;
       case 'ai-drop': { const A = en.aiReview; if (A) A.findings = (A.findings || []).filter(f => f.id !== t.dataset.id); save(); render(); break; }
+      case 'ai-apply': { const A = en.aiReview, ch = A && (A.changes || []).find(x => x.id === t.dataset.id); if (!ch || ch.applied) break;
+        try { aiApplyChange(en, ch); save(); render(); toast('Written into the file'); } catch (err) { toast(err.message, true); } break; }
+      case 'ai-apply-all': { const A = en.aiReview, list = (A && A.changes || []).filter(x => !x.applied);
+        if (!list.length) break;
+        if (!confirm(`Write all ${list.length} piece(s) of wording into the file? Each one can still be undone.`)) break;
+        let ok = 0, bad = 0;
+        list.forEach(ch => { try { aiApplyChange(en, ch); ok++; } catch (err) { bad++; } });
+        save(); render(); toast(`${ok} written in${bad ? `, ${bad} could not be placed` : ''}`); break; }
+      case 'ai-undo': { const A = en.aiReview, ch = A && (A.changes || []).find(x => x.id === t.dataset.id); if (!ch || !ch.applied) break;
+        aiUndoChange(en, ch); save(); render(); toast('Change undone'); break; }
+      case 'ai-chdrop': { const A = en.aiReview, ch = A && (A.changes || []).find(x => x.id === t.dataset.id);
+        if (ch && ch.applied && !confirm('This wording is in the file. Remove it from the list and keep the wording?')) break;
+        if (A) A.changes = (A.changes || []).filter(x => x.id !== t.dataset.id); save(); render(); break; }
+      case 'ai-open-text': UI.view = 'texts'; save(); render(); break;
       case 'ai-go': UI.view = 'tb'; UI.tbMode = 'sched'; save(); render(); { const el = document.getElementById('sch-' + t.dataset.key); if (el) el.scrollIntoView({block: 'start'}); } break;
       case 'ai-remark': { const A = en.aiReview, f = A && (A.findings || []).find(y => y.id === t.dataset.id), x = SM(en)[t.dataset.key];
         if (!f || !x) break;
