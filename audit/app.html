@@ -296,6 +296,18 @@ table.ui.sg tr.same td.cur{color:var(--ok)}
 .banner.warn ul{margin:4px 0 0 18px;padding:0}
 .banner.warn{background:var(--warn-soft);color:#7a5200}
 .q-cmt-box{margin-top:10px}
+.ws-scroll{max-height:52vh;overflow:auto}
+table.ws{border-collapse:separate;border-spacing:0;width:auto;min-width:100%}
+table.ws th,table.ws td{border:1px solid var(--line);padding:0}
+table.ws thead th,table.ws .ws-rn{background:var(--hover);color:var(--muted);font-size:11.5px;font-weight:700;text-align:center;padding:3px 6px;min-width:34px;position:sticky;top:0;z-index:1}
+table.ws .ws-rn{position:sticky;left:0;top:auto;z-index:2}
+.ws-in{border:0;background:transparent;width:120px;padding:4px 6px;font-size:13px}
+.ws-in.num{text-align:right;font-variant-numeric:tabular-nums}
+.ws-in.fx{color:var(--accent)}
+.ws-in:focus{outline:2px solid var(--accent);outline-offset:-2px;background:var(--surface)}
+table.ws tfoot td{background:var(--hover);text-align:right;padding:4px 6px;font-weight:700;font-variant-numeric:tabular-nums;font-size:12.5px}
+.ws-take{margin-top:10px;gap:8px;align-items:center}
+.icon-btn.on{color:var(--accent);background:var(--accent-soft)}
 .fs-order{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:10px}
 .fs-order .box{padding:10px 12px}.fs-order .lay-row{padding:5px 6px}
 .ckl-list{list-style:none;margin:6px 0 0;padding:0}
@@ -2057,14 +2069,26 @@ const Drive = {
         client_id: cid, scope: 'https://www.googleapis.com/auth/drive.file',
         callback: (resp) => {
           if (resp.error){ rej(new Error(resp.error_description || resp.error)); return; }
-          this.token = resp.access_token; this.expires = Date.now() + (resp.expires_in - 60) * 1000; res();
+          this.token = resp.access_token; this.expires = Date.now() + (resp.expires_in - 60) * 1000;
+          if (DB.settings.drivePick){ DB.settings.drivePick = false; save(); }
+          res();
         },
         error_callback: (e) => rej(new Error(e && e.message ? e.message : 'Google sign-in was closed.'))
       });
-      this.tokenClient.requestAccessToken({prompt: interactive ? '' : 'none'});
+      this.tokenClient.requestAccessToken({prompt: interactive ? (DB.settings.drivePick ? 'select_account' : '') : 'none'});
     });
   },
   async ensure(){ if (!this.connected()) await this.connect(true); },
+  /* sign out: give the token back to Google, forget it here, and make the next sign-in ask which account */
+  async disconnect(){
+    const t = this.token;
+    this.token = null; this.expires = 0; this.email = ''; this.tokenClient = null;
+    DB.settings.drivePick = true; save();
+    try { if (t && window.google && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) google.accounts.oauth2.revoke(t, () => {}); } catch (e) {}
+    try { if (t) await fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(t), {method: 'POST', mode: 'no-cors'}); } catch (e) {}
+    try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) {}
+    try { if (window.ftDesktop && ftDesktop.googleSignOut) await ftDesktop.googleSignOut(); } catch (e) {}
+  },
   async api(url, opts = {}){
     await this.ensure();
     const r = await fetch(url, Object.assign({}, opts, {headers: Object.assign({Authorization: 'Bearer ' + this.token}, opts.headers || {})}));
@@ -2497,7 +2521,7 @@ function renderNav(){
       .forEach(([k, l, i]) => { h += `<button class="nav-btn" data-nav="${k}" aria-current="${UI.view === k}">${i}${l}</button>`; });
   }
   document.getElementById('nav').innerHTML = h;
-  document.getElementById('drive-chip').innerHTML = (EMBEDDED ? `<button class="chip warn chip-btn" data-act="embed-help" title="Downloads and printing are blocked in this preview window">Preview window – open in Chrome/Edge to download &amp; print</button> ` : '') + (Drive.connected() ? `<span class="chip ok">Google Drive connected</span>` : `<button class="chip warn chip-btn" data-act="drive-connect">Connect Google Drive</button>`);
+  document.getElementById('drive-chip').innerHTML = (EMBEDDED ? `<button class="chip warn chip-btn" data-act="embed-help" title="Downloads and printing are blocked in this preview window">Preview window – open in Chrome/Edge to download &amp; print</button> ` : '') + (Drive.connected() ? `<span class="chip ok">Google Drive connected</span> <button class="chip neutral chip-btn" data-act="drive-signout" title="Sign out of the Google account">Sign out</button>` : `<button class="chip warn chip-btn" data-act="drive-connect">Connect Google Drive</button>`);
 }
 function render(){
   setAmtDec();
@@ -2785,7 +2809,7 @@ function vTB(){
   const tbDocs = (en.tbDocs || []).map(d => `<a class="doc-link" href="${e_(d.url)}" target="_blank" rel="noopener">${IC.file}<span>${e_(d.name)}</span></a>`).join(' ');
   const head = `<section class="panel"><div class="head"><div><h1>Schedules FY${en.year}</h1><p class="sub">Each schedule is one line in the statements and one note. Enter amounts as <b>+</b> when they follow the schedule’s nature and <b>−</b> when they go against it (e.g. accumulated depreciation, closing stock). FY${en.year - 1} = last year’s figure, same sign rule.</p></div>
     <div class="row"><button class="btn" data-act="paste-tb">${IC.grid}Paste from Excel</button><label class="btn" for="xlsx-in" title="Trial balance: ledger names with amounts">${IC.upload}Import trial balance</label><input id="xlsx-in" type="file" accept=".xlsx,.xls,.csv" hidden><label class="btn" for="fs-in" title="Last year’s or this year’s financial statements in the Fair Tax Excel format – fills the schedules">${IC.upload}Import financial statements</label><input id="fs-in" type="file" accept=".xlsx,.xls" hidden>
-    <button class="btn" data-act="tb-file">${IC.clip}Attach TB file</button><button class="btn" data-act="retrieve">${IC.down}Retrieve previous statements</button><button class="btn primary" data-act="new-sched">${IC.plus}New schedule</button></div></div>
+    <button class="btn" data-act="tb-file">${IC.clip}Attach TB file</button><button class="btn" data-act="bulk-open">${IC.clip}Attach files in bulk</button><button class="btn" data-act="retrieve">${IC.down}Retrieve previous statements</button><button class="btn primary" data-act="new-sched">${IC.plus}New schedule</button></div></div>
     ${tbDocs ? `<div class="row" style="margin-top:10px"><span class="muted small">Trial balance files:</span>${tbDocs}</div>` : ''}${yearLinkBar(c, en)}${gsPanel(c, en)}</section>
   <div class="kpis">
     <div class="kpi"><small>Assets, expenses &amp; dividends</small><b>${fmtN(r.dr)}</b></div><div class="kpi"><small>Liabilities, equity &amp; income</small><b>${fmtN(r.cr)}</b></div>
@@ -2836,6 +2860,7 @@ function vTB(){
           <div class="sched-tot" title="FY${en.year}"${fxRefAttr(`{${en.year}:S:${x.key}:cy}`)}><b>${fmtN(r.cy[x.key])}</b></div>
           <div class="sched-tot" title="FY${en.year - 1}"${fxRefAttr(`{${en.year}:S:${x.key}:py}`)}><b>${fmtN(r.py[x.key])}</b></div>
           <div class="sched-proof" title="Lines with proof"><b class="${docTotal && docs === docTotal ? 'ok-t' : ''}">${docs}/${docTotal}</b></div>
+          <button class="icon-btn${wsHas(en, 'sched:' + x.key) ? ' on' : ''}" data-act="ws-open" data-key="sched:${x.key}" title="Working sheet">${IC.grid}</button>
           <button class="icon-btn gear" data-act="sched-props" data-key="${x.key}" title="Schedule settings">${IC.gear}</button>
         </div>
         ${col ? '' : (isPPE ? ppeMatrix(en, r) + (lines.length ? `<div class="sub-head">Ledger lines (optional – checked against the schedule above)</div><div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${shown.map(l => lineRow(en, l, false)).join('')}</tbody><tfoot><tr><td colspan="2">Total</td><td class="r">${fmtN(amtT)}</td><td class="r">${fmtN(pyT)}</td><td colspan="2"></td></tr></tfoot></table></div>` : '')
@@ -2972,7 +2997,7 @@ function vSettings(){
     <div class="form-grid">${field('set-cid', 'Google OAuth Client ID', S.clientId, {bind: 'settings.clientId', wide: true, ph: DEFAULT_GOOGLE_CLIENT_ID ? 'Fair Tax Client ID already built in – leave blank' : '1234567890-abc.apps.googleusercontent.com'})}
     ${field('set-root', 'Main folder name in Drive', S.rootFolder, {bind: 'settings.rootFolder'})}
     ${field('set-dec', 'Amounts in the statements', String(+S.dec === 2 ? 2 : 0), {bind: 'settings.dec', select: [['0', 'Whole dirhams (no decimals)'], ['2', 'Two decimals – 1,234.56']], hint: 'Two decimals help a trial balance that is out by fils – they can also show small differences that rounding used to hide'})}
-    <div class="field"><label>Status</label><div class="row">${Drive.connected() ? '<span class="chip ok">Connected</span>' : '<span class="chip neutral">Not connected</span>'}<button class="btn small primary" data-act="drive-connect">${Drive.connected() ? 'Reconnect' : 'Connect Google Drive'}</button></div></div></div>
+    <div class="field"><label>Status</label><div class="row">${Drive.connected() ? '<span class="chip ok">Connected</span><button class="btn small" data-act="drive-signout">Sign out of Google</button>' : '<span class="chip neutral">Not connected</span>'}<button class="btn small primary" data-act="drive-connect">${Drive.connected() ? 'Reconnect' : 'Connect Google Drive'}</button></div></div></div>
     <details class="ph" ${S.clientId || DEFAULT_GOOGLE_CLIENT_ID ? '' : 'open'}><summary>One-time setup (about 10 minutes)</summary><ol class="setup">
       <li>Open <b>console.cloud.google.com</b> and sign in with the Google account that should hold client folders.</li>
       <li>Create a project named <b>Fair Tax Audit Desk</b>.</li>
@@ -3395,7 +3420,7 @@ function docsModal(type, id){
       <div class="form-grid"><div class="field"><label for="ln-name">Document name</label><input id="ln-name" placeholder="Bank statement Dec 2025"></div>
       <div class="field"><label for="ln-url">Link</label><input id="ln-url" placeholder="https://drive.google.com/file/d/…"></div></div>
       <button class="btn" data-act="link-doc" data-type="${type}" data-id="${id}">${IC.clip}Attach link</button></div>
-    <div class="foot"><button class="btn" data-close>Done</button></div>`, true);
+    <div class="foot">${['line', 'sched'].includes(type) ? `<button class="btn" data-act="ws-open" data-key="${type}:${e_(id)}">${IC.grid}Working sheet</button>` : ''}<button class="btn" data-close>Done</button></div>`, true);
 }
 /* ============================================================
    QUICK EDIT FROM THE FINANCIAL STATEMENTS – click any amount: its schedule opens in a window,
@@ -3414,7 +3439,7 @@ function drillBody(key, yr){
   const isRes = k === 're' || k === 'lr';
   const linesTable = `<div class="table-wrap"><table class="ui compact q-tab"><colgroup><col><col><col style="width:120px"><col style="width:120px"><col style="width:150px"><col style="width:100px"><col style="width:40px"></colgroup>
     <thead><tr><th>Ledger</th><th>Wording in notes</th><th class="r${hl('cy')}">FY${Y}${isRes ? ((r.cy.eqModes || {})[k] === 'close' ? ' closing' : ' opening') : ''}</th><th class="r${hl('py')}">FY${PY}${isRes ? ' closing' : ''}</th><th>Comment</th><th>Proof</th><th></th></tr></thead>
-    <tbody>${lines.map(l => `<tr><td><input id="q-led-${l.id}" data-line="${l.id}" data-field="ledger" value="${e_(l.ledger)}" placeholder="Ledger name" aria-label="Ledger"></td><td><input id="q-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td><td class="${hl('cy')}">${num(l, 'amt')}</td><td class="${hl('py')}">${num(l, 'py')}</td><td><input class="w-cmt" id="q-cmt-${l.id}" data-remark="line:${l.id}" value="${e_(l.remark || '')}" placeholder="Comment" aria-label="Comment"></td><td>${docCell('line', l)}</td><td><button class="icon-btn" data-act="del-line" data-id="${l.id}" title="Delete line">${IC.trash}</button></td></tr>`).join('') || `<tr><td colspan="7" class="empty">No ledger lines yet.</td></tr>`}</tbody>
+    <tbody>${lines.map(l => `<tr><td><input id="q-led-${l.id}" data-line="${l.id}" data-field="ledger" value="${e_(l.ledger)}" placeholder="Ledger name" aria-label="Ledger"></td><td><input id="q-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td><td class="${hl('cy')}">${num(l, 'amt')}</td><td class="${hl('py')}">${num(l, 'py')}</td><td><input class="w-cmt" id="q-cmt-${l.id}" data-remark="line:${l.id}" value="${e_(l.remark || '')}" placeholder="Comment" aria-label="Comment"></td><td>${docCell('line', l)}</td><td class="acts"><button class="icon-btn${wsHas(en, 'line:' + l.id) ? ' on' : ''}" data-act="ws-open" data-key="line:${l.id}" title="Working sheet">${IC.grid}</button><button class="icon-btn" data-act="del-line" data-id="${l.id}" title="Delete line">${IC.trash}</button></td></tr>`).join('') || `<tr><td colspan="7" class="empty">No ledger lines yet.</td></tr>`}</tbody>
     ${lines.length ? `<tfoot><tr><td colspan="2">Total of the lines</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.amt), 0))}</td><td class="r">${fmtN(lines.reduce((a, l) => a + R(l.py), 0))}</td><td colspan="3"></td></tr></tfoot>` : ''}</table></div>
     <div class="row"><button class="btn small" data-act="q-add-line" data-key="${k}">${IC.plus}Add line</button></div>`;
   const bind = (id, path, v, label) => `<input class="numi${fxCls(en, 'B:' + path)}" id="${id}" data-bind="eng.${path}" data-num="1" inputmode="decimal"${fxAttrs(en, 'B:' + path, '')} value="${fmtIn(v)}" aria-label="${e_(label)}">`;
@@ -3461,7 +3486,7 @@ function drillBody(key, yr){
     <p class="sub">Change any figure, wording or line here – the financial statements behind this window update at once. Type = in an amount for a formula.</p>
     ${k === 'ppe' && en.ppe.length ? extra + (lines.length ? `<h3 class="h3">Ledger lines</h3>${linesTable}` : '') : lineNote + linesTable + extra}
     ${s ? `<div class="field wide q-cmt-box"><label for="q-sched-cmt">Comment / observation on ${e_(s.label)}</label><textarea id="q-sched-cmt" rows="2" data-remark="sched:${e_(k)}" placeholder="Kept with the file and printed in the comments &amp; observations report">${e_(s.remark || '')}</textarea></div>` : ''}
-    <div class="foot"><button class="btn" data-act="go-tb-filter" data-key="${k}">Open the Schedules screen</button>${s && s.sec === 'eq' ? `<button class="btn" data-act="sched-props" data-key="${k}">Opening balance &amp; remarks</button>` : ''}<button class="btn primary" data-close>Done</button></div></div>`, true);
+    <div class="foot"><button class="btn" data-act="go-tb-filter" data-key="${k}">Open the Schedules screen</button>${s ? `<button class="btn" data-act="ws-open" data-key="sched:${e_(k)}">${IC.grid}Working sheet</button>` : ''}${s && s.sec === 'eq' ? `<button class="btn" data-act="sched-props" data-key="${k}">Opening balance &amp; remarks</button>` : ''}<button class="btn primary" data-close>Done</button></div></div>`, true);
   if (k === 'ppe' || lines.length > 6) { const m = document.querySelector('.modal'); if (m) m.classList.add('xwide'); }
 }
 function taxModal(){ liveModal(taxBody); }
@@ -3797,6 +3822,142 @@ function vChecklist(){
   ${ov.length ? `<section class="panel"><h2>Issued with open items</h2><div class="table-wrap"><table class="ui compact"><thead><tr><th>When</th><th>Download</th><th>Reason</th><th class="r">Open items</th></tr></thead><tbody>${ov.map(o => `<tr><td>${e_(fmtStamp(o.at))}</td><td>${e_(o.what || '')}</td><td>${e_(o.reason)}</td><td class="r" title="${e_((o.open || []).join('\n'))}">${(o.open || []).length}</td></tr>`).join('')}</tbody></table></div></section>` : ''}`;
 }
 
+/* ============================================================
+   WORKING SHEETS – a small spreadsheet behind any schedule or ledger line
+   (VAT filing workings, stock counts, wage summaries … formulas start with =)
+   ============================================================ */
+const WS_LET = n => { let s = ''; n = n + 1; while (n > 0){ const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+function wsLabel(en, key){
+  const i = String(key).indexOf(':'), t = String(key).slice(0, i), id = String(key).slice(i + 1);
+  if (t === 'sched'){ const x = SM(en)[id]; return x ? x.label : id; }
+  const l = (en.tb || []).find(q => q.id === id); return l ? (l.ledger || l.caption || 'Ledger line') : 'Ledger line';
+}
+function wsGet(en, key, make){
+  en.sheets = en.sheets || {};
+  if (!en.sheets[key] && make) en.sheets[key] = {rows: Array.from({length: 14}, () => Array(6).fill('')), note: ''};
+  const sh = en.sheets[key];
+  if (sh && !Array.isArray(sh.rows)) sh.rows = [];
+  return sh;
+}
+const wsHas = (en, key) => { const sh = (en.sheets || {})[key]; return !!(sh && sh.rows && sh.rows.some(r => (r || []).some(c => String(c ?? '').trim() !== ''))); };
+const wsCols = sh => sh.rows.reduce((a, r) => Math.max(a, (r || []).length), 1);
+const wsNum = v => { const t = String(v ?? '').replace(/[,\s]/g, '').replace(/^\((.*)\)$/, '-$1'); const n = parseFloat(t); return isNaN(n) ? 0 : n; };
+const wsRaw = (sh, r, c) => String(((sh.rows[r] || [])[c]) ?? '');
+function wsRefRC(ref){ const m = /^([A-Z]{1,2})(\d{1,4})$/.exec(String(ref).toUpperCase()); if (!m) return null;
+  let c = 0; for (const ch of m[1]) c = c * 26 + (ch.charCodeAt(0) - 64); return {r: +m[2] - 1, c: c - 1}; }
+function wsValue(sh, r, c, seen){
+  const raw = wsRaw(sh, r, c).trim();
+  if (raw === '') return '';
+  if (raw[0] !== '=') return /^[-(]?[\d,. ]+\)?$/.test(raw) ? wsNum(raw) : raw;
+  const id = r + '_' + c; seen = seen || new Set();
+  if (seen.has(id)) return '#loop';
+  seen.add(id);
+  return wsEval(sh, raw.slice(1), seen);
+}
+function wsRange(sh, a, b, seen){
+  const A = wsRefRC(a), B = wsRefRC(b), out = []; if (!A || !B) return out;
+  for (let r = Math.min(A.r, B.r); r <= Math.max(A.r, B.r); r++)
+    for (let c = Math.min(A.c, B.c); c <= Math.max(A.c, B.c); c++){
+      const v = wsValue(sh, r, c, new Set(seen)); if (v === '' || typeof v === 'string') continue; out.push(v); }
+  return out;
+}
+function wsEval(sh, expr, seen){
+  try {
+    const fns = {SUM: a => a.reduce((x, y) => x + y, 0), AVERAGE: a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0,
+      AVG: a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0, COUNT: a => a.length,
+      MIN: a => a.length ? Math.min.apply(null, a) : 0, MAX: a => a.length ? Math.max.apply(null, a) : 0};
+    let e = String(expr).replace(/\b(SUM|AVERAGE|AVG|COUNT|MIN|MAX)\s*\(\s*([A-Z]{1,2}\d{1,4})\s*:\s*([A-Z]{1,2}\d{1,4})\s*\)/gi,
+      (m, f, a, b) => fns[f.toUpperCase()](wsRange(sh, a, b, seen)));
+    e = e.replace(/\bROUND\s*\(/gi, 'RND(').replace(/\bABS\s*\(/gi, 'ABSF(');
+    e = e.replace(/\b([A-Z]{1,2}\d{1,4})\b/g, m => { const rc = wsRefRC(m); if (!rc) return m;
+      const v = wsValue(sh, rc.r, rc.c, new Set(seen)); return typeof v === 'number' ? v : wsNum(v); });
+    if (/[^0-9+\-*/().,\s]/.test(e.replace(/RND|ABSF/g, ''))) return '#error';
+    const f = new Function('RND', 'ABSF', 'return (' + e + ');');
+    const v = f((x, n) => { const p = Math.pow(10, n || 0); return Math.round(x * p) / p; }, Math.abs);
+    return typeof v === 'number' && isFinite(v) ? v : '#error';
+  } catch (err) { return '#error'; }
+}
+const wsFmt = v => typeof v === 'number' ? v.toLocaleString('en-US', {maximumFractionDigits: 2}) : String(v ?? '');
+function wsColTotal(sh, c){ let t = 0, any = false;
+  for (let r = 0; r < sh.rows.length; r++){ const v = wsValue(sh, r, c); if (typeof v === 'number'){ t += v; any = true; } }
+  return any ? t : ''; }
+
+function wsModal(key){ UI.wsKey = key; liveModal(() => wsBody(key)); }
+function wsBody(key){
+  const en = eng(); if (!en) return;
+  const sh = wsGet(en, key, true), nC = Math.max(wsCols(sh), 4), label = wsLabel(en, key);
+  const isLine = String(key).startsWith('line:');
+  const head = `<tr><th class="ws-rn"></th>${Array.from({length: nC}, (_, c) => `<th>${WS_LET(c)}</th>`).join('')}</tr>`;
+  const body = sh.rows.map((row, r) => `<tr><th class="ws-rn">${r + 1}</th>${Array.from({length: nC}, (_, c) => {
+      const raw = wsRaw(sh, r, c), v = wsValue(sh, r, c), isF = raw.trim().startsWith('=');
+      return `<td><input class="ws-in${typeof v === 'number' ? ' num' : ''}${isF ? ' fx' : ''}" data-ws="${e_(key)}|${r}|${c}" data-raw="${e_(raw)}" value="${e_(wsFmt(v))}" aria-label="${WS_LET(c)}${r + 1}"></td>`;
+    }).join('')}</tr>`).join('');
+  const totals = `<tr class="ws-tot"><th class="ws-rn" title="Adds every number in the column, including any total line you typed">Σ</th>${Array.from({length: nC}, (_, c) => `<td data-wstot="${c}">${wsFmt(wsColTotal(sh, c))}</td>`).join('')}</tr>`;
+  modal(`<div class="qd ws-wrap"><div class="row between"><h2>Working sheet – ${e_(label)}</h2>
+      <div class="row"><button class="btn small" data-act="ws-row">${IC.plus}Row</button><button class="btn small" data-act="ws-col">${IC.plus}Column</button>
+        <button class="btn small" data-act="ws-xlsx">${IC.down}Excel</button></div></div>
+    <p class="sub">Type figures, or a formula starting with <b>=</b> – for example <b>=SUM(B2:B13)</b>, <b>=B14-C14</b>, <b>=ROUND(D5*0.05,2)</b>. Click a cell to see its formula.</p>
+    <div class="table-wrap ws-scroll"><table class="ws"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${totals}</tfoot></table></div>
+    <div class="row ws-take"><label class="small" for="ws-cell">Take the figure in cell</label><input id="ws-cell" value="${e_(sh.cell || '')}" placeholder="B14" style="width:80px">
+      ${isLine ? `<button class="btn small" data-act="ws-take" data-yr="cy">→ FY${en.year} amount</button><button class="btn small" data-act="ws-take" data-yr="py">→ FY${en.year - 1} amount</button>`
+        : `<button class="btn small" data-act="ws-take" data-yr="cy">→ new line in this schedule</button>`}</div>
+    <details class="ph"><summary>Paste from Excel</summary><p class="small muted">Copy the cells in Excel, paste below and click Fill – the sheet is replaced.</p>
+      <textarea id="ws-paste" rows="4" placeholder="Quarter&#9;Sales per return&#9;Sales per books"></textarea>
+      <div class="row"><button class="btn small" data-act="ws-fill">Fill the sheet</button><button class="btn small danger" data-act="ws-clear">Clear the sheet</button></div></details>
+    <div class="field wide"><label for="ws-note">Note on this working</label><input id="ws-note" data-wsnote="${e_(key)}" value="${e_(sh.note || '')}" placeholder="e.g. VAT returns Q1–Q4 agreed to revenue"></div>
+    <div class="foot"><button class="btn primary" data-close>Done</button></div></div>`, true);
+  const m = document.querySelector('.modal'); if (m) m.classList.add('xwide');
+}
+/* recompute what the cells show without rebuilding the window, so typing and tabbing are not interrupted */
+function wsRefresh(){
+  const en = eng(); if (!en) return;
+  document.querySelectorAll('[data-ws]').forEach(el => { const [key, r, c] = el.dataset.ws.split('|'); const sh = wsGet(en, key, true);
+    el.dataset.raw = wsRaw(sh, +r, +c);
+    const v = wsValue(sh, +r, +c);
+    el.classList.toggle('num', typeof v === 'number'); el.classList.toggle('fx', wsRaw(sh, +r, +c).trim().startsWith('='));
+    if (document.activeElement !== el) el.value = wsFmt(v); });
+  const key = UI.wsKey; if (!key) return; const sh = wsGet(en, key, true);
+  document.querySelectorAll('[data-wstot]').forEach(td => { td.textContent = wsFmt(wsColTotal(sh, +td.dataset.wstot)); });
+}
+function wsSet(en, key, r, c, val){
+  const sh = wsGet(en, key, true);
+  while (sh.rows.length <= r) sh.rows.push([]);
+  const row = sh.rows[r]; while (row.length <= c) row.push('');
+  row[c] = val;
+}
+function wsSheetExcel(en, key){
+  const sh = wsGet(en, key), nC = wsCols(sh);
+  const rows = sh.rows.map(row => Array.from({length: nC}, (_, c) => { const v = wsValue(sh, sh.rows.indexOf(row), c); return v; }));
+  return rows;
+}
+
+/* ---------- attach many documents at once ---------- */
+function bulkWords(s){ return String(s || '').toLowerCase().replace(/\.[a-z0-9]{2,5}$/, '').replace(/[^a-z0-9]+/g, ' ').split(' ').filter(w => w.length >= 3); }
+function bulkGuess(en, name){
+  const w = bulkWords(name); if (!w.length) return '';
+  let best = '', score = 0;
+  const test = (key, text) => { const t = bulkWords(text); const n = w.filter(x => t.includes(x)).length; if (n > score){ score = n; best = key; } };
+  (en.tb || []).forEach(l => test('line:' + l.id, `${l.ledger || ''} ${l.caption || ''}`));
+  ensureSchedules(en).forEach(x => test('sched:' + x.key, `${x.label} ${x.note || ''}`));
+  return score ? best : '';
+}
+function bulkModal(){
+  const en = eng(), c = client(), files = UI.bulkFiles || [];
+  const opts = sel => `<option value="">— skip —</option>` + ensureSchedules(en).map(x => {
+      const lines = (en.tb || []).filter(l => l.fs === x.key);
+      return `<optgroup label="${e_(x.label)}"><option value="sched:${e_(x.key)}"${sel === 'sched:' + x.key ? ' selected' : ''}>${e_(x.label)} (schedule)</option>`
+        + lines.map(l => `<option value="line:${l.id}"${sel === 'line:' + l.id ? ' selected' : ''}>${e_(l.ledger || l.caption || 'line')}</option>`).join('') + '</optgroup>';
+    }).join('');
+  const rows = files.map((f, i) => `<tr><td>${e_(f.name)}<div class="small muted">${Math.round(f.size / 1024)} KB</div></td>
+      <td><select id="bk-t-${i}" data-bulk="${i}">${opts(UI.bulkTarget[i] || '')}</select></td></tr>`).join('');
+  modal(`<div class="qd"><h2>Attach documents in bulk</h2>
+    <p class="sub">Choose many files at once – each one is matched to a schedule or ledger line by its name, and you can change the match. They upload to ${e_(DB.settings.rootFolder || 'Fair Tax Clients')} / ${e_(c.name)} / FY${en.year}.</p>
+    <div class="field wide"><label for="bulk-files">Files</label><input id="bulk-files" type="file" multiple></div>
+    ${files.length ? `<div class="table-wrap"><table class="ui compact"><thead><tr><th>File</th><th>Attach to</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="small muted">${files.filter((f, i) => UI.bulkTarget[i]).length} of ${files.length} matched.</p>` : '<p class="small muted">No files chosen yet.</p>'}
+    <div class="foot"><button class="btn" data-close>Cancel</button>${files.length ? `<button class="btn" data-act="bulk-clear">Clear list</button><button class="btn primary" data-act="bulk-go">${IC.upload}Upload &amp; attach ${files.filter((f, i) => UI.bulkTarget[i]).length} file(s)</button>` : ''}</div></div>`, true);
+}
+
 /* ---------- send the report on WhatsApp: the file itself where the device allows it, otherwise a Google Drive link ---------- */
 function waDigits(s){ return String(s || '').replace(/\D/g, ''); }
 function waMessage(c, en){ const p = c.profile || {}; return `${c.name} – financial statements for the year ended ${p.yearEndText || 'December 31'}, ${en.year}${en.settings.draft ? ' (draft for review)' : ''}`; }
@@ -3864,6 +4025,12 @@ function obsExcel(c, en){
   if (open.length){ rows.push([], ['Pre-issue checklist'], ['Status', 'Item', 'Finding', 'Note']); open.forEach(i => rows.push([CKL_CHIP[i.st][1], i.text, i.auto.msg || '', i.note || ''])); }
   const ws = XLSX.utils.aoa_to_sheet(rows); ws['!cols'] = [{wch: 16}, {wch: 46}, {wch: 16}, {wch: 16}, {wch: 60}, {wch: 34}];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Observations');
+  const used = {};
+  Object.keys(en.sheets || {}).forEach(key => { if (!wsHas(en, key)) return;
+    const sh = wsGet(en, key), nC = wsCols(sh);
+    const aoa = [[wsLabel(en, key) + (sh.note ? ' – ' + sh.note : '')], []].concat(sh.rows.map((row, ri) => Array.from({length: nC}, (_, ci) => { const v = wsValue(sh, ri, ci); return v === '' ? '' : v; })));
+    let nm = String(wsLabel(en, key)).replace(/[\\\/?*\[\]:]/g, ' ').slice(0, 26) || 'Working'; if (used[nm]) nm = (nm + ' ' + (++used[nm])).slice(0, 31); else used[nm] = 1;
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), nm); });
   return new Blob([XLSX.write(wb, {bookType: 'xlsx', type: 'array'})], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 function cklExcel(c, en){
@@ -5589,6 +5756,65 @@ document.addEventListener('click', async ev => {
         finally { t.disabled = false; }
         break;
       }
+      case 'ws-open': wsModal(t.dataset.key); break;
+      case 'ws-row': { const sh = wsGet(en, UI.wsKey, true); sh.rows.push(Array(Math.max(wsCols(sh), 4)).fill('')); save(); refreshModal(); break; }
+      case 'ws-col': { const sh = wsGet(en, UI.wsKey, true); const n = wsCols(sh) + 1; sh.rows.forEach(r => { while (r.length < n) r.push(''); }); save(); refreshModal(); break; }
+      case 'ws-fill': {
+        const txt = ((document.getElementById('ws-paste') || {}).value || '').replace(/\r/g, '');
+        if (!txt.trim()){ toast('Paste the cells from Excel first', true); break; }
+        const rows = txt.split('\n').map(l => l.split('\t'));
+        const sh = wsGet(en, UI.wsKey, true); sh.rows = rows.length ? rows : sh.rows;
+        while (sh.rows.length < 8) sh.rows.push([]);
+        save(); refreshModal(); toast(`${rows.length} row(s) pasted`); break;
+      }
+      case 'ws-clear': { if (!confirm('Clear every cell in this working sheet?')) break; const sh = wsGet(en, UI.wsKey, true); sh.rows = Array.from({length: 14}, () => Array(6).fill('')); save(); refreshModal(); break; }
+      case 'ws-xlsx': {
+        const sh = wsGet(en, UI.wsKey, true), nC = wsCols(sh);
+        const aoa = sh.rows.map((row, r) => Array.from({length: nC}, (_, cI) => { const v = wsValue(sh, r, cI); return v === '' ? '' : v; }));
+        const ws2 = XLSX.utils.aoa_to_sheet(aoa); const wb2 = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2, ws2, 'Working');
+        download(new Blob([XLSX.write(wb2, {bookType: 'xlsx', type: 'array'})], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), `${safeName(wsLabel(en, UI.wsKey))}_working_${en.year}.xlsx`);
+        break;
+      }
+      case 'ws-take': {
+        const key = UI.wsKey, sh = wsGet(en, key, true), ref = ((document.getElementById('ws-cell') || {}).value || '').trim();
+        const rc = wsRefRC(ref); if (!rc){ toast('Type the cell to take, e.g. B14', true); break; }
+        const v = wsValue(sh, rc.r, rc.c); if (typeof v !== 'number'){ toast('That cell is not a number', true); break; }
+        sh.cell = ref.toUpperCase();
+        const yr = t.dataset.yr === 'py' ? 'py' : 'amt';
+        if (String(key).startsWith('line:')){
+          const l = (en.tb || []).find(q => q.id === String(key).slice(5)); if (!l){ toast('Line not found', true); break; }
+          l[yr] = R(v); save(); render(); toast(`${wsFmt(v)} put into ${l.ledger || 'the line'} (${yr === 'py' ? 'FY' + (en.year - 1) : 'FY' + en.year})`);
+        } else {
+          const k2 = String(key).slice(6), lab = wsLabel(en, k2 ? 'sched:' + k2 : key);
+          en.tb.push({id: uid(), ledger: `${lab} – per working sheet`, fs: k2, caption: '', amt: R(v), py: 0, docs: []});
+          save(); render(); toast(`New line added in ${lab} with ${wsFmt(v)}`);
+        }
+        refreshModal(); break;
+      }
+      case 'bulk-open': UI.bulkFiles = UI.bulkFiles || []; UI.bulkTarget = UI.bulkTarget || {}; bulkModal(); break;
+      case 'bulk-clear': UI.bulkFiles = []; UI.bulkTarget = {}; bulkModal(); break;
+      case 'bulk-go': {
+        const files = UI.bulkFiles || [], tg = UI.bulkTarget || {};
+        const list = files.map((f, i) => ({f, key: tg[i]})).filter(x => x.key);
+        if (!list.length){ toast('Choose where at least one file should go', true); break; }
+        t.disabled = true;
+        try {
+          if (!Drive.connected()) await Drive.connect(true);
+          let done = 0;
+          for (const it of list){
+            t.textContent = `Uploading ${done + 1} of ${list.length}…`;
+            const [ty, id] = [String(it.key).slice(0, String(it.key).indexOf(':')), String(it.key).slice(String(it.key).indexOf(':') + 1)];
+            const obj = docTarget(ty === 'sched' ? 'sched' : 'line', id); if (!obj) continue;
+            const folder = ty === 'sched' ? ((SM(en)[id] || {}).folder || '09 Other') : ((SM(en)[(obj.fs || '')] || {}).folder || '09 Other');
+            const fid = await Drive.subFolderId(c, en.year, folder);
+            const up = await Drive.upload(it.f, it.f.name, fid);
+            obj.docs = obj.docs || []; obj.docs.push({name: up.name, url: up.webViewLink, fileId: up.id, folder}); done++; save();
+          }
+          UI.bulkFiles = []; UI.bulkTarget = {}; closeModal(); render(); toast(`${done} file(s) uploaded and attached`);
+        } catch (err) { toast(err.message || 'Upload failed', true); }
+        finally { t.disabled = false; }
+        break;
+      }
       case 'obs-xlsx': download(obsExcel(c, en), `${safeName(c.name)}_Comments_${en.year}.xlsx`); break;
       case 'ckl-go': closeModal(); UI.view = 'checklist'; save(); render(); window.scrollTo(0, 0); break;
       case 'ckl-override': {
@@ -5730,6 +5956,10 @@ document.addEventListener('click', async ev => {
           if (a === 'pv-print') await printPdf(doc); else download(await blobOf(doc), UI.pvName || 'report.pdf'); } finally { t.disabled = false; } break; }
       case 'embed-help': blockedHelp('download'); break;
       case 'drive-connect': await Drive.connect(true); toast('Google Drive connected'); render(); break;
+      case 'drive-signout': {
+        if (!confirm('Sign out of Google? Uploads and backups will ask you to sign in again, and you can pick a different account.')) break;
+        await Drive.disconnect(); render(); toast('Signed out of Google – the next upload will ask which account to use'); break;
+      }
       case 'backup-dl': download(new Blob([JSON.stringify(DB, null, 1)], {type: 'application/json'}), `FairTax_AuditDesk_backup_${new Date().toISOString().slice(0, 10)}.json`); break;
       case 'backup-drive': { if (!Drive.connected()) await Drive.connect(true); const root = await Drive.folder(DB.settings.rootFolder || 'Fair Tax Clients', null); const bk = await Drive.folder('_Backups', root);
         await Drive.upload(new Blob([JSON.stringify(DB)], {type: 'application/json'}), `AuditDesk_backup_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.json`, bk); toast('Backup saved to Google Drive'); break; }
@@ -5799,6 +6029,10 @@ document.addEventListener('change', async ev => {
   }
   if (el.id === 'show-empty'){ UI.showEmpty = el.checked; save(); render(); return; }
   if (el.dataset.ui){ UI[el.dataset.ui] = el.value; render(); return; }
+  if (el.dataset.ws){ const [key, r, cI] = el.dataset.ws.split('|'); wsSet(en, key, +r, +cI, el.value); save(); wsRefresh(); return; }
+  if (el.dataset.wsnote){ const sh = wsGet(en, el.dataset.wsnote, true); sh.note = el.value; save(); return; }
+  if (el.dataset.bulk !== undefined){ UI.bulkTarget = UI.bulkTarget || {}; UI.bulkTarget[el.dataset.bulk] = el.value; bulkModal(); return; }
+  if (el.id === 'bulk-files' && el.files.length){ UI.bulkFiles = [...el.files]; UI.bulkTarget = {}; UI.bulkFiles.forEach((f, i) => { const g = bulkGuess(en, f.name); if (g) UI.bulkTarget[i] = g; }); bulkModal(); return; }
   if (el.dataset.remark){ const [ty, rid] = el.dataset.remark.split(':'); const o = docTarget(ty, rid); if (o){ o.remark = el.value; save(); } return; }
   if (el.dataset.cklNote !== undefined){ const CK = en.checklist = en.checklist || {}; (CK.notes = CK.notes || {})[el.dataset.cklNote] = el.value; save(); return; }
   if (el.dataset.line){ const l = en.tb.find(x => x.id === el.dataset.line); const f = el.dataset.field; if (f === 'fs'){ moveLine(en, l, el.value); UI.justAdded[el.value] = true; } else if (['amt', 'py'].includes(f)){ try { fxInput(c, en, `L:${l.id}:${f}`, el.value, v => { l[f] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
@@ -5819,6 +6053,11 @@ document.addEventListener('change', async ev => {
     save(); scheduleRender();
   }
 });
+/* working sheet: show the formula while a cell has focus, the answer when it does not */
+document.addEventListener('focusin', ev => { const el = ev.target; if (el && el.dataset && el.dataset.ws !== undefined && el.dataset.raw !== undefined){ el.value = el.dataset.raw; try { el.select(); } catch (e) {} } });
+document.addEventListener('focusout', ev => { const el = ev.target; if (!el || !el.dataset || el.dataset.ws === undefined) return;
+  const en = eng(); if (!en) return; const [key, r, c] = el.dataset.ws.split('|'); const sh = wsGet(en, key, true);
+  el.dataset.raw = wsRaw(sh, +r, +c); el.value = wsFmt(wsValue(sh, +r, +c)); });
 /* drop licence / MOA files on the profile */
 ['dragenter', 'dragover'].forEach(n => document.addEventListener(n, ev => { const z = ev.target.closest && ev.target.closest('#pd-drop'); if (!z || DRAG) return; ev.preventDefault(); z.classList.add('over'); }));
 document.addEventListener('dragleave', ev => { const z = ev.target.closest && ev.target.closest('#pd-drop'); if (z && !z.contains(ev.relatedTarget)) z.classList.remove('over'); });
