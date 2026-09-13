@@ -44,6 +44,18 @@ aside.side{background:var(--nav);color:var(--nav-txt);display:flex;flex-directio
 .side-user{display:flex;align-items:center;gap:11px;padding:14px 18px;border-top:1px solid rgba(255,255,255,.09)}
 .side-user .av{width:36px;height:36px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
 .side-user b{display:block;font-size:14px;color:#fff;line-height:1.25}.side-user span{color:var(--nav-dim);font-size:12px}
+.side-out{padding:0 12px 12px}
+.side-out .ft-state{display:block;font-size:11.5px;color:var(--nav-dim);padding:0 12px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-out .ft-state:empty{display:none}
+.side-out button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border-radius:8px;color:var(--nav-txt);font-weight:600;font-size:14.5px}
+.side-out button:hover{background:rgba(255,255,255,.07);color:#fff}
+.side-out button svg{width:18px;height:18px;flex:none;opacity:.9}
+/* the clients table */
+table.cl-tbl td{padding:10px 14px}
+table.cl-tbl select{width:100%;max-width:170px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff;font-size:13px}
+table.cl-tbl .desk{white-space:nowrap}
+.desk-soon{color:var(--faint);font-size:12px;font-weight:600}
+.desk-yr{color:var(--muted);font-size:12px;margin-right:6px}
 .main-col{min-width:0;display:flex;flex-direction:column}
 .topbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--line);padding:13px 24px;display:flex;align-items:center;gap:14px}
 .topbar h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.3px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -221,13 +233,13 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
       <div class="side-logo"><span class="mark">FT</span><div><b>Fair Tax</b><span>International</span></div></div>
       <nav class="side-nav" id="navLinks" aria-label="Main menu"></nav>
       <div class="side-user" id="sideUser"><div class="av">FT</div><div><b>Fair Tax</b><span>CRM</span></div></div>
+      <div class="side-out" id="ft-bar-host"></div>
     </aside>
     <div class="main-col">
       <header class="topbar">
         <h1 id="pageTitle">Dashboard</h1>
         <input class="top-search" id="topSearch" type="search" placeholder="Search clients, leads, tasks…" aria-label="Search">
-        <div class="top-right"><a class="bell" href="#/ai" title="Reminders and notifications">🔔<b id="bellCount" hidden>0</b></a>
-          <a class="btn btn-sm" href="../" title="Back to the Fair Tax Portal">Portal</a></div>
+        <div class="top-right"><a class="bell" href="#/ai" title="Reminders and notifications">🔔<b id="bellCount" hidden>0</b></a></div>
       </header>
       <div class="wrap" id="app"></div>
     </div>
@@ -449,7 +461,7 @@ const NAV_MENU=[
   ['MAIN MENU',[['ai','AI assistant','#/ai',NIC.ai],['dashboard','Dashboard','#/dashboard',NIC.dash],['leads','Leads','#/leads',NIC.lead],['clients','Clients','#/clients',NIC.client],['tasks','Tasks','#/tasks',NIC.task]]],
   ['SALES & BILLING',[['quotations','Quotations','#/quotations',NIC.quote],['agreements','Agreements','#/agreements',NIC.agree],['invoices','Sales invoices','#/invoices',NIC.inv],['receipts','Receipts','#/receipts',NIC.rcpt],['payments','Payments','#/payments',NIC.pay],['retention','Retention','#/retention',NIC.ret]]],
   ['DESKS',[['audit','Audit Desk','../audit/',NIC.desk],['vat','VAT Desk','',NIC.desk],['books','Bookkeeping Desk','',NIC.desk]]],
-  ['ADMINISTRATION',[['settings','Business details','#/settings',NIC.gear],['users','Users & access','../?go=users',NIC.users]]]
+  ['ADMINISTRATION',[['settings','Business details','#/settings',NIC.gear],['users','Users & access','../?go=users',NIC.users],['portal','Portal dashboard','../',NIC.dash]]]
 ];
 function renderNav(active){
   $('#navLinks').innerHTML=NAV_MENU.map(([lbl,items])=>`<div class="side-lbl">${lbl}</div>`+items.map(([k,label,href,ic])=>
@@ -665,26 +677,51 @@ function statusPill(s){return{'Not Started':'low','In Progress':'progress','Pend
 
 /* ============================================================= CLIENTS */
 let clientSearch='',clientFilter='Active';
+/* what the Audit Desk already holds for this client */
+function auditInfo(name){
+  const hit=(auditStore().clients||[]).find(c=>normName(c.name)===normName(name));
+  if(!hit) return null;
+  const ys=(hit.engagements||[]).map(e=>e.year).sort();
+  return {year:ys.length?ys[ys.length-1]:0};
+}
+function deskCell(c,kind){
+  if(kind!=='audit') return '<span class="desk-soon">Soon</span>';
+  const a=auditInfo(c.name);
+  return `${a&&a.year?`<span class="desk-yr">FY${a.year}</span>`:''}<a class="btn btn-sm" href="../audit/?client=${encodeURIComponent(c.name)}">${a?'Open':'Start'}</a>`;
+}
 function renderClients(){
   const db=load();
+  const q=clientSearch.toLowerCase();
+  const list=db.clients.filter(c=>(clientFilter==='All'||c.status===clientFilter)&&c.name.toLowerCase().includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  const partnerSel=c=>`<select data-cl="partner" data-id="${c.id}" aria-label="Partner for ${esc(c.name)}">${db.partners.map(p=>`<option value="${p.id}"${c.partnerId===p.id?' selected':''}>${esc(p.name)}</option>`).join('')}</select>`;
+  const staffSel=c=>`<select data-cl="staff" data-id="${c.id}" aria-label="Assigned user for ${esc(c.name)}"><option value="">— nobody —</option>${(db.team||[]).map(t=>`<option${(c.staff||[])[0]===t?' selected':''}>${esc(t)}</option>`).join('')}</select>`;
   app.innerHTML=`
-  <div class="page-head"><div style="display:flex;gap:14px;align-items:center"><div class="stat" style="width:auto;padding:0"><div class="ic bg-green" style="margin:0">🏢</div></div>
-    <div><h1>Clients</h1><p class="sub">Drag clients between partners to reassign</p></div></div></div>
+  <div class="page-head"><div><h1>Clients</h1></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" data-act="new-client">+ New client</button></div></div>
   <div class="toolbar"><div class="search">🔍<input id="clientSearch" placeholder="Search clients..." value="${esc(clientSearch)}"></div>
-    <select class="sel" id="clientFilter"><option ${clientFilter==='Active'?'selected':''}>Active</option><option ${clientFilter==='All'?'selected':''}>All</option></select></div>
-  <div class="board" id="clientBoard">
-  ${db.partners.map(p=>{
-    const items=db.clients.filter(c=>c.partnerId===p.id&&(clientFilter==='All'||c.status===clientFilter)&&c.name.toLowerCase().includes(clientSearch.toLowerCase()));
-    return `<div class="col" data-partner="${p.id}">
-      <div class="col-head"><span class="mini-av" style="width:28px;height:28px;background:${p.color};color:#fff">${initials(p.name)}</span>
-        <div><div style="font-size:14px">${esc(p.name)}</div><div style="font-size:11px;color:var(--muted);font-weight:500">${items.length} client${items.length!==1?'s':''}</div></div>
-        <span class="count">${items.length}</span></div>
-      <div class="col-body" data-drop="partner" data-partner="${p.id}">
-        ${items.map(c=>clientCard(c,p)).join('')||`<div style="color:var(--faint);font-size:13px;text-align:center;padding:20px 0">—</div>`}
-      </div></div>`;}).join('')}
-  </div>`;
-  $('#clientSearch').oninput=e=>{clientSearch=e.target.value;renderClients();$('#clientSearch').focus();};
+    <select class="sel" id="clientFilter"><option ${clientFilter==='Active'?'selected':''}>Active</option><option ${clientFilter==='All'?'selected':''}>All</option></select>
+    <span style="color:var(--muted);font-size:13px">${list.length} client${list.length!==1?'s':''}</span></div>
+  <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
+    <thead><tr><th>Client</th><th>Partner</th><th>Assigned to</th><th>Audit</th><th>VAT desk</th><th>BK desk</th><th></th></tr></thead>
+    <tbody>${list.map(c=>`<tr>
+      <td><a class="link" href="#/client/${c.id}">${esc(c.name)}</a>${c.status!=='Active'?` <span class="pill low">${esc(c.status)}</span>`:''}
+        ${(c.services||[]).length?`<div style="margin-top:3px">${(c.services||[]).map(s=>`<span class="pill tag">${esc(s)}</span>`).join(' ')}</div>`:''}</td>
+      <td>${partnerSel(c)}</td>
+      <td>${staffSel(c)}</td>
+      <td class="desk">${deskCell(c,'audit')}</td>
+      <td class="desk">${deskCell(c,'vat')}</td>
+      <td class="desk">${deskCell(c,'bk')}</td>
+      <td class="r"><a class="btn btn-sm" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive">📁</a></td>
+    </tr>`).join('')||'<tr><td colspan="7" class="empty">No clients match.</td></tr>'}</tbody>
+  </table></div></div>`;
+  $('#clientSearch').oninput=e=>{clientSearch=e.target.value;renderClients();const i=$('#clientSearch');i.focus();i.setSelectionRange(i.value.length,i.value.length);};
   $('#clientFilter').onchange=e=>{clientFilter=e.target.value;renderClients();};
+  app.querySelectorAll('[data-cl]').forEach(sel=>{ sel.onchange=()=>{
+    const d=load(), c=d.clients.find(x=>x.id===sel.getAttribute('data-id')); if(!c) return;
+    if(sel.getAttribute('data-cl')==='partner'){ c.partnerId=sel.value; save(); toast(`${c.name} moved to ${(d.partners.find(p=>p.id===sel.value)||{}).name||'—'}`); }
+    else { c.staff=sel.value?[sel.value]:[]; c.assignedBy='manual'; c.assignedOn=ymd(new Date()); save(); toast(sel.value?`${c.name} assigned to ${sel.value}`:`${c.name} unassigned`); }
+  }; });
 }
 function clientCard(c,p){return `<div class="kcard" draggable="true" data-drag="client" data-id="${c.id}" data-goto="#/client/${c.id}" style="border-left:3px solid ${p.color}">
   <h4>${esc(c.name)}<span class="pill active">${c.status}</span></h4>
@@ -1632,6 +1669,8 @@ function handleAct(act,el){
     case'post-lead-note':{const l=db.leads.find(x=>x.id===id);const v=$('#leadNote').value.trim();if(v){l.notes.unshift({by:'Waseem',at:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'}),text:v});save();route();}break;}
     case'post-client-note':{const c=db.clients.find(x=>x.id===id);const v=$('#clientNote').value.trim();if(v){c.notes.unshift({by:'Waseem',text:v});save();route();}break;}
     case'del-client':db.clients=db.clients.filter(c=>c.id!==id);save();location.hash='#/clients';toast('Client deleted');break;
+    case'new-client':{const c={id:uid('c'),name:'New client',status:'Active',partnerId:(db.partners[0]||{}).id||'p_un',email:'',phone:'',trn:'-',tradeLicence:'',services:[],staff:[],ledger:[],notes:[],invoiced:0,received:0};
+      db.clients.unshift(c);save();openEditClient(c.id);break;}
     case'edit-client':openEditClient(id);break;
     case'save-edit-client':{const c=db.clients.find(x=>x.id===id);if(c){c.name=$('#c_name').value.trim()||c.name;c.status=$('#c_status').value;c.partnerId=$('#c_partner').value;c.email=$('#c_email').value;c.phone=$('#c_phone').value;c.trn=$('#c_trn').value;c.tradeLicence=$('#c_licence').value;c.vatCycle=$('#c_vat').value;c.taxYearEnd=$('#c_ye').value;c.portalId=$('#c_pid').value;c.portalPassword=$('#c_ppw').value;c.contractExpiry=$('#c_exp').value;c.address=$('#c_addr').value;c.services=$('#c_svc').value.split(',').map(s=>s.trim()).filter(Boolean);save();closeModal();toast('Client updated');route();}break;}
     case'toggle-mask':{const span=el.closest('.v');const m=span.getAttribute('data-mask');const showing=el.textContent==='hide';span.childNodes[0].textContent=(showing?'••••••••':m)+' ';el.textContent=showing?'show':'hide';break;}
