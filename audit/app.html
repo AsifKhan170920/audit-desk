@@ -398,6 +398,7 @@ body.fx-picking [data-ref]:not(:focus):hover{outline:2px dashed var(--ok);outlin
 /* clients only the admin may open */
 tr.locked .link-strong{color:var(--muted)}
 .lockchip{font-size:12px;margin-left:6px;cursor:help}
+a.chip{text-decoration:none}
 table.cfpy td input.numi{width:100%;min-width:0}
 table.cfpy th[scope=row]{font-weight:400}
 .fsi-table{max-height:260px;overflow:auto;margin:10px 0}
@@ -2575,7 +2576,7 @@ function renderNav(){
       .forEach(([k, l, i]) => { h += `<button class="nav-btn" data-nav="${k}" aria-current="${UI.view === k}">${i}${l}</button>`; });
   }
   document.getElementById('nav').innerHTML = h;
-  document.getElementById('drive-chip').innerHTML = (EMBEDDED ? `<button class="chip warn chip-btn" data-act="embed-help" title="Downloads and printing are blocked in this preview window">Preview window – open in Chrome/Edge to download &amp; print</button> ` : '') + (Drive.connected() ? `<span class="chip ok">Google Drive connected</span> <button class="chip neutral chip-btn" data-act="drive-signout" title="Sign out of the Google account">Sign out</button>` : `<button class="chip warn chip-btn" data-act="drive-connect">Connect Google Drive</button>`);
+  document.getElementById('drive-chip').innerHTML = (window.FT && FT.me ? `<a class="chip neutral" href="../" title="Back to the Fair Tax Portal – clients, CRM and the Audit Desk">← Portal</a> ` : '') + (EMBEDDED ? `<button class="chip warn chip-btn" data-act="embed-help" title="Downloads and printing are blocked in this preview window">Preview window – open in Chrome/Edge to download &amp; print</button> ` : '') + (Drive.connected() ? `<span class="chip ok">Google Drive connected</span> <button class="chip neutral chip-btn" data-act="drive-signout" title="Sign out of the Google account">Sign out</button>` : `<button class="chip warn chip-btn" data-act="drive-connect">Connect Google Drive</button>`);
 }
 function render(){
   setAmtDec();
@@ -6429,12 +6430,29 @@ document.addEventListener('drop', ev => { if (!CFDRAG) return; const tr = ev.tar
   render(); });
 document.addEventListener('dragend', () => { CFDRAG = null; document.querySelectorAll('tr[data-cfk][draggable=true]').forEach(x => { x.draggable = false; }); document.querySelectorAll('.dragging,.drop-before,.drop-after').forEach(x => x.classList.remove('dragging', 'drop-before', 'drop-after')); });
 
+/* opened from the portal home: ?client=<name> goes straight to that client, &new=1 starts a new audit */
+function openFromLink(){
+  let q; try { q = new URLSearchParams(location.search); } catch (e) { return; }
+  const want = (q.get('client') || '').trim(), fresh = q.get('new') === '1';
+  if (!want && !fresh) return;
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const c = want ? DB.clients.find(x => norm(x.name) === norm(want)) : null;
+  if (c && !fresh){
+    const open = () => { UI.clientId = c.id; UI.engId = c.engagements.slice().sort((a, b) => b.year - a.year)[0].id; UI.view = 'tb'; save(); render(); };
+    if (clientLocked(c)) pinAskModal(open); else open();
+    return;
+  }
+  wzStart();
+  if (want){ const el = document.getElementById('wz-name'); if (el) el.value = want; }
+}
+
 /* year controls live in the nav */
 function renderYearActions(){}
 document.addEventListener('DOMContentLoaded', () => {
   load();
   const c = client(); if (c && !c.engagements.find(e => e.id === UI.engId)) UI.engId = c.engagements[c.engagements.length - 1].id;
   render();
+  try { openFromLink(); } catch (e) { console.warn('link', e); }
   if (location.protocol !== 'file:' && DB.settings.clientId) Drive.loadGis().catch(() => {});
 });
 document.getElementById('report-css').textContent = REPORT_CSS;
