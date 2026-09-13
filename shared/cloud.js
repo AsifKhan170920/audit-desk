@@ -422,13 +422,26 @@
     '.ft-bar .ft-state{font-weight:500;opacity:.85;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ft-bar .ft-state.ok{color:#9fe3bf}.ft-bar .ft-state.bad{color:#ffb4a8}.ft-bar .ft-state.reload{color:#ffd88a;text-decoration:underline;cursor:pointer}' +
     '.ft-modal{position:fixed;inset:0;background:rgba(10,20,40,.45);z-index:100000;display:grid;place-items:center;padding:16px}.ft-card{background:#fff;color:#14284b;border-radius:12px;max-width:460px;padding:20px;font:14px/1.5 system-ui,Segoe UI,Arial,sans-serif}' +
     '.ft-card h3{margin:0 0 8px}.ft-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.ft-btn{border:1px solid #c9d1de;background:#fff;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer}.ft-danger{border-color:#c0392b;color:#c0392b}';
+  /* An app that keeps a place for this in its own side menu puts an empty
+     #ft-bar-host there; otherwise this floats as a small pill in the corner. */
   FT.bar = function (me) {
     var st = document.createElement('style'); st.textContent = FT.css; document.head.appendChild(st);
-    var b = document.createElement('div'); b.className = 'ft-bar';
-    b.innerHTML = '<a href="../" title="Back to the dashboard">◀ Dashboard</a><span>' + esc(me.name || me.id) + '</span><span class="ft-state" id="ft-state"></span><button id="ft-out">Sign out</button>';
-    document.body.appendChild(b);
-    document.getElementById('ft-out').onclick = async function () { this.textContent = 'Signing out…'; await FT.signOut(); location.href = '../'; };
-    document.getElementById('ft-state').onclick = function () { if (this.classList.contains('reload')) location.reload(); };
+    function mount() {
+      var host = document.getElementById('ft-bar-host');
+      if (host) {
+        host.innerHTML = '<span class="ft-state" id="ft-state"></span>' +
+          '<button id="ft-out" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/></svg>Sign out</button>';
+      } else {
+        var b = document.createElement('div'); b.className = 'ft-bar';
+        b.innerHTML = '<a href="../" title="Back to the dashboard">◀ Dashboard</a><span>' + esc(me.name || me.id) + '</span><span class="ft-state" id="ft-state"></span><button id="ft-out">Sign out</button>';
+        document.body.appendChild(b);
+      }
+      var out = document.getElementById('ft-out');
+      if (out) out.onclick = async function () { this.textContent = 'Signing out…'; await FT.signOut(); location.href = '../'; };
+      var stEl = document.getElementById('ft-state');
+      if (stEl) stEl.onclick = function () { if (this.classList.contains('reload')) location.reload(); };
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
   };
   FT.badge = function (text, cls) {
     var el = document.getElementById('ft-state'); if (!el) return;
