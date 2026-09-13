@@ -3351,6 +3351,7 @@ function vStatements(){
   <section class="panel"><div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${UI.stTab === k}" data-sttab="${k}">${l}</button>`).join('')}</div>
     ${ratiosOff ? `<p class="small muted">Ratio analysis is left out of the report – switch it on under <button class="linkish" data-nav="layout">Report layout</button>.</p>` : ''}
     ${UI.stTab === 'socf' ? `<div class="cf-edit">${pyCfTable(en, M.r)}</div><h3 class="h3">How it prints</h3>` : ''}
+    ${UI.stTab === 'sofp' || UI.stTab === 'soci' ? `<div class="cf-edit">${fsLinesEditor(en, M, UI.stTab)}</div><h3 class="h3">How it prints</h3>` : ''}
     <div class="paper-wrap"><div class="paper">${reportHtml(ratiosOff ? Object.assign({}, M, {sections: M.allSections}) : M, {only: [UI.stTab], interactive: true})}</div></div></section>`;
 }
 
@@ -3547,21 +3548,22 @@ function vLayout(){
         .map(([v, t, d]) => `<label class="radio-row"><input type="radio" name="notes-years" value="${v}" ${(L.notesYears || 'all') === v ? 'checked' : ''}><span><b>${t}</b> – ${d}</span></label>`).join('')}
       ${L.notesYears === 'custom' ? `<p class="small muted">${Object.keys(L.yearsOff || {}).length} page(s) without year columns. If notes move to other pages after changes, check the preview again.</p>` : ''}</div></section>
 
-  ${fsLinesPanel(en, M)}
+  <section class="panel"><h2>Lines of the statements</h2><p class="sub">The lines of the statement of financial position and the statement of profit or loss – their names, note numbers, figures and order – are set on <b>Financial statements</b>, under the <b>Financial position</b> and <b>Profit or loss</b> tabs.</p>
+    <div class="row"><button class="btn small" data-act="fs-lines-go" data-tab="sofp">Financial position lines</button><button class="btn small" data-act="fs-lines-go" data-tab="soci">Profit or loss lines</button></div></section>
 
   <section class="panel"><h2>Print</h2><p class="sub">Choose what to print. Page numbers stay the same as in the full report.</p>
     <div class="chips print-chips">${printList}</div>
     <div class="row" style="margin-top:12px"><button class="btn primary" data-act="print-pdf" data-sel="1">${IC.print}Print selected</button><button class="btn" data-act="pdf-preview" data-sel="1">${IC.eye}Preview selected</button><button class="btn" data-act="dl-pdf" data-sel="1">${IC.down}Download selected as PDF</button></div></section>`;
 }
 /* ---------- the lines of the statements: name, note number, figures, order ---------- */
-function fsLinesPanel(en, M){
+function fsLinesEditor(en, M, tab){
   const FSL = fsLayoutOf(en), Y = en.year, PY = Y - 1, lists = M.fsLines || {};
   const noteNo = M.noteNo || {};
   const inp = (k, col, x) => { const key = (col === 'cy' ? 'FSC:' : 'FSP:') + k, t = fsTypedOf(en, k, col), auto = t === null && !x.user;
     if (x.fixed) return `<div class="fs-auto" title="This figure comes from the statement of changes in equity">${fmtN(col === 'cy' ? x.cy : x.py)}<span class="auto-i">auto</span></div>`;
     return `<div class="fs-cell"><input class="numi${fxCls(en, key)}" id="fsv-${col}-${k}" data-fs${col}="${e_(k)}"${fxAttrs(en, key, '')} value="${auto ? '' : fmtSigned(col === 'cy' ? x.cy : x.py)}" placeholder="${e_(fmtN(col === 'cy' ? x.cy : x.py))}" inputmode="decimal" aria-label="${e_(x.label)} FY${col === 'cy' ? Y : PY}">${auto ? '<span class="auto-i">auto</span>' : `<button class="icon-btn fs-rst" data-act="fs-auto" data-k="${e_(k)}" data-col="${col}" title="Back to the schedule figure">↺</button>`}</div>`; };
-  const line = (sec, x, i, len) => `<tr class="fs-line${x.hidden ? ' off' : ''}${x.user ? ' fs-user' : ''}">
-      <td class="cf-h"><button class="icon-btn cf-mv" data-act="fs-move" data-sec="${sec}" data-k="${e_(x.key)}" data-dir="-1" title="Move up" aria-label="Move up">▲</button><button class="icon-btn cf-mv" data-act="fs-move" data-sec="${sec}" data-k="${e_(x.key)}" data-dir="1" title="Move down" aria-label="Move down">▼</button></td>
+  const line = (sec, x, i, len) => `<tr class="cf-line fs-line${x.hidden ? ' off' : ''}${x.user ? ' fs-user' : ''}" data-fsk="${e_(x.key)}" data-fssec="${sec}">
+      <td class="cf-h"><span class="cf-grip" title="Drag up or down" aria-hidden="true">⋮⋮</span><button class="icon-btn cf-mv" data-act="fs-move" data-sec="${sec}" data-k="${e_(x.key)}" data-dir="-1" title="Move up" aria-label="Move up">▲</button><button class="icon-btn cf-mv" data-act="fs-move" data-sec="${sec}" data-k="${e_(x.key)}" data-dir="1" title="Move down" aria-label="Move down">▼</button></td>
       <th scope="row"><div class="fs-nm"><input class="cf-label" id="fsl-${x.key}" data-fslabel="${e_(x.key)}" value="${e_(x.label)}" placeholder="Line name" aria-label="Line name">${x.hidden ? '<span class="chip warn">Left out</span>' : x.shown ? '' : '<span class="muted small nowrap">no amount</span>'}</div></th>
       <td><input class="fs-note" id="fsn-${x.key}" data-fsnote="${e_(x.key)}" value="${e_(FSL.notes[x.key] || '')}" placeholder="${e_(noteNo[x.key] ? String(noteNo[x.key]) : '–')}" aria-label="Note number"></td>
       <td>${inp(x.key, 'cy', x)}</td><td>${inp(x.key, 'py', x)}</td>
@@ -3571,13 +3573,16 @@ function fsLinesPanel(en, M){
       return `<tr class="msub"><th colspan="6">${e_((SECT[sec] || {}).label || sec)}${canAdd ? `<button class="linkish cf-add" data-act="fs-add" data-sec="${sec}">+ Add line</button>` : '<span class="fs-hint">figures come from the statement of changes in equity</span>'}</th></tr>`
         + list.map((x, i) => line(sec, x, i, list.length)).join(''); }).join('');
     if (!body) return '';
-    return `<h3 class="h3">${e_(title)}</h3><div class="table-wrap"><table class="ui matrix cfpy cfman fs-tbl"><colgroup><col style="width:62px"><col><col style="width:62px"><col style="width:196px"><col style="width:196px"><col style="width:44px"></colgroup>
+    return `${title ? `<h3 class="h3">${e_(title)}</h3>` : ''}<div class="table-wrap"><table class="ui matrix cfpy cfman fs-tbl"><colgroup><col style="width:78px"><col><col style="width:62px"><col style="width:196px"><col style="width:196px"><col style="width:44px"></colgroup>
       <thead><tr><th></th><th>Line</th><th>Note</th><th class="r">FY${Y}</th><th class="r">FY${PY}</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`; };
   const changed = Object.keys(FSL.labels).length || Object.keys(FSL.hidden).length || Object.keys(FSL.notes).length || (FSL.custom || []).length || Object.keys(layoutOf(en).fsOrder || {}).length;
-  return `<section class="panel"><div class="head"><div><h2>Lines of the statements</h2><p class="sub">Every line of the statements. The figure comes from its schedule – marked <b>auto</b>; type a figure or a formula (start with <b>=</b>) to use your own, ↺ puts it back. Click a line name to rename it, type a note number to print your own, <b>+ Add line</b> for a line with no schedule, 🗑 leaves a line out, ▲ ▼ sets the printing order.</p></div>${changed ? '<button class="linkish" data-act="fs-reset">Standard lines</button>' : ''}</div>
-    ${table('Statement of financial position', ['nca', 'ca', 'eq', 'ncl', 'cl'])}
-    ${table('Statement of profit or loss', ['inc', 'dc', 'exp'])}
-    <p class="small muted">The statement of changes in equity has its own rows – add, rename and reorder them on <b>Tax, reserve &amp; prior year</b>.</p></section>`;
+  const body = tab === 'soci' ? table('', ['inc', 'dc', 'exp']) : table('', ['nca', 'ca', 'eq', 'ncl', 'cl']);
+  const name = tab === 'soci' ? 'Statement of profit or loss' : 'Statement of financial position';
+  return `<h3 class="h3" id="fs-lines">${e_(name)} – lines, note numbers and figures</h3>
+    <p class="small muted">A line's figure comes from its schedule – shown with <b>auto</b>. Type a figure or a formula for FY${en.year} or FY${en.year - 1} to use your own; a formula starts with <b>=</b> – pick amounts from the list or click an amount on the page, and ↺ puts the line back to its schedule. Click a line name to rename it, type a <b>note number</b> to print your own, <b>+ Add line</b> for a line with no schedule, 🗑 leaves a line out, drag ⋮⋮ or use ▲ ▼ to reorder – the statement prints in this order.</p>
+    ${body}
+    <div class="row between"><p class="small muted">${tab === 'soci' ? 'Gross profit, profit before tax and the totals are worked out from these lines.' : 'Equity lines come from the statement of changes in equity – add and rename those rows on <b>Tax, reserve &amp; prior year</b>.'}</p>
+      ${changed ? '<button class="linkish" data-act="fs-reset">Standard lines</button>' : ''}</div>`;
 }
 function selectedSections(){ return [...document.querySelectorAll('.print-sec')].filter(x => x.checked).map(x => x.value); }
 async function pdfFor(t, letterhead){
@@ -6387,6 +6392,7 @@ document.addEventListener('click', async ev => {
         if ((R(r0.cy[f]) || R(r0.py[f])) && !confirm(`“${schedLabel(en, k)}” has figures (FY${en.year}: ${fmtN(r0.cy[f])} · FY${en.year - 1}: ${fmtN(r0.py[f])}). Leaving it out takes those figures out of the statements. Leave it out?`)) break;
         L.hidden[k] = true; save(); render(); toast('Line left out – ↺ puts it back'); break; }
       case 'fs-restore': delete fsLayoutOf(en).hidden[t.dataset.k]; save(); render(); break;
+      case 'fs-lines-go': UI.view = 'statements'; UI.stTab = t.dataset.tab; save(); render(); { const el = document.getElementById('fs-lines'); if (el) el.scrollIntoView({block: 'start'}); } break;
       case 'fs-auto': { const k = t.dataset.k, col = t.dataset.col, st = col === 'py' ? en.fsPy : en.fsCy;
         if (st) delete st[k]; if (en.fx) delete en.fx[(col === 'cy' ? 'FSC:' : 'FSP:') + k]; save(); render(); break; }
       case 'fs-reset': if (confirm('Go back to the standard statement lines? Names, note numbers, order, figures you typed and lines you added are all cleared.')){
@@ -6665,16 +6671,25 @@ document.addEventListener('keydown', ev => {
 let CFDRAG = null;
 const cfDropAt = (tr, y) => tr.dataset.cfsec ? true : y > tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
 document.addEventListener('mousedown', ev => { const g = ev.target.closest && ev.target.closest('.cf-grip'); if (g) g.closest('tr').draggable = true; });
-document.addEventListener('mouseup', () => { if (!CFDRAG) document.querySelectorAll('tr[data-cfk][draggable=true]').forEach(x => { x.draggable = false; }); });
-document.addEventListener('dragstart', ev => { const tr = ev.target.closest && ev.target.closest('tr[data-cfk]'); if (!tr || !tr.draggable) return; CFDRAG = tr.dataset.cfk; tr.classList.add('dragging'); ev.dataTransfer.effectAllowed = 'move'; try { ev.dataTransfer.setData('text/plain', CFDRAG); } catch (e) {} });
-document.addEventListener('dragover', ev => { if (!CFDRAG) return; const tr = ev.target.closest && ev.target.closest('tr[data-cfk],tr[data-cfsec]'); if (!tr) return; ev.preventDefault();
+const DRAGSEL = 'tr[data-cfk],tr[data-fsk]';
+document.addEventListener('mouseup', () => { if (!CFDRAG) document.querySelectorAll(DRAGSEL + '[draggable=true]').forEach(x => { x.draggable = false; }); });
+document.addEventListener('dragstart', ev => { const tr = ev.target.closest && ev.target.closest(DRAGSEL); if (!tr || !tr.draggable) return;
+  CFDRAG = tr.dataset.fsk ? {fs: true, k: tr.dataset.fsk, sec: tr.dataset.fssec} : {k: tr.dataset.cfk};
+  tr.classList.add('dragging'); ev.dataTransfer.effectAllowed = 'move'; try { ev.dataTransfer.setData('text/plain', CFDRAG.k); } catch (e) {} });
+const dragTarget = ev => CFDRAG && CFDRAG.fs ? (ev.target.closest && ev.target.closest(`tr[data-fssec="${CFDRAG.sec}"]`)) : (ev.target.closest && ev.target.closest('tr[data-cfk],tr[data-cfsec]'));
+document.addEventListener('dragover', ev => { if (!CFDRAG) return; const tr = dragTarget(ev); if (!tr) return; ev.preventDefault();
   const after = cfDropAt(tr, ev.clientY); document.querySelectorAll('.drop-before,.drop-after').forEach(x => { if (x !== tr) x.classList.remove('drop-before', 'drop-after'); });
   tr.classList.toggle('drop-after', after); tr.classList.toggle('drop-before', !after); });
-document.addEventListener('drop', ev => { if (!CFDRAG) return; const tr = ev.target.closest && ev.target.closest('tr[data-cfk],tr[data-cfsec]'); const k = CFDRAG; CFDRAG = null; if (!tr) { render(); return; } ev.preventDefault();
-  const en = eng(), L = cfLayoutOf(en), order = cfLines(en).order.filter(o => o !== k), target = tr.dataset.cfsec ? '§' + tr.dataset.cfsec : tr.dataset.cfk, at = order.indexOf(target);
+document.addEventListener('drop', ev => { if (!CFDRAG) return; const tr = dragTarget(ev), D = CFDRAG; CFDRAG = null; if (!tr) { render(); return; } ev.preventDefault();
+  const en = eng();
+  if (D.fs){ const sec = D.sec, LAY = layoutOf(en), M0 = buildReport(client(), en, prev());
+    const list = ((M0.fsLines || {})[sec] || []).map(x => x.key).filter(x => x !== D.k), at = list.indexOf(tr.dataset.fsk);
+    if (at >= 0 && tr.dataset.fsk !== D.k){ list.splice(cfDropAt(tr, ev.clientY) ? at + 1 : at, 0, D.k); (LAY.fsOrder = LAY.fsOrder || {})[sec] = list; save(); }
+    render(); return; }
+  const L = cfLayoutOf(en), k = D.k, order = cfLines(en).order.filter(o => o !== k), target = tr.dataset.cfsec ? '§' + tr.dataset.cfsec : tr.dataset.cfk, at = order.indexOf(target);
   if (at >= 0 && target !== k){ order.splice(cfDropAt(tr, ev.clientY) ? at + 1 : at, 0, k); L.order = order; save(); }
   render(); });
-document.addEventListener('dragend', () => { CFDRAG = null; document.querySelectorAll('tr[data-cfk][draggable=true]').forEach(x => { x.draggable = false; }); document.querySelectorAll('.dragging,.drop-before,.drop-after').forEach(x => x.classList.remove('dragging', 'drop-before', 'drop-after')); });
+document.addEventListener('dragend', () => { CFDRAG = null; document.querySelectorAll(DRAGSEL + '[draggable=true]').forEach(x => { x.draggable = false; }); document.querySelectorAll('.dragging,.drop-before,.drop-after').forEach(x => x.classList.remove('dragging', 'drop-before', 'drop-after')); });
 
 /* opened from the portal home: ?client=<name> goes straight to that client, &new=1 starts a new audit */
 function openFromLink(){
