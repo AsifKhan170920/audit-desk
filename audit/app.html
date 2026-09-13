@@ -424,9 +424,8 @@ a.chip{text-decoration:none}
 .sched-do .linkish{font-size:12.5px}
 .sched-do .linkish svg{width:11px;height:11px;vertical-align:-1px;margin-right:3px}
 /* rows the software puts in a schedule: a typed opening balance, the tax provision */
-tr.sfix td{background:var(--surface-2)}
-tr.sfix td .muted{font-weight:400;margin-top:1px}
-tr.sfix .numi{background:var(--surface)}
+tr.sfix td .muted{font-weight:400}
+.auto-i{display:inline-block;vertical-align:middle;margin-left:7px;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:help}
 table.cfpy td input.numi{width:100%;min-width:0}
 table.cfpy th[scope=row]{font-weight:400}
 .fsi-table{max-height:260px;overflow:auto;margin:10px 0}
@@ -3240,14 +3239,17 @@ function noteTextBtn(x, short){ return noteTextOpen(x) ? '' : `<button class="li
 /* a typed opening balance shows as its own row, editable here as well as in the settings */
 function openRow(en, x){
   if (!x.open || (x.open.cy === undefined && x.open.py === undefined)) return '';
-  const cell = (col, yr) => `<td><input class="numi" id="so-${x.key}-${col}" data-sopen="${e_(x.key)}|${col}" value="${x.open[col] === undefined || x.open[col] === '' ? '' : fmtIn(x.open[col])}" placeholder="—" inputmode="decimal" aria-label="Opening balance FY${yr}"></td>`;
-  return `<tr class="sfix"><td colspan="2">Balance at the beginning of the year<div class="muted small">Typed opening balance – used in the statement of changes in equity, not added to the lines below. Clear both boxes in schedule settings to remove this row.</div></td>
+  const cell = (col, yr) => { const key = `SO:${x.key}:${col}`, v = x.open[col];
+    return `<td><input class="numi${R(v) < 0 ? ' neg' : ''}${fxCls(en, key)}" id="so-${x.key}-${col}" data-sopen="${e_(x.key)}|${col}"${fxAttrs(en, key)} value="${v === undefined || v === '' ? '' : fmtIn(v)}" placeholder="—" inputmode="decimal" aria-label="Opening balance FY${yr}"></td>`; };
+  return `<tr class="sfix"><td colspan="2">Balance at the beginning of the year${autoTag('Typed opening balance – it feeds the statement of changes in equity and is not added to the lines below. Type a number or a formula starting with =, or clear both boxes in schedule settings to remove this row.')}</td>
     ${cell('cy', en.year)}${cell('py', en.year - 1)}<td colspan="3"></td></tr>`;
 }
+/* a small marker instead of a paragraph of instructions under a fixed row */
+const autoTag = t => `<span class="auto-i" title="${e_(t)}" aria-label="${e_(t)}">auto</span>`;
 /* the corporate tax provision, shown in whichever schedule holds it */
 function ctSchedRow(en, r, x){
   if (r.cy.ctKey !== x.key || (!R(r.cy.ctProv) && !R(r.py.ctProv))) return '';
-  return `<tr class="sfix"><td colspan="2">Provision for corporate tax<div class="muted small">Worked out by the software – change it on <b>Tax, reserve &amp; prior year</b>, or move it in another schedule’s settings</div></td>
+  return `<tr class="sfix"><td colspan="2">Provision for corporate tax${autoTag('Worked out by the software – change it on Tax, reserve & prior year, or move it in another schedule’s settings')}</td>
     <td class="r">${fmtN(r.cy.ctProv)}</td><td class="r">${fmtN(r.py.ctProv)}</td><td colspan="3"></td></tr>`;
 }
 function noteTextBox(en, x, noteNo){
@@ -4845,6 +4847,7 @@ function fxGet(en, key){
   if (k[0] === 'P'){ const p = (en.ppe || []).find(x => x.id === k[1]); return p ? R(p[k[2]]) : undefined; }
   if (k[0] === 'CFP'){ return R((en.cfPy || {})[k[1]]); }
   if (k[0] === 'CFC'){ return R((en.cfCy || {})[k[1]]); }
+  if (k[0] === 'SO'){ const x = (en.schedules || []).find(y => y.key === k[1]); return x && x.open ? R(x.open[k[2]]) : undefined; }
   if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o && o[parts[i]]; } return o ? R(o[parts[parts.length - 1]]) : undefined; }
 }
 function fxSet(en, key, v){
@@ -4853,12 +4856,14 @@ function fxSet(en, key, v){
   if (k[0] === 'P'){ const p = (en.ppe || []).find(x => x.id === k[1]); if (p) p[k[2]] = v; return; }
   if (k[0] === 'CFP'){ (en.cfPy = en.cfPy || {})[k[1]] = v; return; }
   if (k[0] === 'CFC'){ (en.cfCy = en.cfCy || {})[k[1]] = v; return; }
+  if (k[0] === 'SO'){ const x = (en.schedules || []).find(y => y.key === k[1]); if (x){ x.open = x.open || {}; x.open[k[2]] = v; } return; }
   if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o[parts[i]] = o[parts[i]] || {}; } o[parts[parts.length - 1]] = v; }
 }
 function fxTargetExists(en, key){
   const k = key.split(':');
   if (k[0] === 'L') return en.tb.some(x => x.id === k[1]);
   if (k[0] === 'P') return (en.ppe || []).some(x => x.id === k[1]);
+  if (k[0] === 'SO') return (en.schedules || []).some(x => x.key === k[1] && x.open && (x.open.cy !== undefined || x.open.py !== undefined));
   if ((k[0] === 'CFC' || k[0] === 'CFP') && /^u/.test(k[1])) return ((en.cfLayout || {}).custom || []).some(u => u.key === k[1]);
   return true;
 }
@@ -6436,8 +6441,11 @@ document.addEventListener('change', async ev => {
   if (el.dataset.bulk !== undefined){ UI.bulkTarget = UI.bulkTarget || {}; UI.bulkTarget[el.dataset.bulk] = el.value; bulkModal(); return; }
   if (el.id === 'wz-file' && el.files.length){ UI.wz = UI.wz || {}; UI.wz.file = el.files[0]; UI.wz.cmp = 'excel'; render(); return; }
   if (el.id === 'bulk-files' && el.files.length){ UI.bulkFiles = [...el.files]; UI.bulkTarget = {}; UI.bulkFiles.forEach((f, i) => { const g = bulkGuess(en, f.name); if (g) UI.bulkTarget[i] = g; }); bulkModal(); return; }
-  if (el.dataset.sopen){ const [sk, scol] = el.dataset.sopen.split('|'); const s0 = SM(en)[sk];
-    if (s0){ s0.open = s0.open || {}; s0.open[scol] = el.value.trim() === '' ? '' : num(el.value); save(); scheduleRender(); } return; }
+  if (el.dataset.sopen){ const [sk, scol] = el.dataset.sopen.split('|'); const s0 = SM(en)[sk]; const fk = `SO:${sk}:${scol}`;
+    if (s0){ s0.open = s0.open || {};
+      if (el.value.trim() === ''){ s0.open[scol] = ''; if (en.fx) delete en.fx[fk]; }
+      else { try { fxInput(c, en, fk, el.value, v => { s0.open[scol] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
+      save(); scheduleRender(); } return; }
   if (el.dataset.remark){ const [ty, rid] = el.dataset.remark.split(':'); const o = docTarget(ty, rid); if (o){ o.remark = el.value; save(); } return; }
   if (el.dataset.cklNote !== undefined){ const CK = en.checklist = en.checklist || {}; (CK.notes = CK.notes || {})[el.dataset.cklNote] = el.value; save(); return; }
   if (el.dataset.line){ const l = en.tb.find(x => x.id === el.dataset.line); const f = el.dataset.field; if (f === 'fs'){ moveLine(en, l, el.value); UI.justAdded[el.value] = true; } else if (['amt', 'py'].includes(f)){ try { fxInput(c, en, `L:${l.id}:${f}`, el.value, v => { l[f] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
