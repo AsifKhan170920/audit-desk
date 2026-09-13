@@ -383,6 +383,21 @@ body.fx-picking [data-ref]:not(:focus):hover{outline:2px dashed var(--ok);outlin
 .kpis.slim{gap:8px}
 .kpis.slim .kpi{padding:6px 11px;display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .kpis.slim .kpi b{display:inline;font-size:14.5px}
+/* the four steps of a new audit */
+.wz-bar{list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 0;padding:0}
+.wz-bar li{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--muted)}
+.wz-bar li>b{flex:none;width:23px;height:23px;border-radius:50%;display:grid;place-items:center;background:var(--line);color:#fff;font-size:12.5px}
+.wz-bar li.on{border-color:var(--primary);background:var(--surface);color:var(--ink)}
+.wz-bar li.on>b{background:var(--primary)}
+.wz-bar li.done>b{background:var(--ok)}
+.wz-bar li>span{display:flex;flex-direction:column;min-width:0}
+.wz-bar li>span b{font-size:13.5px}
+.wz-bar li small{font-size:11.5px;line-height:1.35}
+@media(max-width:900px){.wz-bar{grid-template-columns:1fr 1fr}}
+.wz-sum th{width:210px;color:var(--muted);font-weight:600;text-align:left}
+/* clients only the admin may open */
+tr.locked .link-strong{color:var(--muted)}
+.lockchip{font-size:12px;margin-left:6px;cursor:help}
 table.cfpy td input.numi{width:100%;min-width:0}
 table.cfpy th[scope=row]{font-weight:400}
 .fsi-table{max-height:260px;overflow:auto;margin:10px 0}
@@ -2551,6 +2566,7 @@ function renderNav(){
   let h = `<div class="side-label">Practice</div>
     <button class="nav-btn" data-nav="clients" aria-current="${UI.view === 'clients'}">${IC.users}Clients</button>
     <button class="nav-btn" data-nav="settings" aria-current="${UI.view === 'settings'}">${IC.gear}Settings &amp; backup</button>`;
+  if (UI.wz && UI.view !== 'wizard') h += `<button class="nav-btn" data-act="wz-resume">${IC.spark}Continue the new audit</button>`;
   if (c && en){
     h += `<div class="side-label">Current client</div><div class="side-client">${e_(c.name)}</div>
       <div class="side-year"><select id="year-select" aria-label="Financial year">${c.engagements.slice().sort((a, b) => b.year - a.year).map(x => `<option value="${x.id}"${x.id === en.id ? ' selected' : ''}>FY${x.year} · ${e_(x.type)}</option>`).join('')}</select>
@@ -2568,9 +2584,9 @@ function render(){
   try { const c0 = client(); if (c0 && c0.engagements.some(e => !FXERR.has(e))) fxRecalc(c0); } catch (e) { console.warn('formulas', e); }
   const active = document.activeElement; const aid = active && active.id; const sel = active && active.selectionStart !== undefined ? [active.selectionStart, active.selectionEnd] : null;
   const scrollY = window.scrollY;
-  if (!client() && !['clients', 'settings'].includes(UI.view)) UI.view = 'clients';
+  if (!client() && !['clients', 'settings', 'wizard'].includes(UI.view)) UI.view = 'clients';
   renderNav();
-  const views = {clients: vClients, settings: vSettings, profile: vProfile, tb: vTB, adjust: vAdjust, statements: vStatements, texts: vTexts, layout: vLayout, checklist: vChecklist, export: vExport};
+  const views = {clients: vClients, settings: vSettings, profile: vProfile, tb: vTB, adjust: vAdjust, statements: vStatements, texts: vTexts, layout: vLayout, checklist: vChecklist, export: vExport, wizard: vWizard};
   document.getElementById('main').innerHTML = (views[UI.view] || vClients)();
   refreshModal();
   if (aid){ const el = document.getElementById(aid); if (el){ el.focus({preventScroll: true}); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
@@ -2578,18 +2594,76 @@ function render(){
 }
 
 /* ---------- views ---------- */
+/* ============================================================
+   ADMIN LOCK – a passcode in front of the clients you choose.
+   It keeps other people in the office out of a file; it is not
+   encryption, so anyone with the backup file can still read it.
+   ============================================================ */
+async function pinHash(pin){
+  const t = 'fairtax:' + String(pin);
+  try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+    return 'S' + [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+  catch (e){ let h = 5381; for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return 'B' + h.toString(16); }
+}
+const pinSet = () => !!(DB.settings || {}).adminPin;
+const clientLocked = c => !!(c && c.adminOnly && pinSet() && !UI.unlocked);
+function pinAskModal(then, title){
+  UI.afterPin = then || null;
+  modal(`<h2>${title || 'Admin passcode'}</h2><p class="sub">This client is marked <b>admin only</b>. Type the passcode to open it – it stays unlocked until you close the software.</p>
+    <div class="field wide"><label for="pin-in">Passcode</label><input id="pin-in" type="password" autocomplete="off"></div>
+    <div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-act="pin-go">Unlock</button></div>`);
+}
+async function pinCheck(){
+  const v = (document.getElementById('pin-in') || {}).value || '';
+  if (!v){ toast('Type the passcode', true); return; }
+  if (await pinHash(v) !== DB.settings.adminPin){ toast('That passcode is not right', true); return; }
+  UI.unlocked = true; const then = UI.afterPin; UI.afterPin = null; closeModal();
+  if (then) then(); else render();
+}
+function pinSetModal(){
+  modal(`<h2>${pinSet() ? 'Change' : 'Set'} the admin passcode</h2>
+    <p class="sub">Clients ticked <b>admin only</b> ask for this passcode before they open. Everything else stays as it is.</p>
+    ${pinSet() ? '<div class="field wide"><label for="pin-old">Current passcode</label><input id="pin-old" type="password" autocomplete="off"></div>' : ''}
+    <div class="field wide"><label for="pin-new">New passcode (at least 4 characters)</label><input id="pin-new" type="password" autocomplete="off"></div>
+    <div class="field wide"><label for="pin-new2">Type it again</label><input id="pin-new2" type="password" autocomplete="off"></div>
+    <p class="note">Write it down somewhere safe – there is no way to recover it, and a lost passcode means those clients can only be reached from a backup file.</p>
+    <div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-act="pin-save">Save passcode</button></div>`);
+}
+async function pinSave(){
+  const V = id => (document.getElementById(id) || {}).value || '';
+  if (pinSet() && await pinHash(V('pin-old')) !== DB.settings.adminPin){ toast('The current passcode is not right', true); return; }
+  const a = V('pin-new'), b = V('pin-new2');
+  if (a.length < 4){ toast('Use at least 4 characters', true); return; }
+  if (a !== b){ toast('The two passcodes are different', true); return; }
+  DB.settings.adminPin = await pinHash(a); UI.unlocked = true; save(); closeModal(); render();
+  toast('Admin passcode saved. Tick “Admin only” on any client to put it behind the passcode.');
+}
+async function pinRemove(){
+  if (!confirm('Remove the admin passcode? Every client opens without asking.')) return;
+  delete DB.settings.adminPin; UI.unlocked = true; save(); render(); toast('Admin passcode removed');
+}
+function toggleAdminOnly(id){
+  const c = DB.clients.find(x => x.id === id); if (!c) return;
+  if (clientLocked(c)){ pinAskModal(() => { toggleAdminOnly(id); }); return; }
+  c.adminOnly = !c.adminOnly; save(); render();
+  toast(c.adminOnly
+    ? (pinSet() ? `${c.name} now asks for the admin passcode` : `${c.name} is marked admin only – set a passcode in Settings to make it ask`)
+    : `${c.name} opens without the passcode`);
+}
+
 function vClients(){
   const rows = DB.clients.map(c => {
     const latest = c.engagements.slice().sort((a, b) => b.year - a.year)[0];
     let status = '<span class="chip neutral">No trial balance</span>';
     if (latest && latest.tb.length){ const r = compute(latest, prevOf(c, latest)); const bad = r.checks.filter(x => x.level === 'bad').length; status = bad ? `<span class="chip warn">${bad} check(s) open</span>` : '<span class="chip ok">Ready</span>'; }
     const folder = c.drive && c.drive.folderId ? `<a class="folder" href="${folderUrl(c.drive.folderId)}" target="_blank" rel="noopener">${IC.folder}<span>Open Drive folder</span></a>` : '<span class="muted small">No Drive folder yet</span>';
-    return `<tr><td><button class="link-strong" data-open="${c.id}">${e_(c.name)}</button><div class="muted small">${e_((c.profile || {}).emirate || '')}</div></td>
+    return `<tr${c.adminOnly ? ' class="locked"' : ''}><td><button class="link-strong" data-open="${c.id}">${e_(c.name)}</button>${c.adminOnly ? `<span class="lockchip" title="${pinSet() ? 'Admin only – asks for the passcode' : 'Admin only – set a passcode in Settings to make it ask'}">🔒</span>` : ''}<div class="muted small">${e_((c.profile || {}).emirate || '')}</div></td>
       <td>${latest ? 'FY' + latest.year + ' · ' + e_(latest.type) : '–'}</td><td>${folder}</td><td>${status}</td>
-      <td class="r"><button class="icon-btn" data-act="del-client" data-id="${c.id}" title="Delete client">${IC.trash}</button></td></tr>`;
+      <td class="r"><button class="icon-btn" data-act="lock-client" data-id="${c.id}" title="${c.adminOnly ? 'Open to everyone' : 'Admin only'}">${c.adminOnly ? '🔒' : '🔓'}</button><button class="icon-btn" data-act="del-client" data-id="${c.id}" title="Delete client">${IC.trash}</button></td></tr>`;
   }).join('');
   return `<section class="panel"><div class="head"><div><h1>Clients</h1><p class="sub">Open a client to prepare its financial statements, or create a new one.</p></div>
-    <div class="row"><label class="btn" for="import-saved" title="Excel downloaded from this software, or a backup file">${IC.upload}Import saved statements</label><input id="import-saved" type="file" accept=".xlsx,.json" hidden><label class="btn" for="fs-in-client" title="The Fair Tax financial statements workbook (Bs, P&amp;L, Equity, Cf and notes)">${IC.upload}Import financial statements (Excel)</label><input id="fs-in-client" type="file" accept=".xlsx,.xls" hidden><button class="btn primary" data-act="new-client">${IC.plus}New client</button></div></div></section>
+    <div class="row"><label class="btn" for="import-saved" title="Excel downloaded from this software, or a backup file">${IC.upload}Import saved statements</label><input id="import-saved" type="file" accept=".xlsx,.json" hidden><label class="btn" for="fs-in-client" title="The Fair Tax financial statements workbook (Bs, P&amp;L, Equity, Cf and notes)">${IC.upload}Import financial statements (Excel)</label><input id="fs-in-client" type="file" accept=".xlsx,.xls" hidden><button class="btn primary" data-act="wz-start">${IC.plus}New audit</button></div></div>
+    <p class="small muted" style="margin:10px 0 0">Four guided steps: the company and its documents, the financial year, the schedules to start from, and the audit setup. · <button class="linkish" data-act="new-client">Just add a client without the steps</button>${pinSet() && UI.unlocked ? ' · <button class="linkish" data-act="pin-lock">Lock admin-only clients again</button>' : ''}</p></section>
     <section class="panel steps-panel"><div class="steps">
       <div class="step"><div class="step-n">1</div><div><b>Create client</b><span>Enter company details once. A Google Drive folder is created for the client.</span></div></div>
       <div class="step"><div class="step-n">2</div><div><b>Enter trial balance</b><span>Type, paste from Excel or import. Attach proof to any amount.</span></div></div>
@@ -2663,6 +2737,148 @@ function vProfile(){
     ${field('en-type', 'Engagement type', en.type, {bind: 'eng.type', select: [['Audit', 'Audit – with auditor’s report'], ['Simple FS', 'Financial statements only']]})}
     ${field('en-year', 'Financial year', en.year, {bind: 'eng.year', num: true})}
   </div></section>`;
+}
+
+/* ============================================================
+   NEW AUDIT – four guided steps: company & documents, financial
+   year, template, audit setup. Everything can be changed later.
+   ============================================================ */
+const WZ_STEPS = [['Company', 'Name and the trade licence &amp; MOA'], ['Financial year', 'Year end and last year’s figures'], ['Schedules', 'What this audit starts with'], ['Audit setup', 'Auditor, dates, reserve and tax']];
+const EMIRATES = ['Sharjah', 'Dubai', 'Ajman', 'Ras Al Khaimah', 'Abu Dhabi', 'Umm Al Quwain', 'Fujairah'];
+function wzStart(){ UI.wz = {step: 1, clientId: '', cmp: 'type', tplId: '', file: null}; UI.pdFiles = []; UI.view = 'wizard'; render(); window.scrollTo(0, 0); }
+const wzClient = () => DB.clients.find(c => c.id === (UI.wz || {}).clientId) || null;
+const wzEng = () => { const c = wzClient(); return c ? c.engagements[0] : null; };
+function vWizard(){
+  const W = UI.wz; if (!W){ UI.view = 'clients'; return vClients(); }
+  const bar = `<section class="panel"><div class="head"><div><h1>New audit</h1><p class="sub">Four short steps – nothing here is final, every answer can be changed later.</p></div><button class="btn" data-act="wz-quit">Leave</button></div>
+    <ol class="wz-bar">${WZ_STEPS.map((x, i) => `<li class="${i + 1 === W.step ? 'on' : i + 1 < W.step ? 'done' : ''}"><b>${i + 1 < W.step ? '✓' : i + 1}</b><span><b>${x[0]}</b><small>${x[1]}</small></span></li>`).join('')}</ol></section>`;
+  return bar + [wzStep1, wzStep2, wzStep3, wzStep4][W.step - 1]();
+}
+function wzStep1(){
+  const c = wzClient();
+  if (!c){
+    const Y = new Date().getFullYear() - 1;
+    return `<section class="panel"><h2>The company</h2>
+      <p class="sub">Type the name exactly as it is on the trade licence. Attach the licence and the MOA and the profile is filled in for you to check – licence number and dates, authority, legal form, activity, office, management, shareholders and the legal reserve in the MOA.</p>
+      <div class="form-grid">
+        <div class="field wide"><label for="wz-name">Company name</label><input id="wz-name" placeholder="e.g. GILL TRANSPORT L.L.C – OPC"></div>
+        <div class="field"><label for="wz-em">Emirate</label><select id="wz-em">${EMIRATES.map(x => `<option>${x}</option>`).join('')}</select></div>
+        <div class="field"><label for="wz-year">Financial year</label><input id="wz-year" value="${Y}" inputmode="numeric"></div>
+        <div class="field"><label for="wz-type">Engagement</label><select id="wz-type"><option value="Audit">Audit – with auditor’s report</option><option value="Simple FS">Financial statements only</option></select></div>
+        <div class="field wide"><label for="wz-docs">Trade licence &amp; MOA – PDF or photo, Arabic or English</label><input id="wz-docs" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+      </div>
+      <p class="note">${AI.key() ? 'Claude reads the documents and shows you everything it found before a single field is changed.' : 'There is no AI key yet, so the documents are read without AI – English text in digital PDFs only. <button class="linkish" data-act="ai-key">Add a Claude API key</button> to read photos and Arabic too.'}</p>
+      <div class="foot"><button class="btn" data-act="wz-quit">Cancel</button><button class="btn primary" data-act="wz-create">Create the client${'{docs}'} →</button></div></section>`.replace('{docs}', '');
+  }
+  const p = c.profile || {};
+  const sh = (p.shareholders || []).filter(x => x.name).map(x => x.name).join(', ');
+  const rows = [['Emirate', p.emirate], ['Legal form', p.legalForm], ['Licence no.', p.licenceNo], ['Licensing authority', p.authority], ['Licence issued', p.licenceIssue], ['Licence expires', p.licenceExpiry],
+    ['Established', p.estDate], ['Principal activities', p.activity], ['Registered office', p.office], ['Management', p.manager], ['Shareholders', sh],
+    ['Legal reserve per MOA', p.lrPct ? `${p.lrPct}% of net profit, up to ${p.lrCap || 50}% of capital` : '']];
+  const filled = rows.filter(r => String(r[1] || '').trim()).length;
+  return `<section class="panel"><div class="head"><div><h2>${e_(c.name)}</h2><p class="sub">${filled} of ${rows.length} details are filled. Anything still empty can be typed on the Company profile screen – or read from another document below.</p></div></div>
+    <div class="table-wrap"><table class="ui compact wz-sum"><tbody>${rows.map(r => `<tr><th scope="row">${r[0]}</th><td>${String(r[1] || '').trim() ? e_(r[1]) : '<span class="muted">not filled yet</span>'}</td></tr>`).join('')}</tbody></table></div></section>
+  ${docReaderPanel(c)}
+  <section class="panel"><div class="foot"><button class="btn" data-act="wz-quit">Leave</button><button class="btn primary" data-act="wz-next">Next – financial year →</button></div></section>`;
+}
+function wzStep2(){
+  const c = wzClient(), en = wzEng(), p = c.profile || {}, W = UI.wz, PY = en.year - 1;
+  const opt = (v, title, text) => `<label class="radio-row"><input type="radio" name="wz-cmp" value="${v}"${W.cmp === v ? ' checked' : ''}><span><b>${title}</b> – ${text}</span></label>`;
+  return `<section class="panel"><h2>Financial year</h2>
+    <div class="form-grid">
+      <div class="field"><label for="wz-y">Financial year</label><input id="wz-y" value="${en.year}" inputmode="numeric"></div>
+      <div class="field"><label for="wz-ye">Year end</label><input id="wz-ye" value="${e_(p.yearEndText || 'December 31')}" placeholder="December 31"></div>
+    </div>
+    <div class="box"><h3 class="h3">Where do the FY${PY} comparative figures come from?</h3>
+      ${opt('type', 'I will type them', `the FY${PY} column sits next to FY${en.year} on the Schedules screen`)}
+      ${opt('excel', 'Last year’s financial statements (Excel)', 'the Fair Tax statements workbook – figures, notes, PPE and the cash flow are read into the FY' + PY + ' column')}
+      <div class="row ay-file"><label class="btn small" for="wz-file">${IC.upload}Choose Excel file</label><input id="wz-file" type="file" accept=".xlsx,.xls" hidden><span class="small muted" id="wz-file-name">${W.file ? e_(W.file.name) : 'No file chosen'}</span></div>
+      ${opt('first', `FY${en.year} is the company’s first year`, `the FY${PY} column stays empty`)}
+    </div>
+    <p class="note">FY${PY} can also be added later as its own year, with FY${en.year} linked live to it – <b>+ Add financial year</b> on the left.</p>
+    <div class="foot"><button class="btn" data-act="wz-back">← Back</button><button class="btn primary" data-act="wz-next">Next – schedules →</button></div></section>`;
+}
+function wzStep3(){
+  const W = UI.wz, list = tplList();
+  const pick = (id, title, text) => `<label class="radio-row"><input type="radio" name="wz-tpl" value="${e_(id)}"${W.tplId === id ? ' checked' : ''}><span><b>${title}</b> – ${text}</span></label>`;
+  return `<section class="panel"><h2>Which schedules should this audit start with?</h2>
+    <p class="sub">A template brings in the schedules and the ledger lines with <b>no amounts</b> – along with the formulas, the note wording and the report layout. You then only fill the figures.</p>
+    <div class="box">${pick('', 'Standard schedules', 'the built-in list – add ledger lines as you go')}
+      ${list.map(t => { const d = t.data || {}; return pick(t.id, e_(t.name), `${(d.schedules || []).length} schedules · ${(d.tb || []).length} ledger lines · ${Object.keys(d.fx || {}).length} formulas`); }).join('')}</div>
+    ${list.length ? '' : '<p class="note">No templates saved yet. When this audit is finished, save it as a template from <b>Settings &amp; backup</b> – the next audit of the same kind then starts with every schedule and ledger line ready and the amounts empty.</p>'}
+    <div class="foot"><button class="btn" data-act="wz-back">← Back</button><button class="btn primary" data-act="wz-next">Next – audit setup →</button></div></section>`;
+}
+function wzStep4(){
+  const c = wzClient(), en = wzEng(), p = c.profile || {};
+  const other = DB.clients.find(x => x.id !== c.id && (x.profile || {}).auditor), lp = (other || {}).profile || {};
+  const v = (a, b) => e_(a != null && String(a).trim() !== '' ? a : (b || ''));
+  return `<section class="panel"><h2>Audit setup</h2>
+    <p class="sub">These go straight into the auditor’s report, the notes and the statement of changes in equity.${other ? ` Pre-filled from ${e_(other.name)}.` : ''}</p>
+    <div class="form-grid">
+      <div class="field"><label for="wz-aud">Audit firm</label><input id="wz-aud" value="${v(p.auditor, lp.auditor)}"></div>
+      <div class="field"><label for="wz-part">Signing partner</label><input id="wz-part" value="${v(p.partner, lp.partner)}"></div>
+      <div class="field"><label for="wz-reg">Auditor registration no.</label><input id="wz-reg" value="${v(p.auditorReg, lp.auditorReg)}"></div>
+      <div class="field"><label for="wz-acity">Auditor city</label><input id="wz-acity" value="${v(p.auditorCity, lp.auditorCity)}"></div>
+      <div class="field"><label for="wz-rd">Report date</label><input id="wz-rd" value="${e_(p.reportDate || '')}" placeholder="10 June ${en.year + 1}"></div>
+      <div class="field"><label for="wz-dec">Amounts in the statements</label><select id="wz-dec"><option value="0"${+DB.settings.dec === 2 ? '' : ' selected'}>Whole dirhams</option><option value="2"${+DB.settings.dec === 2 ? ' selected' : ''}>Two decimals – 1,234.56</option></select></div>
+      <div class="field"><label for="wz-lrp">Legal reserve – % of net profit (per MOA)</label><input id="wz-lrp" value="${e_(p.lrPct ?? '')}" placeholder="5"></div>
+      <div class="field"><label for="wz-lrc">Legal reserve – stop at % of capital</label><input id="wz-lrc" value="${e_(p.lrCap ?? '')}" placeholder="50"></div>
+      <div class="field wide"><label for="wz-ct">Corporate tax for FY${en.year}</label><select id="wz-ct">
+        <option value="auto">Work it out – and do not add a provision if the payables already hold one</option>
+        <option value="ledger">The books already hold the tax – use the ledger figure</option>
+        <option value="add">Always add the provision worked out by the software</option></select>
+        <small class="muted">Changed any time on <b>Tax, reserve &amp; prior year</b>.</small></div>
+    </div>
+    <div class="foot"><button class="btn" data-act="wz-back">← Back</button><button class="btn primary" data-act="wz-finish">Finish – open the schedules</button></div></section>`;
+}
+async function wzCreate(){
+  const V = id => (document.getElementById(id) || {}).value || '';
+  const docs = [...((document.getElementById('wz-docs') || {}).files || [])];
+  const name = V('wz-name').trim() || (docs.length ? 'New client' : '');
+  if (!name){ toast('Type the company name, or attach the trade licence', true); return; }
+  const year = num(V('wz-year')) || new Date().getFullYear() - 1;
+  const em = V('wz-em') || 'Sharjah';
+  const en = newEngagement(year, V('wz-type') || 'Audit');
+  const c = {id: uid(), name, drive: {}, engagements: [en],
+    profile: {emirate: em, cityLine: em + ', U.A.E.', yearEndText: 'December 31', shareholders: [{name: '', nationality: '', country: '', shares: 0, value: 0}], partnerTitle: 'Managing Partner', signatory: 'Authorised Signatory', statementSignatory: '(Managing Director)'}};
+  DB.clients.unshift(c); UI.clientId = c.id; UI.engId = en.id; UI.wz.clientId = c.id;
+  save(); render();
+  if (docs.length){ UI.pdFiles = docs; render(); await readProfileDocs(AI.key() ? 'ai' : 'basic'); return; }
+  if (Drive.connected()) makeFolders(c, en.year);
+}
+function wzNext(){
+  const W = UI.wz, c = wzClient(), en = wzEng(); if (!c || !en) return;
+  const V = id => (document.getElementById(id) || {}).value || '';
+  if (W.step === 2){
+    const y = num(V('wz-y')); if (y > 1990 && y < 2100 && y !== en.year) en.year = y;
+    c.profile.yearEndText = V('wz-ye').trim() || 'December 31';
+    W.cmp = ((document.querySelector('input[name=wz-cmp]:checked') || {}).value) || 'type';
+    if (W.cmp !== 'excel') W.file = null;
+    else if (!W.file){ toast('Choose last year’s Excel file, or pick another option', true); return; }
+  }
+  if (W.step === 3) W.tplId = ((document.querySelector('input[name=wz-tpl]:checked') || {}).value) || '';
+  W.step = Math.min(4, W.step + 1); save(); render(); window.scrollTo(0, 0);
+}
+async function wzFinish(){
+  const W = UI.wz, c = wzClient(), en = wzEng(); if (!c || !en) return;
+  const p = c.profile, V = id => ((document.getElementById(id) || {}).value || '').trim();
+  ['auditor:wz-aud', 'partner:wz-part', 'auditorReg:wz-reg', 'auditorCity:wz-acity', 'reportDate:wz-rd', 'lrPct:wz-lrp', 'lrCap:wz-lrc']
+    .forEach(x => { const [k, id] = x.split(':'); const val = V(id); if (val !== '') p[k] = val; });
+  DB.settings.dec = +V('wz-dec') === 2 ? 2 : 0; setAmtDec();
+  en.settings.ctPay = V('wz-ct') || 'auto';
+  const tp = tplList().find(x => x.id === W.tplId);
+  let msg = `${c.name} FY${en.year} is ready`;
+  if (tp){ const res = tplApply(c, en, tp, false); msg += ` – ${res.lines} ledger lines from “${tp.name}” with the amounts empty`; }
+  const file = W.file;
+  UI.clientId = c.id; UI.engId = en.id; UI.wz = null; UI.pdFiles = []; UI.view = 'tb'; save(); render();
+  if (file){
+    try {
+      const res = await readFsWorkbookFile(file);
+      UI.fsImp = {res, fileName: file.name};
+      fsImportModal(); return;
+    } catch (err) { toast(err.message || 'That Excel file could not be read', true); }
+  }
+  toast(msg);
 }
 
 /* ---------- fill the profile from the trade licence & MOA ---------- */
@@ -3063,6 +3279,12 @@ function vSettings(){
     <div class="form-grid"><div class="field"><label for="set-aikey">Claude API key</label><input id="set-aikey" type="password" autocomplete="off" placeholder="sk-ant-…" value="${e_(AI.key())}"></div>
     ${field('set-aimodel', 'Model', AI.model(), {bind: 'settings.aiModel', select: AI_MODELS})}
     <div class="field"><label>Status</label><div class="row">${AI.key() ? '<span class="chip ok">Key saved</span><button class="btn small" data-act="ai-test">Test</button><button class="linkish" data-act="ai-key-remove">Remove</button>' : '<span class="chip neutral">No key</span><button class="btn small primary" data-act="ai-key">How to get a key</button>'}</div></div></div></section>
+  <section class="panel"><h2>Admin lock</h2>
+    <p class="sub">Put the clients you choose behind a passcode, so other people using this computer cannot open them. It is a lock on the screen, not encryption – a backup file still holds everything, so keep backups where only you can reach them.</p>
+    <div class="row">${pinSet()
+      ? `<span class="chip ok">Passcode set</span>${UI.unlocked ? '<span class="chip neutral">Unlocked for this session</span><button class="btn small" data-act="pin-lock">Lock again</button>' : ''}<button class="btn small" data-act="pin-set">Change passcode</button><button class="linkish" data-act="pin-remove">Remove</button>`
+      : `<span class="chip neutral">No passcode</span><button class="btn small primary" data-act="pin-set">Set a passcode</button>`}</div>
+    ${DB.clients.some(c => c.adminOnly) ? `<p class="small muted" style="margin-top:10px">Admin only: ${DB.clients.filter(c => c.adminOnly).map(c => e_(c.name)).join(' · ')}${pinSet() ? '' : ' – <b>set a passcode above</b>, otherwise they open like any other client.'}</p>` : '<p class="small muted" style="margin-top:10px">No client is marked admin only yet – use the lock button on the Clients list.</p>'}</section>
   ${tplPanel()}
   <section class="panel"><h2>Backup</h2><div class="row">
     <button class="btn" data-act="backup-dl">${IC.down}Download backup file</button>
@@ -5684,7 +5906,9 @@ document.addEventListener('click', async ev => {
   if (t.tagName === 'A') return;
   if (t.hasAttribute('data-close')){ closeModal(); return; }
   if (t.dataset.nav){ UI.view = t.dataset.nav; closeModal(); save(); render(); window.scrollTo(0, 0); return; }
-  if (t.dataset.open){ const c = DB.clients.find(x => x.id === t.dataset.open); UI.clientId = c.id; UI.engId = c.engagements.slice().sort((a, b) => b.year - a.year)[0].id; UI.view = 'tb'; save(); render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.open){ const c = DB.clients.find(x => x.id === t.dataset.open);
+    if (clientLocked(c)){ pinAskModal(() => { UI.clientId = c.id; UI.engId = c.engagements.slice().sort((a, b) => b.year - a.year)[0].id; UI.view = 'tb'; save(); render(); window.scrollTo(0, 0); }); return; }
+    UI.clientId = c.id; UI.engId = c.engagements.slice().sort((a, b) => b.year - a.year)[0].id; UI.view = 'tb'; save(); render(); window.scrollTo(0, 0); return; }
   if (t.dataset.docs){ const [type, id] = t.dataset.docs.split(':'); docsModal(type, id); return; }
   if (t.dataset.drill){ const d = t.dataset.drill, yr = t.dataset.yr || 'cy'; if (d.startsWith('cf:')) cfLineModal(d.slice(3), yr); else if (d.startsWith('ratio:')) ratioModal(d.slice(6)); else if (d === 'soce') soceModal(); else if (d === 'ct') taxModal(); else drillModal(d, yr); return; }
   if (t.dataset.sttab){ UI.stTab = t.dataset.sttab; save(); render(); return; }
@@ -5693,6 +5917,19 @@ document.addEventListener('click', async ev => {
   try {
     switch (a){
       case 'new-client': newClientModal(); break;
+      case 'wz-start': wzStart(); break;
+      case 'wz-resume': UI.view = 'wizard'; render(); window.scrollTo(0, 0); break;
+      case 'wz-quit': { const had = (UI.wz || {}).clientId; UI.wz = null; UI.pdFiles = []; UI.view = had ? 'tb' : 'clients'; save(); render(); break; }
+      case 'wz-create': await wzCreate(); break;
+      case 'wz-next': wzNext(); break;
+      case 'wz-back': UI.wz.step = Math.max(1, UI.wz.step - 1); render(); window.scrollTo(0, 0); break;
+      case 'wz-finish': await wzFinish(); break;
+      case 'lock-client': toggleAdminOnly(t.dataset.id); break;
+      case 'pin-set': pinSetModal(); break;
+      case 'pin-save': await pinSave(); break;
+      case 'pin-go': await pinCheck(); break;
+      case 'pin-remove': await pinRemove(); break;
+      case 'pin-lock': UI.unlocked = false; render(); toast('Admin-only clients are locked again'); break;
       case 'create-client': await createClient(); break;
       case 'del-client': { const x = DB.clients.find(k => k.id === t.dataset.id); if (x && confirm(`Delete ${x.name} and all its years from this browser? Files in Google Drive are not deleted.`)){ DB.clients = DB.clients.filter(k => k !== x); if (UI.clientId === x.id) UI.clientId = null; save(); render(); } break; }
       case 'make-folders': if (!Drive.connected()) await Drive.connect(true); await makeFolders(c, en.year); break;
@@ -6091,6 +6328,7 @@ document.addEventListener('change', async ev => {
   if (el.dataset.ws){ const [key, r, cI] = el.dataset.ws.split('|'); wsSet(en, key, +r, +cI, el.value); save(); wsRefresh(); return; }
   if (el.dataset.wsnote){ const sh = wsGet(en, el.dataset.wsnote, true); sh.note = el.value; save(); return; }
   if (el.dataset.bulk !== undefined){ UI.bulkTarget = UI.bulkTarget || {}; UI.bulkTarget[el.dataset.bulk] = el.value; bulkModal(); return; }
+  if (el.id === 'wz-file' && el.files.length){ UI.wz = UI.wz || {}; UI.wz.file = el.files[0]; UI.wz.cmp = 'excel'; render(); return; }
   if (el.id === 'bulk-files' && el.files.length){ UI.bulkFiles = [...el.files]; UI.bulkTarget = {}; UI.bulkFiles.forEach((f, i) => { const g = bulkGuess(en, f.name); if (g) UI.bulkTarget[i] = g; }); bulkModal(); return; }
   if (el.dataset.remark){ const [ty, rid] = el.dataset.remark.split(':'); const o = docTarget(ty, rid); if (o){ o.remark = el.value; save(); } return; }
   if (el.dataset.cklNote !== undefined){ const CK = en.checklist = en.checklist || {}; (CK.notes = CK.notes || {})[el.dataset.cklNote] = el.value; save(); return; }
