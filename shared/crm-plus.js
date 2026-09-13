@@ -437,7 +437,7 @@
   }, true);
 
   /* ---------------- phone navigation (the CRM hides its menu on small screens) ---------------- */
-  var MCSS = '#cp-mnav{display:none}@media(max-width:900px){#cp-mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:99980;background:#fff;border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}' +
+  var MCSS = '#cp-mnav,#cp-more{display:none}@media(max-width:900px){#cp-mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:99980;background:#fff;border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}' +
     '#cp-mnav a,#cp-mnav button{all:unset;flex:1;text-align:center;font-size:11px;font-weight:600;color:#6b7280;padding:6px 0;border-radius:10px;cursor:pointer;position:relative}#cp-mnav .i{display:block;font-size:19px;line-height:1.2}#cp-mnav .on{color:var(--brand)}' +
     '#cp-mnav .n{position:absolute;top:2px;left:55%;background:var(--red);color:#fff;border-radius:999px;font-size:10px;padding:0 5px}' +
     'body{padding-bottom:74px}.ft-bar{left:auto!important;right:8px!important;top:12px!important;bottom:auto!important;font-size:12px!important;padding:3px 4px!important;gap:2px!important}.ft-bar>span{display:none!important}.nav-right{display:none!important}' +
