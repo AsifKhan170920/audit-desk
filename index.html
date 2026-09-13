@@ -57,6 +57,22 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
 .gbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px}
 .exp{display:flex;flex-wrap:wrap;gap:4px}.exp label{display:inline-flex;align-items:center;gap:3px;margin:0;font-size:12px;font-weight:500;color:var(--ink);background:#f1f4f9;border-radius:6px;padding:2px 6px;white-space:nowrap}
 .phone{margin-top:22px}
+/* every client once, with the services it can be opened in */
+.cl-card{margin-top:22px}
+.cl-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.cl-top input{flex:1;min-width:220px;width:auto}
+.cl-count{color:var(--muted);font-size:13px}
+table.cl td{padding:7px 8px}
+table.cl td.acts{text-align:right;white-space:nowrap}
+table.cl .nm{font-weight:600}
+table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
+.svc{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:600;background:#eef2f8;color:var(--navy);margin-right:4px}
+.mini{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:8px;padding:5px 11px;font-weight:600;font-size:13px;cursor:pointer;margin-left:6px;text-decoration:none;display:inline-block}
+.mini:hover{background:#f1f4f9}
+.mini.go{background:var(--navy);border-color:var(--navy);color:#fff}
+.cl-empty{padding:22px 8px;color:var(--muted);text-align:center}
+.apps-line{margin-top:26px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.apps-line .note{margin-right:4px}
 .askai{margin-top:18px;background:linear-gradient(135deg,#0f9d6b,#0b5c9c);color:#fff;border:0}.askai b{font-size:17px}.askai p{margin:2px 0 12px;opacity:.9;font-size:14px}
 .askrow{display:flex;gap:8px}.askrow input{flex:1;border:0;border-radius:10px;padding:12px 14px;font-size:15px;color:#14284b}.askrow button{border:0;border-radius:10px;padding:0 14px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.18);color:#fff;font-size:15px}.askrow button.go{background:#fff;color:#0b5c9c}
 .askchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.askchips button{border:1px solid rgba(255,255,255,.45);background:transparent;color:#fff;border-radius:999px;padding:5px 10px;font-size:12.5px;cursor:pointer}.askchips button:hover{background:rgba(255,255,255,.15)}
@@ -121,6 +137,68 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
     if (next && FT.canOpen(me, next)){ location.href = next + '/'; return; }
     dashboard();
   }
+  /* every client the signed-in person may see, from the CRM and the Audit Desk, merged by name */
+  var CLIENTS = null, clFilter = '';
+  var norm = function(s){ return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
+  async function loadClients(){
+    if (CLIENTS) return CLIENTS;
+    var map = {};
+    var add = function(name, patch){
+      var k = norm(name); if (!k) return;
+      var o = map[k] || (map[k] = {name: name, services: []});
+      Object.keys(patch).forEach(function(p){ o[p] = patch[p]; });
+    };
+    if (FT.canOpen(me, 'crm')){
+      try {
+        await FT.pull('crm', FT.APPS.crm.key);
+        var d = JSON.parse(localStorage.getItem(FT.APPS.crm.key) || '{}');
+        var pn = {}; (d.partners || []).forEach(function(p){ pn[p.id] = p.name; });
+        (d.clients || []).forEach(function(c){ add(c.name, {name: c.name, crmId: c.id, partner: pn[c.partnerId] || '', services: c.services || [], status: c.status || ''}); });
+      } catch (e) {}
+    }
+    if (FT.canOpen(me, 'audit')){
+      try {
+        await FT.pull('audit', FT.APPS.audit.key);
+        var a = JSON.parse(localStorage.getItem(FT.APPS.audit.key) || '{}');
+        (a.clients || []).forEach(function(c){
+          var ys = (c.engagements || []).map(function(e){ return e.year; }).sort();
+          add(c.name, {audit: true, auditYear: ys.length ? 'FY' + ys[ys.length - 1] : '', adminOnly: !!c.adminOnly});
+        });
+      } catch (e) {}
+    }
+    CLIENTS = Object.keys(map).map(function(k){ return map[k]; }).sort(function(x, y){ return x.name.localeCompare(y.name); });
+    return CLIENTS;
+  }
+  function clientRows(){
+    var q = norm(clFilter);
+    var list = CLIENTS.filter(function(c){ return !q || norm(c.name).indexOf(q) >= 0 || norm((c.services || []).join(' ')).indexOf(q) >= 0 || norm(c.partner).indexOf(q) >= 0; });
+    if (!list.length) return '<tr><td colspan="2" class="cl-empty">' + (CLIENTS.length ? 'No client matches “' + esc(clFilter) + '”.' : 'No clients yet – add one in the CRM, or start a new audit.') + '</td></tr>';
+    return list.map(function(c){
+      var meta = [];
+      if (c.partner) meta.push('👤 ' + esc(c.partner));
+      if (c.status && c.status !== 'Active') meta.push(esc(c.status));
+      if (c.audit) meta.push('Audit Desk: ' + esc(c.auditYear || 'no year yet'));
+      var svc = (c.services || []).map(function(s){ return '<span class="svc">' + esc(s) + '</span>'; }).join('');
+      var acts = '';
+      if (FT.canOpen(me, 'crm') && c.crmId) acts += '<a class="mini" href="crm/#/client/' + encodeURIComponent(c.crmId) + '">CRM</a>';
+      if (FT.canOpen(me, 'audit')) acts += '<a class="mini' + (c.audit ? ' go' : '') + '" href="audit/?client=' + encodeURIComponent(c.name) + '">' + (c.audit ? 'Audit Desk' : 'Start an audit') + '</a>';
+      return '<tr><td><div class="nm">' + esc(c.name) + (c.adminOnly ? ' 🔒' : '') + '</div>' + (svc ? '<div style="margin-top:3px">' + svc + '</div>' : '') +
+        (meta.length ? '<div class="meta">' + meta.join(' · ') + '</div>' : '') + '</td><td class="acts">' + acts + '</td></tr>';
+    }).join('');
+  }
+  function paintClients(){
+    var body = document.getElementById('cl-body'); if (body) body.innerHTML = clientRows();
+    var cnt = document.getElementById('cl-count'); if (cnt) cnt.textContent = CLIENTS.length + (CLIENTS.length === 1 ? ' client' : ' clients');
+  }
+  function clientsCard(){
+    if (!FT.canOpen(me, 'crm') && !FT.canOpen(me, 'audit')) return '';
+    return '<div class="card cl-card"><div class="row between" style="align-items:flex-start"><div style="flex:1;min-width:300px"><h2>Clients</h2>' +
+      '<p class="sub" style="margin-bottom:0">Pick a client, then the service you want to work on. Every client appears once, whether it came from the CRM or the Audit Desk.</p></div>' +
+      (FT.canOpen(me, 'audit') ? '<a class="btn primary" href="audit/?new=1" style="text-decoration:none">+ New audit</a>' : '') + '</div>' +
+      '<div class="cl-top"><input type="text" id="cl-q" placeholder="Search a client, a partner or a service…" autocomplete="off"><span class="cl-count" id="cl-count">Loading…</span></div>' +
+      '<div class="table-wrap"><table class="cl"><tbody id="cl-body"><tr><td class="cl-empty">Loading your clients…</td></tr></tbody></table></div></div>';
+  }
+
   function dashboard(){
     var tile = function(app, color, letters, title, text){
       var ok = FT.canOpen(me, app);
@@ -131,11 +209,17 @@ td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:middle}
     var ask = FT.canOpen(me, 'crm') ? '<form class="card askai" id="f-ask"><b>✦ Ask the AI assistant</b><p>Type or speak – it works on the CRM for you: leads, clients, tasks, reminders, invoices.</p>' +
       '<div class="askrow"><input id="ask-text" type="text" placeholder="e.g. What is overdue today?" autocomplete="off"><button type="button" data-ask="voice" title="Speak">🎤</button><button type="button" class="talk" data-ask="talk" title="Talk back and forth">Talk</button><button class="go" title="Ask">➤</button></div>' +
       '<div class="askchips">' + ['What is overdue today?', 'Which clients need a check-in call?', 'I want to add a new lead', 'VAT returns due this month', 'Unpaid invoices'].map(function(x){ return '<button type="button" data-ask="chip">' + x + '</button>'; }).join('') + '</div></form>' : '';
-    show('<h1>Welcome, ' + esc(me.name) + '</h1><p class="sub">Choose where to work.</p>' + ask + '<div class="tiles">' +
+    show('<h1>Welcome, ' + esc(me.name) + '</h1><p class="sub">Pick a client below, or open a whole app.</p>' + ask + clientsCard() + '<div class="tiles">' +
       tile('crm', '#0f9d6b', 'CRM', 'CRM', 'Leads, clients, tasks, quotations, invoices and receipts – with an AI assistant you can talk to.') +
       tile('audit', '#14284b', 'FS', 'Audit Desk', 'Financial statements, audit reports, policies and proof documents.') +
       (me.role === 'admin' ? '<button class="tile" data-go="users"><div class="ic" style="background:#c9973a">👥</div><b>Users &amp; access</b><span>Add users, choose CRM / Audit access, expertise, block users.</span><span class="go">Manage →</span></button>' : '') +
       '</div>' + phoneCard());
+    var q = document.getElementById('cl-q');
+    if (q){
+      q.value = clFilter;
+      q.oninput = function(){ clFilter = this.value; paintClients(); };
+      loadClients().then(paintClients, function(){ var b = document.getElementById('cl-body'); if (b) b.innerHTML = '<tr><td class="cl-empty">The client list could not be loaded – open the CRM or the Audit Desk below.</td></tr>'; });
+    }
     var fAsk = document.getElementById('f-ask');
     if (fAsk) fAsk.onsubmit = function(e){ e.preventDefault(); var t = document.getElementById('ask-text'); FTAI.open(t.value.trim() || null); t.value = ''; };
     if (FTNotify.native() && FT.canOpen(me, 'crm')) FTNotify.scheduleFromCloud().then(function(){ var pc = document.getElementById('phone-state'); if (pc) pc.outerHTML = phoneState(); });
