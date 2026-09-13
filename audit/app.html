@@ -439,6 +439,10 @@ tr.sfix td .muted{font-weight:400}
 input.fs-note{width:100%;text-align:center;padding-left:4px;padding-right:4px}
 tr.fs-line.off th[scope=row] input,tr.fs-line.off td{opacity:.55}
 tr.fs-user th[scope=row] input{font-weight:600}
+.sub-box .note-text-head{gap:10px;flex-wrap:wrap}
+input.sb-title{flex:1;min-width:200px;font-weight:600}
+.sub-box table.tb tfoot td{font-weight:700}
+.sub-box table.tb tfoot td.muted{font-weight:400}
 .auto-i{display:inline-block;vertical-align:middle;margin-left:7px;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:help}
 table.cfpy td input.numi{width:100%;min-width:0}
 table.cfpy th[scope=row]{font-weight:400}
@@ -933,6 +937,8 @@ function rollForward(client, eng){
   n.texts = JSON.parse(JSON.stringify(eng.texts)); n.customNotes = JSON.parse(JSON.stringify(eng.customNotes || []));
   n.settings.deprMethod = eng.settings.deprMethod;
   n.schedules = JSON.parse(JSON.stringify(ensureSchedules(eng))); ensureSchedules(n);
+  /* a sub-table keeps its lines; this year's figures become next year's comparatives */
+  n.schedules.forEach(sx => (sx.subs || []).forEach(sb => (sb.rows || []).forEach(rw => { rw.py = rw.cy; rw.cy = ''; })));
   const incomeOrExpense = s => ['inc', 'dc', 'exp'].includes(s.sec);
   const m = SM(eng);
   n.tb = eng.tb.map(l => {
@@ -1606,6 +1612,16 @@ function buildReport(client, eng, prevEng){
     // free text the user adds above / below a schedule's table in its note
     const sch = SMAP[key === 'dep' ? 'ppe' : key];
     if (sch && (sch.textAbove || '').trim() && !(key === 'ppe' && r.ppe.length)){ const at = grp.findIndex((g, i) => i > 0 && g.k !== 'p'); grp.splice(at < 0 ? grp.length : at, 0, blocks(sch.textAbove)); }
+    /* sub-tables the user added under this schedule, e.g. revenue by geography */
+    if (sch && key !== 'dep') (sch.subs || []).forEach(sb => {
+      const rws = (sb.rows || []).filter(rw => String(rw.label || '').trim() || nz(subVal(rw, 'cy'), subVal(rw, 'py')));
+      if (!rws.length) return;
+      const t = subTotals(sb);
+      const body = rws.map(rw => row(rw.label || '', '', subVal(rw, 'cy'), subVal(rw, 'py')));
+      if (sb.showTotal !== false) body.push(total('', t.cy, t.py));
+      if (String(sb.title || '').trim()) grp.push(blocks('## ' + sb.title));
+      grp.push(T(body));
+    });
     if (sch && (sch.textBelow || '').trim()) grp.push(blocks(sch.textBelow));
     { const fk = key === 'dep' ? 'ppe' : key; grp.forEach(g => { if (g.k === 'fs' && !g.fs && !g.drill){ if (key === 'ct') g.drill = 'ct'; else if (SMAP[fk]) g.fs = fk; } if (g.k === 'grid' && key === 'ppe' && !g.drill) g.drill = 'ppe'; }); }
     items.push({k: 'group', items: grp, keep: !['risk', 'fi', 'ppe'].includes(key)});
@@ -3316,7 +3332,7 @@ function vTB(){
     const vis = list.filter(x => {
       const lines = en.tb.filter(l => l.fs === x.key);
       /* a typed opening balance or the tax provision keeps a schedule on screen even with no ledger lines */
-      const extra = !!(x.open && (x.open.cy !== undefined || x.open.py !== undefined)) || (r.cy.ctKey === x.key && !!(R(r.cy.ctProv) || R(r.py.ctProv)));
+      const extra = !!(x.open && (x.open.cy !== undefined || x.open.py !== undefined)) || (x.subs || []).length > 0 || (r.cy.ctKey === x.key && !!(R(r.cy.ctProv) || R(r.py.ctProv)));
       if (!lines.length && !extra && !(x.key === 'ppe' && en.ppe.length) && !UI.showEmpty && !UI.justAdded?.[x.key]) return false;
       if (x.key === 'dep' && en.ppe.length && !lines.length && !UI.justAdded?.dep) return false;
       if (q && !lines.filter(match).length) return false;
@@ -3336,7 +3352,7 @@ function vTB(){
       /* the schedule's own buttons live on this row now, so the card has no footer strip */
       const doRow = col ? '' : `<div class="sched-do">${isPPE
         ? `<button class="linkish" data-act="add-ppe" title="Add an asset class column to the movement schedule">${IC.plus}Asset class</button><button class="linkish" data-act="add-line-to" data-key="ppe" title="Add a ledger line instead of an asset class">Ledger line</button>`
-        : `<button class="linkish" data-act="add-line-to" data-key="${x.key}" title="Add a ledger line to this schedule">${IC.plus}Line</button><button class="linkish" data-act="paste-tb" data-key="${x.key}" title="Paste ledger lines into this schedule from Excel">Paste</button>`}${noteTextBtn(x, true)}</div>`;
+        : `<button class="linkish" data-act="add-line-to" data-key="${x.key}" title="Add a ledger line to this schedule">${IC.plus}Line</button><button class="linkish" data-act="paste-tb" data-key="${x.key}" title="Paste ledger lines into this schedule from Excel">Paste</button>`}${noteTextBtn(x, true)}<button class="linkish" data-act="sub-add" data-key="${x.key}" title="Add a table that prints inside this note, e.g. revenue by geography">${IC.plus}Table</button></div>`;
       const totCells = col ? `<div class="sched-tot" title="FY${en.year}"${fxRefAttr(`{${en.year}:S:${x.key}:cy}`)}><b>${fmtN(totCy)}</b></div>
           <div class="sched-tot" title="FY${en.year - 1}"${fxRefAttr(`{${en.year}:S:${x.key}:py}`)}><b>${fmtN(totPy)}</b></div>` : '';
       return `<section class="panel flush sched${col ? ' collapsed' : ''}" id="sch-${x.key}">
@@ -3349,10 +3365,10 @@ function vTB(){
           <div class="sched-acts"><button class="icon-btn${wsHas(en, 'sched:' + x.key) ? ' on' : ''}" data-act="ws-open" data-key="sched:${x.key}" title="Working sheet">${IC.grid}</button><button class="icon-btn gear" data-act="sched-props" data-key="${x.key}" title="Schedule settings">${IC.gear}</button></div>
         </div>
         ${col ? '' : (isPPE ? ppeMatrix(en, r) + (lines.length ? `<div class="sub-head">Ledger lines (optional – checked against the schedule above)</div><div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${shown.map(l => lineRow(en, l, false)).join('')}</tbody><tfoot><tr><td colspan="2">Total</td><td class="r">${fmtN(amtT)}</td><td class="r">${fmtN(pyT)}</td><td colspan="2"></td></tr></tfoot></table></div>` : '')
-            + noteTextBox(en, x, noteNo)
+            + noteTextBox(en, x, noteNo) + subTblBox(en, x, r)
           : `<div class="table-wrap"><table class="ui tb sch">${cols}${thead(false, true)}<tbody>${oRow}${shown.map(l => lineRow(en, l, false)).join('') || (oRow || ctRow ? '' : `<tr><td colspan="7" class="empty">No lines yet.</td></tr>`)}${ctRow}</tbody>
           ${lines.length || ctRow || oRow ? `<tfoot><tr><td colspan="2">Total</td><td class="r"${fxRefAttr(`{${en.year}:S:${x.key}:cy}`)}>${fmtN(totCy)}</td><td class="r"${fxRefAttr(`{${en.year}:S:${x.key}:py}`)}>${fmtN(totPy)}</td><td colspan="3"></td></tr></tfoot>` : ''}</table></div>
-        ${noteTextBox(en, x, noteNo)}`)}
+        ${noteTextBox(en, x, noteNo)}${subTblBox(en, x, r)}`)}
       </section>`;
     }).join('');
     const secCy = list.reduce((a, x) => a + r.cy[x.key], 0);
@@ -3368,6 +3384,21 @@ function vTB(){
 /* text typed under (or above) a schedule's table – printed inside its note */
 function noteTextOpen(x){ return !!((x.textBelow || '').trim() || (x.textAbove || '').trim() || (UI.noteText || {})[x.key]); }
 function noteTextBtn(x, short){ return noteTextOpen(x) ? '' : `<button class="linkish" data-act="note-text" data-key="${x.key}" title="Type a paragraph that prints inside this note">${IC.plus}${short ? 'Note text' : 'Add text below this note'}</button>`; }
+/* ============================================================
+   SUB-TABLES – an extra table printed inside a schedule's note, e.g. revenue
+   by geography under the revenue note. Each has a title and its own lines with
+   figures or formulas, and can be asked to agree with the schedule total.
+   ============================================================ */
+const subVal = (rw, col) => { const v = rw[col]; return v === undefined || v === null || String(v).trim() === '' ? 0 : R(v); };
+const subTotals = sb => ({cy: (sb.rows || []).reduce((a, rw) => a + subVal(rw, 'cy'), 0), py: (sb.rows || []).reduce((a, rw) => a + subVal(rw, 'py'), 0)});
+function subRowFind(en, rowId){
+  for (const x of ensureSchedules(en)) for (const sb of (x.subs || [])){ const rw = (sb.rows || []).find(y => y.id === rowId); if (rw) return rw; }
+  return null;
+}
+const subUsed = sb => (sb.rows || []).some(rw => String(rw.label || '').trim() || subVal(rw, 'cy') || subVal(rw, 'py'));
+/* the schedule figure a sub-table is checked against */
+const subSchedFig = (r, key, col) => R(r[col][key === 'pay' ? 'payTot' : key === 'lr' ? 'lrClose' : key === 're' ? 'reClose' : key === 'ca' ? 'caClose' : key]);
+
 /* a typed opening balance shows as its own row, editable here as well as in the settings */
 function openRow(en, x){
   if (!x.open || (x.open.cy === undefined && x.open.py === undefined)) return '';
@@ -3396,6 +3427,32 @@ function noteTextBox(en, x, noteNo){
       <textarea id="nt-b-${x.key}" data-sched-text="textBelow" data-key="${x.key}" rows="${Math.min(10, Math.max(2, String(x.textBelow || '').split('\n').length + 1))}" placeholder="e.g. The loans are secured against the vehicles and carry interest at 6% per annum.">${e_(x.textBelow || '')}</textarea>
       <div class="row between"><span class="muted small">Blank line = new paragraph · - bullet · **bold** · {name} {year} placeholders</span><button class="linkish danger-t" data-act="note-text-del" data-key="${x.key}">Remove text</button></div>
     </div>`;
+}
+/* the editor for a schedule's sub-tables, under its card on the Schedules screen */
+function subTblBox(en, x, r){
+  const subs = x.subs || [];
+  if (!subs.length) return '';
+  const schCy = subSchedFig(r, x.key, 'cy'), schPy = subSchedFig(r, x.key, 'py');
+  return subs.map(sb => {
+    const t = subTotals(sb), tie = sb.tie !== false, dc = schCy - t.cy, dp = schPy - t.py;
+    const rows = (sb.rows || []).map(rw => `<tr>
+      <td><input class="w-cap" id="sb-l-${rw.id}" data-sbrow="${rw.id}" data-f="label" value="${e_(rw.label || '')}" placeholder="e.g. Within the United Arab Emirates" aria-label="Line name"></td>
+      ${['cy', 'py'].map(col => { const key = `SB:${rw.id}:${col}`;
+        return `<td><input class="numi${R(rw[col]) < 0 ? ' neg' : ''}${fxCls(en, key)}" id="sb-${col}-${rw.id}" data-sbrow="${rw.id}" data-f="${col}"${fxAttrs(en, key, '')} value="${rw[col] === undefined || rw[col] === '' ? '' : fmtIn(rw[col])}" placeholder="—" inputmode="decimal" aria-label="${col === 'cy' ? en.year : en.year - 1}"></td>`; }).join('')}
+      <td class="acts"><button class="icon-btn" data-act="sub-row-del" data-key="${e_(x.key)}" data-sb="${sb.id}" data-id="${rw.id}" title="Delete line">${IC.trash}</button></td></tr>`).join('');
+    return `<div class="note-text sub-box">
+      <div class="note-text-head"><input class="sb-title" id="sb-t-${sb.id}" data-sub="${sb.id}" data-key="${e_(x.key)}" data-f="title" value="${e_(sb.title || '')}" placeholder="Table title, e.g. Revenue by geography" aria-label="Table title">
+        <label class="check-lbl" title="Show a difference line while the table does not add up to the schedule"><input type="checkbox" data-sub="${sb.id}" data-key="${e_(x.key)}" data-f="tie"${tie ? ' checked' : ''}> Agrees with the schedule total</label>
+        <button class="linkish danger-t" data-act="sub-del" data-key="${e_(x.key)}" data-sb="${sb.id}">Remove table</button></div>
+      <div class="table-wrap"><table class="ui tb"><colgroup><col><col style="width:150px"><col style="width:150px"><col style="width:44px"></colgroup>
+        <thead><tr><th>Line</th><th class="r">FY${en.year}</th><th class="r">FY${en.year - 1}</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="empty">No lines yet – add the first one below.</td></tr>'}</tbody>
+        <tfoot><tr><td>Total</td><td class="r">${fmtN(t.cy)}</td><td class="r">${fmtN(t.py)}</td><td></td></tr>
+          ${tie ? `<tr><td class="muted small">Difference from ${e_(x.label)}</td><td class="r ${dc ? 'bad-t' : 'ok-t'}">${dc ? fmtN(dc) : '✓'}</td><td class="r ${dp ? 'bad-t' : 'ok-t'}">${dp ? fmtN(dp) : '✓'}</td><td></td></tr>` : ''}</tfoot></table></div>
+      <div class="row between"><button class="btn small" data-act="sub-row-add" data-key="${e_(x.key)}" data-sb="${sb.id}">${IC.plus}Add line</button>
+        <span class="muted small">Prints inside the note under this schedule's own table. Type a figure or a formula starting with =.</span></div>
+    </div>`;
+  }).join('');
 }
 function docCell(type, obj){
   const d = obj.docs || [];
@@ -3543,7 +3600,9 @@ function tplFromEngagement(c, en, name){
     fx[key] = rel;
   });
   return {id: uid(), name: name || `${c.name} FY${Y}`, created: new Date().toISOString(), from: `${c.name} · FY${Y}`, type: en.type, data: {
-    schedules: clone(ensureSchedules(en)).map(x => { const y = Object.assign({}, x); delete y.open; delete y.remark; delete y.docs; return y; }), tb: en.tb.map(l => ({id: l.id, ledger: l.ledger || '', fs: l.fs || '', caption: l.caption || ''})),
+    schedules: clone(ensureSchedules(en)).map(x => { const y = Object.assign({}, x); delete y.open; delete y.remark; delete y.docs;
+      if (y.subs) y.subs = y.subs.map(sb => Object.assign({}, sb, {rows: (sb.rows || []).map(rw => ({id: rw.id, label: rw.label || '', cy: '', py: ''}))}));
+      return y; }), tb: en.tb.map(l => ({id: l.id, ledger: l.ledger || '', fs: l.fs || '', caption: l.caption || ''})),
     ppe: (en.ppe || []).map(p => ({id: p.id, name: p.name || '', life: p.life || ''})), texts: clone(en.texts), customNotes: clone(en.customNotes || []),
     layout: clone(layoutOf(en)), cfLayout: en.cfLayout ? clone(en.cfLayout) : null, fsLayout: en.fsLayout ? clone(en.fsLayout) : null,
     settings: {deprMethod: en.settings.deprMethod, draft: en.settings.draft, eqTb: en.settings.eqTb || 'auto'},
@@ -5033,6 +5092,7 @@ function fxGet(en, key){
   if (k[0] === 'CFP'){ return R((en.cfPy || {})[k[1]]); }
   if (k[0] === 'CFC'){ return R((en.cfCy || {})[k[1]]); }
   if (k[0] === 'SO'){ const x = (en.schedules || []).find(y => y.key === k[1]); return x && x.open ? R(x.open[k[2]]) : undefined; }
+  if (k[0] === 'SB'){ const rw = subRowFind(en, k[1]); return rw ? R(rw[k[2]]) : undefined; }
   if (k[0] === 'FSC'){ return R((en.fsCy || {})[k[1]]); }
   if (k[0] === 'FSP'){ return R((en.fsPy || {})[k[1]]); }
   if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o && o[parts[i]]; } return o ? R(o[parts[parts.length - 1]]) : undefined; }
@@ -5044,6 +5104,7 @@ function fxSet(en, key, v){
   if (k[0] === 'CFP'){ (en.cfPy = en.cfPy || {})[k[1]] = v; return; }
   if (k[0] === 'CFC'){ (en.cfCy = en.cfCy || {})[k[1]] = v; return; }
   if (k[0] === 'SO'){ const x = (en.schedules || []).find(y => y.key === k[1]); if (x){ x.open = x.open || {}; x.open[k[2]] = v; } return; }
+  if (k[0] === 'SB'){ const rw = subRowFind(en, k[1]); if (rw) rw[k[2]] = v; return; }
   if (k[0] === 'FSC'){ (en.fsCy = en.fsCy || {})[k[1]] = v; return; }
   if (k[0] === 'FSP'){ (en.fsPy = en.fsPy || {})[k[1]] = v; return; }
   if (k[0] === 'B'){ let o = en; const parts = k[1].split('.'); for (let i = 0; i < parts.length - 1; i++){ o = o[parts[i]] = o[parts[i]] || {}; } o[parts[parts.length - 1]] = v; }
@@ -5054,6 +5115,7 @@ function fxTargetExists(en, key){
   if (k[0] === 'P') return (en.ppe || []).some(x => x.id === k[1]);
   if (k[0] === 'SO') return (en.schedules || []).some(x => x.key === k[1] && x.open && (x.open.cy !== undefined || x.open.py !== undefined));
   if ((k[0] === 'CFC' || k[0] === 'CFP') && /^u/.test(k[1])) return ((en.cfLayout || {}).custom || []).some(u => u.key === k[1]);
+  if (k[0] === 'SB') return !!subRowFind(en, k[1]);
   if ((k[0] === 'FSC' || k[0] === 'FSP') && /^f/.test(k[1])) return ((en.fsLayout || {}).custom || []).some(u => u.key === k[1]);
   return true;
 }
@@ -5577,6 +5639,7 @@ async function createYear(){
 function copyStructure(from, n){
   if (!from) return;
   n.schedules = JSON.parse(JSON.stringify(ensureSchedules(from))); ensureSchedules(n);
+  n.schedules.forEach(sx => (sx.subs || []).forEach(sb => (sb.rows || []).forEach(rw => { rw.py = rw.cy; rw.cy = ''; })));
   n.texts = JSON.parse(JSON.stringify(from.texts)); n.customNotes = JSON.parse(JSON.stringify(from.customNotes || []));
   n.layout = JSON.parse(JSON.stringify(layoutOf(from))); n.settings.deprMethod = from.settings.deprMethod;
   if (from.cfLayout) n.cfLayout = JSON.parse(JSON.stringify(from.cfLayout));
@@ -6583,6 +6646,24 @@ document.addEventListener('click', async ev => {
       case 'ai-key-remove': if (confirm('Remove the Claude API key from this browser?')){ AI.setKey(''); render(); } break;
       case 'note-text': { UI.noteText = UI.noteText || {}; UI.noteText[t.dataset.key] = true; UI.collapsed = UI.collapsed || {}; UI.collapsed[t.dataset.key] = false; render(); const el = document.getElementById('nt-b-' + t.dataset.key); if (el) el.focus(); break; }
       case 'note-text-above': { UI.noteTextAbove = UI.noteTextAbove || {}; UI.noteTextAbove[t.dataset.key] = true; render(); const el = document.getElementById('nt-a-' + t.dataset.key); if (el) el.focus(); break; }
+      /* ---- sub-tables inside a note ---- */
+      case 'sub-add': { const x = SM(en)[t.dataset.key]; if (!x) break;
+        const sb = {id: uid(), title: '', tie: true, rows: [{id: uid(), label: '', cy: '', py: ''}]};
+        (x.subs = x.subs || []).push(sb); save(); render();
+        { const el = document.getElementById('sb-t-' + sb.id); if (el){ el.focus(); el.scrollIntoView({block: 'center'}); } } break; }
+      case 'sub-del': { const x = SM(en)[t.dataset.key]; if (!x) break;
+        const sb = (x.subs || []).find(y => y.id === t.dataset.sb); if (!sb) break;
+        if (subUsed(sb) && !confirm(`Remove the table “${sb.title || 'this table'}” and its lines from this note?`)) break;
+        (sb.rows || []).forEach(rw => { if (en.fx){ delete en.fx['SB:' + rw.id + ':cy']; delete en.fx['SB:' + rw.id + ':py']; } });
+        x.subs = (x.subs || []).filter(y => y !== sb); save(); render(); break; }
+      case 'sub-row-add': { const x = SM(en)[t.dataset.key]; const sb = x && (x.subs || []).find(y => y.id === t.dataset.sb); if (!sb) break;
+        const rw = {id: uid(), label: '', cy: '', py: ''}; (sb.rows = sb.rows || []).push(rw); save(); render();
+        { const el = document.getElementById('sb-l-' + rw.id); if (el){ el.focus(); el.scrollIntoView({block: 'center'}); } } break; }
+      case 'sub-row-del': { const x = SM(en)[t.dataset.key]; const sb = x && (x.subs || []).find(y => y.id === t.dataset.sb); if (!sb) break;
+        const rw = (sb.rows || []).find(y => y.id === t.dataset.id); if (!rw) break;
+        if ((subVal(rw, 'cy') || subVal(rw, 'py')) && !confirm(`Delete “${rw.label || 'this line'}”?`)) break;
+        if (en.fx){ delete en.fx['SB:' + rw.id + ':cy']; delete en.fx['SB:' + rw.id + ':py']; }
+        sb.rows = sb.rows.filter(y => y !== rw); save(); render(); break; }
       case 'note-text-del': { const x = SM(en)[t.dataset.key]; if (x && ((x.textBelow || x.textAbove) ? confirm('Remove the text from this note?') : true)){ x.textBelow = ''; x.textAbove = ''; (UI.noteText || {})[x.key] = false; (UI.noteTextAbove || {})[x.key] = false; save(); render(); } break; }
       case 'do-retrieve': doRetrieve(); break;
       case 'dl-excel': if (cklGate(t)) break; download(excelFile(buildReport(c, en, prev())), `${safeName(c.name)}_FS_${en.year}.xlsx`); break;
@@ -6681,6 +6762,15 @@ document.addEventListener('change', async ev => {
   if (el.dataset.bulk !== undefined){ UI.bulkTarget = UI.bulkTarget || {}; UI.bulkTarget[el.dataset.bulk] = el.value; bulkModal(); return; }
   if (el.id === 'wz-file' && el.files.length){ UI.wz = UI.wz || {}; UI.wz.file = el.files[0]; UI.wz.cmp = 'excel'; render(); return; }
   if (el.id === 'bulk-files' && el.files.length){ UI.bulkFiles = [...el.files]; UI.bulkTarget = {}; UI.bulkFiles.forEach((f, i) => { const g = bulkGuess(en, f.name); if (g) UI.bulkTarget[i] = g; }); bulkModal(); return; }
+  if (el.dataset.sbrow !== undefined){ const rw = subRowFind(en, el.dataset.sbrow); if (!rw) return; const f = el.dataset.f;
+    if (f === 'label'){ rw.label = el.value; save(); scheduleRender(); return; }
+    const fk = `SB:${rw.id}:${f}`;
+    if (el.value.trim() === ''){ rw[f] = ''; if (en.fx) delete en.fx[fk]; }
+    else { try { fxInput(c, en, fk, el.value, v => { rw[f] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
+    save(); scheduleRender(); return; }
+  if (el.dataset.sub !== undefined){ const x = SM(en)[el.dataset.key]; const sb = x && (x.subs || []).find(y => y.id === el.dataset.sub); if (!sb) return;
+    if (el.dataset.f === 'tie') sb.tie = el.checked; else sb[el.dataset.f] = el.value;
+    save(); scheduleRender(); return; }
   if (el.dataset.finint !== undefined){ const S = en.settings.finInt = en.settings.finInt || {};
     if (el.value === 'auto') delete S[el.dataset.finint]; else S[el.dataset.finint] = el.value;
     save(); scheduleRender(); return; }
