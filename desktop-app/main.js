@@ -206,6 +206,19 @@ ipcMain.handle('ft:status', () => {
 });
 ipcMain.handle('ft:autostart', (_e, on) => { setAutoStart(on); refreshTrayMenu(); return app.getLoginItemSettings().openAtLogin; });
 ipcMain.handle('ft:version', () => app.getVersion());
+/* Sign out of Google: clear the sign-in cookies and storage this app keeps, so the next sign-in asks which account */
+ipcMain.handle('ft:google-signout', async () => {
+  const ses = session.defaultSession;
+  const hosts = ['https://accounts.google.com', 'https://google.com', 'https://www.google.com', 'https://oauth2.googleapis.com', 'https://content.googleapis.com'];
+  try {
+    const cookies = await ses.cookies.get({});
+    await Promise.all(cookies.filter(c => /(^|\.)google\.com$/.test(String(c.domain || '').replace(/^\./, '')))
+      .map(c => ses.cookies.remove(`http${c.secure ? 's' : ''}://${String(c.domain || '').replace(/^\./, '')}${c.path || '/'}`, c.name).catch(() => {})));
+  } catch (e) { /* ignore */ }
+  for (const origin of hosts){ try { await ses.clearStorageData({origin, storages: ['cookies', 'localstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage']}); } catch (e) { /* ignore */ } }
+  try { await ses.clearAuthCache(); } catch (e) { /* ignore */ }
+  return true;
+});
 ipcMain.handle('ft:retry', () => { if (win) win.loadURL(SITE); return true; });
 
 /* ---------------- speech (Windows speech recognition) ---------------- */

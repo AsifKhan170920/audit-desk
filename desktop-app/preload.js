@@ -22,6 +22,7 @@ if (TRUSTED) {
       stop: () => ipcRenderer.invoke('ft:speech-stop'),
       abort: () => { speechHandler = null; return ipcRenderer.invoke('ft:speech-abort'); }
     },
+    googleSignOut: () => ipcRenderer.invoke('ft:google-signout'),
     retry: () => ipcRenderer.invoke('ft:retry')
   });
 }
