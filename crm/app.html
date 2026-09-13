@@ -50,12 +50,22 @@ aside.side{background:var(--nav);color:var(--nav-txt);display:flex;flex-directio
 .side-out button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border-radius:8px;color:var(--nav-txt);font-weight:600;font-size:14.5px}
 .side-out button:hover{background:rgba(255,255,255,.07);color:#fff}
 .side-out button svg{width:18px;height:18px;flex:none;opacity:.9}
-/* the clients table */
-table.cl-tbl td{padding:10px 14px}
-table.cl-tbl select{width:100%;max-width:170px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff;font-size:13px}
+/* one compact table for clients, leads and tasks */
+table.cl-tbl th{padding:9px 12px}
+table.cl-tbl td{padding:6px 12px;vertical-align:middle}
+table.cl-tbl select{width:100%;max-width:165px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;background:#fff;font-size:13px;line-height:1.25}
 table.cl-tbl .desk{white-space:nowrap}
+table.cl-tbl .btn-sm{padding:4px 9px}
+table.cl-tbl .nm{font-weight:600;color:var(--brand-d)}
+table.cl-tbl .sub2{color:var(--muted);font-size:12px}
 .desk-soon{color:var(--faint);font-size:12px;font-weight:600}
 .desk-yr{color:var(--muted);font-size:12px;margin-right:6px}
+/* services in their own column */
+.svc-cell{display:flex;flex-wrap:wrap;gap:3px;align-items:center}
+.svc-cell .pill{cursor:default;font-size:10.5px;padding:1px 7px;white-space:nowrap}
+.svc-cell .x{cursor:pointer;margin-left:3px;opacity:.55;font-size:12px}
+.svc-cell .x:hover{opacity:1}
+ table.cl-tbl select.svc-add{border:1px dashed var(--line);border-radius:7px;padding:2px 1px 2px 4px;font-size:12px;background:#fff;color:var(--muted);width:42px;min-width:42px;max-width:42px}
 .main-col{min-width:0;display:flex;flex-direction:column}
 .topbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--line);padding:13px 24px;display:flex;align-items:center;gap:14px}
 .topbar h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.3px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -65,7 +75,8 @@ table.cl-tbl .desk{white-space:nowrap}
 .bell b{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:10.5px;display:grid;place-items:center;padding:0 4px}
 /* ---------- the AI assistant page ---------- */
 .ai-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
-#ai-dock{min-height:min(660px,calc(100vh - 190px));display:flex;overflow:hidden;padding:0}
+#ai-dock{display:flex;overflow:hidden;padding:0}
+body.ai-page #cai .body{flex:0 1 auto;max-height:calc(100vh - 330px)}
 body.ai-page #cai{position:static!important;inset:auto!important;display:flex!important;width:100%!important;max-width:none!important;height:auto!important;flex:1;border:0!important;border-radius:var(--radius)!important;box-shadow:none!important}
 body.ai-page #cai-fab{display:none!important}
 body.ai-page #cai .hd .ib:last-child{display:none}
@@ -489,14 +500,20 @@ function route(){
     agreements:['agreements',renderAgreements],agreement:['agreements',()=>renderAgreementBuilder(id)],
     ai:['ai',renderAI]};
   const [nav,fn]=map[page]||map.ai;
-  renderNav(nav); fn(); pageTitle();
+  renderNav(nav); const t0=$('#pageTitle'); if(t0) t0.textContent='Fair Tax CRM';
+  fn(); pageTitle();
 }
 /* the screen's own name goes into the top bar, and the paragraph under it goes away */
 function pageTitle(){
   const t=$('#pageTitle'); if(!t) return;
   const h=$('#app h1');
-  t.textContent=h?h.textContent.trim():'Fair Tax CRM';
-  if(h){const box=h.parentElement; h.remove(); const sub=box&&box.querySelector(':scope > p.sub'); if(sub) sub.remove();}
+  if(h){
+    t.textContent=h.textContent.trim();
+    const box=h.parentElement, head=box&&box.closest('.page-head');
+    h.remove(); const sub=box&&box.querySelector(':scope > p.sub'); if(sub) sub.remove();
+    if(box&&!box.textContent.trim()&&!box.querySelector('button,a,input,select')) box.remove();
+    if(head&&!head.querySelector('button,a,input,select')) head.remove();
+  }
   try{const d=load(),me=(window.FT&&FT.me)||{};
     const c=window.FTReminders?FTReminders.compute(d,{days:7,me:{name:me.name||'',id:me.id||'',admin:me.role==='admin'}}).length:0;
     const b=$('#bellCount'); if(b){b.textContent=c>99?'99+':c; b.hidden=!c;}
@@ -548,6 +565,12 @@ function renderAI(){
   else if(dock) dock.innerHTML='<div class="empty" style="padding:40px 20px">The assistant needs a Claude API key – an admin can add it in <b>Users &amp; access</b> on the portal.</div>';
 }
 window.addEventListener('hashchange',route);
+/* the search in the top bar jumps to the clients that match */
+document.addEventListener('keydown',e=>{ if(e.key!=='Enter') return;
+  const i=e.target; if(!i||i.id!=='topSearch') return;
+  clientSearch=i.value.trim(); i.value='';
+  if(location.hash==='#/clients') renderClients(); else location.hash='#/clients';
+});
 
 /* ============================================================= DASHBOARD */
 function renderDashboard(){
@@ -618,20 +641,29 @@ const STAGE_DOT={'New':'#3b82f6','Contacted':'#f59e0b','Quotation Sent':'#7c3aed
 let leadSearch='';
 function renderLeads(){
   const db=load();
+  const q=leadSearch.toLowerCase();
+  const list=db.leads.filter(l=>l.name.toLowerCase().includes(q)||(l.services||[]).join(' ').toLowerCase().includes(q))
+    .sort((a,b)=>LEAD_STAGES.indexOf(a.stage)-LEAD_STAGES.indexOf(b.stage)||a.name.localeCompare(b.name));
   app.innerHTML=`
-  <div class="page-head"><div><h1>Leads</h1><p class="sub">Drag cards between columns to update status</p></div>
-    <button class="btn btn-primary" data-act="add-lead">＋ Add Lead</button></div>
-  <div class="toolbar"><div class="search">🔍<input id="leadSearch" placeholder="Search leads..." value="${esc(leadSearch)}"></div></div>
-  <div class="board" id="leadBoard">
-  ${LEAD_STAGES.map(st=>{
-    const items=db.leads.filter(l=>l.stage===st&&l.name.toLowerCase().includes(leadSearch.toLowerCase()));
-    return `<div class="col ${items.length?'':'empty-drop'}" data-stage="${st}">
-      <div class="col-head"><span class="dot" style="background:${STAGE_DOT[st]}"></span>${st}<span class="count">${items.length}</span></div>
-      <div class="col-body" data-drop="stage" data-stage="${st}">
-        ${items.length?items.map(l=>leadCard(l)).join(''):`<div style="color:var(--faint);font-size:13px;text-align:center;padding:20px 0">Drop leads here</div>`}
-      </div></div>`;}).join('')}
-  </div>`;
-  const s=$('#leadSearch');if(s)s.oninput=e=>{leadSearch=e.target.value;const b=$('#leadBoard');renderLeads();$('#leadSearch').focus();};
+  <div class="page-head"><div><h1>Leads</h1></div></div>
+  <div class="toolbar"><div class="search">🔍<input id="leadSearch" placeholder="Search leads..." value="${esc(leadSearch)}"></div>
+    <span style="color:var(--muted);font-size:13px">${list.length} lead${list.length!==1?'s':''}</span>
+    <button class="btn btn-primary btn-sm" data-act="add-lead">＋ Add lead</button></div>
+  <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
+    <thead><tr><th>Lead</th><th>Services</th><th>Stage</th><th>Assigned to</th><th>Source</th><th>Added</th><th></th></tr></thead>
+    <tbody>${list.map(l=>`<tr>
+      <td><a class="nm" href="#/lead/${l.id}">${esc(l.name)}</a>${l.phone&&l.phone!=='-'?`<div class="sub2">${esc(l.phone)}</div>`:''}</td>
+      <td>${(l.services||[]).map(x=>`<span class="pill tag">${esc(x)}</span>`).join(' ')||'<span class="sub2">—</span>'}</td>
+      <td><select data-cl="stage" data-id="${l.id}" aria-label="Stage for ${esc(l.name)}">${LEAD_STAGES.map(st=>`<option${l.stage===st?' selected':''}>${esc(st)}</option>`).join('')}</select></td>
+      <td>${staffSel(db,l,'assignedTo')}</td>
+      <td><span class="pill blue">${esc(l.source||'—')}</span></td>
+      <td class="sub2">${fmtDate(l.date)}</td>
+      <td class="r"><a class="btn btn-sm" href="#/lead/${l.id}">Open</a></td>
+    </tr>`).join('')||'<tr><td colspan="7" class="empty">No leads match.</td></tr>'}</tbody>
+  </table></div></div>`;
+  keepFocus('#leadSearch',v=>{leadSearch=v;renderLeads();});
+  pageTitle();
+  wireRowEdits();
 }
 function leadCard(l){return `<div class="kcard" draggable="true" data-drag="lead" data-id="${l.id}" data-goto="#/lead/${l.id}">
   <h4>${esc(l.name)}<span class="reddot"></span></h4>
@@ -689,38 +721,65 @@ function deskCell(c,kind){
   const a=auditInfo(c.name);
   return `${a&&a.year?`<span class="desk-yr">FY${a.year}</span>`:''}<a class="btn btn-sm" href="../audit/?client=${encodeURIComponent(c.name)}">${a?'Open':'Start'}</a>`;
 }
+const CL_SERVICES=['VAT','Corporate Tax','Bookkeeping','Audit','Financial Statements','AML','Other'];
+/* the services a client has bought, add and remove them here */
+function svcCell(c){
+  const has=(c.services||[]);
+  const left=CL_SERVICES.filter(x=>!has.includes(x));
+  return `<div class="svc-cell">${has.map(x=>`<span class="pill tag">${esc(x)}<span class="x" data-svcdel="${c.id}" data-s="${esc(x)}" title="Remove">×</span></span>`).join('')}
+    ${left.length?`<select class="svc-add" data-svcadd="${c.id}" aria-label="Add a service for ${esc(c.name)}"><option value="">＋</option>${left.map(x=>`<option>${esc(x)}</option>`).join('')}</select>`:''}</div>`;
+}
+const staffSel=(db,obj,kind)=>`<select data-cl="${kind}" data-id="${obj.id}" aria-label="Assigned user"><option value="">— nobody —</option>${(db.team||[]).map(t=>`<option${(kind==='staff'?(obj.staff||[])[0]:kind==='assignees'?(obj.assignees||[])[0]:obj.assignedTo)===t?' selected':''}>${esc(t)}</option>`).join('')}</select>`;
 function renderClients(){
   const db=load();
   const q=clientSearch.toLowerCase();
   const list=db.clients.filter(c=>(clientFilter==='All'||c.status===clientFilter)&&c.name.toLowerCase().includes(q))
     .sort((a,b)=>a.name.localeCompare(b.name));
-  const partnerSel=c=>`<select data-cl="partner" data-id="${c.id}" aria-label="Partner for ${esc(c.name)}">${db.partners.map(p=>`<option value="${p.id}"${c.partnerId===p.id?' selected':''}>${esc(p.name)}</option>`).join('')}</select>`;
-  const staffSel=c=>`<select data-cl="staff" data-id="${c.id}" aria-label="Assigned user for ${esc(c.name)}"><option value="">— nobody —</option>${(db.team||[]).map(t=>`<option${(c.staff||[])[0]===t?' selected':''}>${esc(t)}</option>`).join('')}</select>`;
   app.innerHTML=`
-  <div class="page-head"><div><h1>Clients</h1></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" data-act="new-client">+ New client</button></div></div>
+  <div class="page-head"><div><h1>Clients</h1></div></div>
   <div class="toolbar"><div class="search">🔍<input id="clientSearch" placeholder="Search clients..." value="${esc(clientSearch)}"></div>
     <select class="sel" id="clientFilter"><option ${clientFilter==='Active'?'selected':''}>Active</option><option ${clientFilter==='All'?'selected':''}>All</option></select>
-    <span style="color:var(--muted);font-size:13px">${list.length} client${list.length!==1?'s':''}</span></div>
+    <span style="color:var(--muted);font-size:13px">${list.length} client${list.length!==1?'s':''}</span>
+    <button class="btn btn-primary btn-sm" data-act="new-client">＋ New client</button></div>
   <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
-    <thead><tr><th>Client</th><th>Partner</th><th>Assigned to</th><th>Audit</th><th>VAT desk</th><th>BK desk</th><th></th></tr></thead>
+    <thead><tr><th>Client</th><th>Services</th><th>Assigned to</th><th>Audit</th><th>VAT desk</th><th>BK desk</th><th></th></tr></thead>
     <tbody>${list.map(c=>`<tr>
-      <td><a class="link" href="#/client/${c.id}">${esc(c.name)}</a>${c.status!=='Active'?` <span class="pill low">${esc(c.status)}</span>`:''}
-        ${(c.services||[]).length?`<div style="margin-top:3px">${(c.services||[]).map(s=>`<span class="pill tag">${esc(s)}</span>`).join(' ')}</div>`:''}</td>
-      <td>${partnerSel(c)}</td>
-      <td>${staffSel(c)}</td>
+      <td><a class="nm" href="#/client/${c.id}">${esc(c.name)}</a>${c.status!=='Active'?` <span class="pill low">${esc(c.status)}</span>`:''}</td>
+      <td>${svcCell(c)}</td>
+      <td>${staffSel(db,c,'staff')}</td>
       <td class="desk">${deskCell(c,'audit')}</td>
       <td class="desk">${deskCell(c,'vat')}</td>
       <td class="desk">${deskCell(c,'bk')}</td>
       <td class="r"><a class="btn btn-sm" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive">📁</a></td>
     </tr>`).join('')||'<tr><td colspan="7" class="empty">No clients match.</td></tr>'}</tbody>
   </table></div></div>`;
-  $('#clientSearch').oninput=e=>{clientSearch=e.target.value;renderClients();const i=$('#clientSearch');i.focus();i.setSelectionRange(i.value.length,i.value.length);};
+  keepFocus('#clientSearch',v=>{clientSearch=v;renderClients();});
+  pageTitle();
   $('#clientFilter').onchange=e=>{clientFilter=e.target.value;renderClients();};
+  wireRowEdits();
+}
+/* the search box keeps the caret where it was after the table redraws */
+function keepFocus(sel,fn){ const i=$(sel); if(!i) return;
+  i.oninput=e=>{ const p=e.target.selectionStart; fn(e.target.value); const j=$(sel); if(j){ j.focus(); try{ j.setSelectionRange(p,p); }catch(err){} } }; }
+/* the drop-downs and service pills in any of the three tables */
+function wireRowEdits(){
   app.querySelectorAll('[data-cl]').forEach(sel=>{ sel.onchange=()=>{
-    const d=load(), c=d.clients.find(x=>x.id===sel.getAttribute('data-id')); if(!c) return;
-    if(sel.getAttribute('data-cl')==='partner'){ c.partnerId=sel.value; save(); toast(`${c.name} moved to ${(d.partners.find(p=>p.id===sel.value)||{}).name||'—'}`); }
-    else { c.staff=sel.value?[sel.value]:[]; c.assignedBy='manual'; c.assignedOn=ymd(new Date()); save(); toast(sel.value?`${c.name} assigned to ${sel.value}`:`${c.name} unassigned`); }
+    const d=load(), kind=sel.getAttribute('data-cl'), id=sel.getAttribute('data-id');
+    const c=d.clients.find(x=>x.id===id), l=d.leads.find(x=>x.id===id), t=d.tasks.find(x=>x.id===id);
+    if(kind==='staff'&&c){ c.staff=sel.value?[sel.value]:[]; c.assignedBy='manual'; c.assignedOn=ymd(new Date()); save(); toast(sel.value?`${c.name} assigned to ${sel.value}`:`${c.name} unassigned`); }
+    else if(kind==='assignedTo'&&l){ l.assignedTo=sel.value; save(); toast(sel.value?`${l.name} assigned to ${sel.value}`:`${l.name} unassigned`); }
+    else if(kind==='stage'&&l){ l.stage=sel.value; l.lastActivity=ymd(new Date()); save(); toast(`${l.name} → ${sel.value}`); renderLeads(); }
+    else if(kind==='assignees'&&t){ t.assignees=sel.value?[sel.value]:[]; save(); toast(sel.value?`Task assigned to ${sel.value}`:'Task unassigned'); }
+    else if(kind==='status'&&t){ t.status=sel.value; save(); toast(`${t.title} → ${sel.value}`); renderTasks(); }
+    else if(kind==='priority'&&t){ t.priority=sel.value; save(); }
+  }; });
+  app.querySelectorAll('[data-svcadd]').forEach(sel=>{ sel.onchange=()=>{
+    const d=load(), c=d.clients.find(x=>x.id===sel.getAttribute('data-svcadd')); if(!c||!sel.value) return;
+    c.services=(c.services||[]).concat([sel.value]); save(); toast(`${sel.value} added to ${c.name}`); renderClients();
+  }; });
+  app.querySelectorAll('[data-svcdel]').forEach(el=>{ el.onclick=()=>{
+    const d=load(), c=d.clients.find(x=>x.id===el.getAttribute('data-svcdel')); if(!c) return;
+    c.services=(c.services||[]).filter(x=>x!==el.getAttribute('data-s')); save(); renderClients();
   }; });
 }
 function clientCard(c,p){return `<div class="kcard" draggable="true" data-drag="client" data-id="${c.id}" data-goto="#/client/${c.id}" style="border-left:3px solid ${p.color}">
@@ -774,21 +833,33 @@ function renderClientDetail(id){
 const TASK_STATUSES=['Not Started','In Progress','Pending to Client','Completed'];
 const TS_DOT={'Not Started':'#3b82f6','In Progress':'#f59e0b','Pending to Client':'#a855f7','Completed':'#10b981'};
 let taskFilter='All';
+let taskSearch='';
 function renderTasks(){
   const db=load();
+  const q=taskSearch.toLowerCase(), today=ymd(new Date());
+  const list=db.tasks.filter(t=>(taskFilter==='All'||t.type===taskFilter)&&(!q||t.title.toLowerCase().includes(q)))
+    .sort((a,b)=>TASK_STATUSES.indexOf(a.status)-TASK_STATUSES.indexOf(b.status)||String(a.dueDate).localeCompare(String(b.dueDate)));
   app.innerHTML=`
-  <div class="page-head"><div><h1>Tasks</h1><p class="sub">Drag cards between columns to update status</p></div>
-    <div style="display:flex;gap:10px"><button class="btn" data-act="run-engine">⟳ Run deadline engine</button><button class="btn btn-primary" data-act="new-task">＋ New Task</button></div></div>
+  <div class="page-head"><div><h1>Tasks</h1></div></div>
   <div class="toolbar">${['All','Task','Reminder','Meeting','Renewal'].map(f=>`<button class="btn btn-sm ${taskFilter===f?'btn-primary':''}" data-act="task-filter" data-f="${f}">${f==='All'?'All':f+'s'}</button>`).join('')}
-    <div class="search" style="flex:1">🔍<input id="taskSearch" placeholder="Search..."></div></div>
-  <div class="board" id="taskBoard">
-  ${TASK_STATUSES.map(st=>{
-    const items=db.tasks.filter(t=>t.status===st&&(taskFilter==='All'||t.type===taskFilter));
-    return `<div class="col" data-status="${st}"><div class="col-head"><span class="dot" style="background:${TS_DOT[st]}"></span>${st}<span class="count">${items.length}</span></div>
-      <div class="col-body" data-drop="status" data-status="${st}">
-        ${items.map(t=>taskCard(t,db)).join('')||`<div style="color:var(--faint);font-size:13px;text-align:center;padding:20px 0">Drop tasks here</div>`}
-      </div></div>`;}).join('')}
-  </div>`;
+    <div class="search" style="flex:1">🔍<input id="taskSearch" placeholder="Search tasks..." value="${esc(taskSearch)}"></div>
+    <button class="btn btn-sm" data-act="run-engine">⟳ Deadlines</button><button class="btn btn-primary btn-sm" data-act="new-task">＋ New task</button></div>
+  <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
+    <thead><tr><th>Task</th><th>Client</th><th>Due</th><th>Status</th><th>Assigned to</th><th>Priority</th><th></th></tr></thead>
+    <tbody>${list.map(t=>{const c=db.clients.find(x=>x.id===t.clientId); const late=t.status!=='Completed'&&t.dueDate&&t.dueDate<today;
+      return `<tr>
+      <td><a class="nm" href="#/task/${t.id}">${esc(t.title)}</a><div class="sub2">${esc(t.type)}${t.recurrence&&t.recurrence!=='None'?' · ⟳ '+esc(t.recurrence):''}</div></td>
+      <td>${c?`<a class="link" href="#/client/${c.id}">${esc(c.name)}</a>`:'<span class="sub2">—</span>'}</td>
+      <td class="sub2" style="white-space:nowrap">${late?'<span class="pill high">Late</span> ':''}${fmtDate(t.dueDate)}</td>
+      <td><select data-cl="status" data-id="${t.id}" aria-label="Status">${TASK_STATUSES.map(st=>`<option${t.status===st?' selected':''}>${esc(st)}</option>`).join('')}</select></td>
+      <td>${staffSel(db,t,'assignees')}</td>
+      <td><select data-cl="priority" data-id="${t.id}" aria-label="Priority">${['High','Medium','Low'].map(p=>`<option${t.priority===p?' selected':''}>${p}</option>`).join('')}</select></td>
+      <td class="r"><a class="btn btn-sm" href="#/task/${t.id}">Open</a></td>
+    </tr>`;}).join('')||'<tr><td colspan="7" class="empty">No tasks match.</td></tr>'}</tbody>
+  </table></div></div>`;
+  keepFocus('#taskSearch',v=>{taskSearch=v;renderTasks();});
+  pageTitle();
+  wireRowEdits();
 }
 function taskCard(t,db){const c=db.clients.find(x=>x.id===t.clientId);
   return `<div class="kcard" draggable="true" data-drag="task" data-id="${t.id}" data-goto="#/task/${t.id}">
