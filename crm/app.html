@@ -69,7 +69,13 @@ table.cl-tbl .sub2{color:var(--muted);font-size:12px}
 .main-col{min-width:0;display:flex;flex-direction:column}
 .topbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--line);padding:13px 24px;display:flex;align-items:center;gap:14px}
 .topbar h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.3px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.top-search{width:300px;max-width:34vw;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:#fff}
+.topbar h1{flex:none;margin-right:4px}
+.top-tools{display:flex;align-items:center;gap:10px;flex:1;min-width:0;justify-content:flex-end;flex-wrap:wrap}
+.top-tools:empty{display:none}
+.top-tools .tsearch{flex:1;min-width:180px;max-width:520px;display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.top-tools .tsearch input{border:0;outline:0;flex:1;min-width:0;font:inherit;font-size:14px;background:transparent}
+.top-tools .sel{border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:#fff;font-size:13.5px}
+.tcount{color:var(--muted);font-size:13px;white-space:nowrap}
 .top-right{display:flex;align-items:center;gap:10px}
 .bell{position:relative;border:1px solid var(--line);background:#fff;border-radius:10px;width:40px;height:38px;display:grid;place-items:center;font-size:16px}
 .bell b{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:10.5px;display:grid;place-items:center;padding:0 4px}
@@ -249,7 +255,7 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
     <div class="main-col">
       <header class="topbar">
         <h1 id="pageTitle">Dashboard</h1>
-        <input class="top-search" id="topSearch" type="search" placeholder="Search clients, leads, tasks…" aria-label="Search">
+        <div class="top-tools" id="topTools"></div>
         <div class="top-right"><a class="bell" href="#/ai" title="Reminders and notifications">🔔<b id="bellCount" hidden>0</b></a></div>
       </header>
       <div class="wrap" id="app"></div>
@@ -501,7 +507,7 @@ function route(){
     ai:['ai',renderAI]};
   const [nav,fn]=map[page]||map.ai;
   renderNav(nav); const t0=$('#pageTitle'); if(t0) t0.textContent='Fair Tax CRM';
-  fn(); pageTitle();
+  renderTools(page); fn(); pageTitle();
 }
 /* the screen's own name goes into the top bar, and the paragraph under it goes away */
 function pageTitle(){
@@ -548,8 +554,7 @@ function remRows(){
 }
 function renderAI(){
   app.innerHTML=`
-  <div class="page-head"><div><h1>AI assistant</h1></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="ai-voice">🎤 Speak</button><button class="btn" data-act="ai-talk">Talk back and forth</button></div></div>
+  <div class="page-head"><div><h1>AI assistant</h1></div></div>
   <div class="ai-grid">
     <div class="card" id="ai-dock"></div>
     <div class="card"><div style="padding:16px 18px 0"><div class="sec-title" style="margin:0">🔔 Reminders &amp; notifications</div>
@@ -565,12 +570,32 @@ function renderAI(){
   else if(dock) dock.innerHTML='<div class="empty" style="padding:40px 20px">The assistant needs a Claude API key – an admin can add it in <b>Users &amp; access</b> on the portal.</div>';
 }
 window.addEventListener('hashchange',route);
-/* the search in the top bar jumps to the clients that match */
-document.addEventListener('keydown',e=>{ if(e.key!=='Enter') return;
-  const i=e.target; if(!i||i.id!=='topSearch') return;
-  clientSearch=i.value.trim(); i.value='';
-  if(location.hash==='#/clients') renderClients(); else location.hash='#/clients';
-});
+/* the search and the buttons for a list live in the top bar, so the table starts
+   right under it and typing never loses the caret when the rows redraw */
+function renderTools(page){
+  const box=$('#topTools'); if(!box) return;
+  const srch=(id,ph,val)=>`<div class="tsearch">🔍<input id="${id}" placeholder="${ph}" value="${esc(val)}" autocomplete="off"></div>`;
+  if(page==='clients'||page==='client'){
+    box.innerHTML=srch('clientSearch','Search clients…',clientSearch)+
+      `<select class="sel" id="clientFilter"><option ${clientFilter==='Active'?'selected':''}>Active</option><option ${clientFilter==='All'?'selected':''}>All</option></select>
+       <span class="tcount" id="tcount"></span><button class="btn btn-primary btn-sm" data-act="new-client">＋ New client</button>`;
+    $('#clientSearch').oninput=e=>{clientSearch=e.target.value;renderClients();};
+    $('#clientFilter').onchange=e=>{clientFilter=e.target.value;renderClients();};
+  } else if(page==='leads'||page==='lead'){
+    box.innerHTML=srch('leadSearch','Search leads…',leadSearch)+
+      `<span class="tcount" id="tcount"></span><button class="btn btn-primary btn-sm" data-act="add-lead">＋ Add lead</button>`;
+    $('#leadSearch').oninput=e=>{leadSearch=e.target.value;renderLeads();};
+  } else if(page==='tasks'||page==='task'){
+    box.innerHTML=srch('taskSearch','Search tasks…',taskSearch)+
+      `<select class="sel" id="taskType">${['All','Task','Reminder','Meeting','Renewal'].map(f=>`<option${taskFilter===f?' selected':''}>${f}</option>`).join('')}</select>
+       <span class="tcount" id="tcount"></span><button class="btn btn-sm" data-act="run-engine">⟳ Deadlines</button><button class="btn btn-primary btn-sm" data-act="new-task">＋ New task</button>`;
+    $('#taskSearch').oninput=e=>{taskSearch=e.target.value;renderTasks();};
+    $('#taskType').onchange=e=>{taskFilter=e.target.value;renderTasks();};
+  } else if(page==='ai'){
+    box.innerHTML=`<button class="btn btn-sm" data-act="ai-voice">🎤 Speak</button><button class="btn btn-sm" data-act="ai-talk">Talk back and forth</button>`;
+  } else box.innerHTML='';
+}
+const setCount=t=>{const c=$('#tcount'); if(c) c.textContent=t;};
 
 /* ============================================================= DASHBOARD */
 function renderDashboard(){
@@ -646,9 +671,6 @@ function renderLeads(){
     .sort((a,b)=>LEAD_STAGES.indexOf(a.stage)-LEAD_STAGES.indexOf(b.stage)||a.name.localeCompare(b.name));
   app.innerHTML=`
   <div class="page-head"><div><h1>Leads</h1></div></div>
-  <div class="toolbar"><div class="search">🔍<input id="leadSearch" placeholder="Search leads..." value="${esc(leadSearch)}"></div>
-    <span style="color:var(--muted);font-size:13px">${list.length} lead${list.length!==1?'s':''}</span>
-    <button class="btn btn-primary btn-sm" data-act="add-lead">＋ Add lead</button></div>
   <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
     <thead><tr><th>Lead</th><th>Services</th><th>Stage</th><th>Assigned to</th><th>Source</th><th>Added</th><th></th></tr></thead>
     <tbody>${list.map(l=>`<tr>
@@ -661,7 +683,7 @@ function renderLeads(){
       <td class="r"><a class="btn btn-sm" href="#/lead/${l.id}">Open</a></td>
     </tr>`).join('')||'<tr><td colspan="7" class="empty">No leads match.</td></tr>'}</tbody>
   </table></div></div>`;
-  keepFocus('#leadSearch',v=>{leadSearch=v;renderLeads();});
+  setCount(`${list.length} lead${list.length!==1?'s':''}`);
   pageTitle();
   wireRowEdits();
 }
@@ -737,10 +759,6 @@ function renderClients(){
     .sort((a,b)=>a.name.localeCompare(b.name));
   app.innerHTML=`
   <div class="page-head"><div><h1>Clients</h1></div></div>
-  <div class="toolbar"><div class="search">🔍<input id="clientSearch" placeholder="Search clients..." value="${esc(clientSearch)}"></div>
-    <select class="sel" id="clientFilter"><option ${clientFilter==='Active'?'selected':''}>Active</option><option ${clientFilter==='All'?'selected':''}>All</option></select>
-    <span style="color:var(--muted);font-size:13px">${list.length} client${list.length!==1?'s':''}</span>
-    <button class="btn btn-primary btn-sm" data-act="new-client">＋ New client</button></div>
   <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
     <thead><tr><th>Client</th><th>Services</th><th>Assigned to</th><th>Audit</th><th>VAT desk</th><th>BK desk</th><th></th></tr></thead>
     <tbody>${list.map(c=>`<tr>
@@ -753,9 +771,8 @@ function renderClients(){
       <td class="r"><a class="btn btn-sm" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive">📁</a></td>
     </tr>`).join('')||'<tr><td colspan="7" class="empty">No clients match.</td></tr>'}</tbody>
   </table></div></div>`;
-  keepFocus('#clientSearch',v=>{clientSearch=v;renderClients();});
+  setCount(`${list.length} client${list.length!==1?'s':''}`);
   pageTitle();
-  $('#clientFilter').onchange=e=>{clientFilter=e.target.value;renderClients();};
   wireRowEdits();
 }
 /* the search box keeps the caret where it was after the table redraws */
@@ -841,9 +858,6 @@ function renderTasks(){
     .sort((a,b)=>TASK_STATUSES.indexOf(a.status)-TASK_STATUSES.indexOf(b.status)||String(a.dueDate).localeCompare(String(b.dueDate)));
   app.innerHTML=`
   <div class="page-head"><div><h1>Tasks</h1></div></div>
-  <div class="toolbar">${['All','Task','Reminder','Meeting','Renewal'].map(f=>`<button class="btn btn-sm ${taskFilter===f?'btn-primary':''}" data-act="task-filter" data-f="${f}">${f==='All'?'All':f+'s'}</button>`).join('')}
-    <div class="search" style="flex:1">🔍<input id="taskSearch" placeholder="Search tasks..." value="${esc(taskSearch)}"></div>
-    <button class="btn btn-sm" data-act="run-engine">⟳ Deadlines</button><button class="btn btn-primary btn-sm" data-act="new-task">＋ New task</button></div>
   <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
     <thead><tr><th>Task</th><th>Client</th><th>Due</th><th>Status</th><th>Assigned to</th><th>Priority</th><th></th></tr></thead>
     <tbody>${list.map(t=>{const c=db.clients.find(x=>x.id===t.clientId); const late=t.status!=='Completed'&&t.dueDate&&t.dueDate<today;
@@ -857,7 +871,7 @@ function renderTasks(){
       <td class="r"><a class="btn btn-sm" href="#/task/${t.id}">Open</a></td>
     </tr>`;}).join('')||'<tr><td colspan="7" class="empty">No tasks match.</td></tr>'}</tbody>
   </table></div></div>`;
-  keepFocus('#taskSearch',v=>{taskSearch=v;renderTasks();});
+  setCount(`${list.length} task${list.length!==1?'s':''}`);
   pageTitle();
   wireRowEdits();
 }
