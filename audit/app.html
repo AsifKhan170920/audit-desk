@@ -1512,11 +1512,14 @@ function buildReport(client, eng, prevEng){
     tokens: {SHARE_TABLE: shareTable, USEFUL_LIVES: lives}});
 
   /* ---------- numeric notes ---------- */
-  const T = (rows) => ({k: 'fs', rows, noteCol: false, years: [Y, PY], noHead: true});
+  // a note table gets a note column when one of its lines refers to another note (e.g. the tax provision in payables → the corporate tax note)
+  const T = (rows) => ({k: 'fs', rows, noteCol: rows.some(r => r.note), years: [Y, PY], noHead: true});
   const openVal = (key, col) => { const s0 = SMAP[key], v = s0 && s0.open ? s0.open[col] : undefined; return v === undefined || v === null || String(v).trim() === '' ? 0 : R(v); };
-  // the opening balance of the cost of revenue schedule is the opening inventory
-  const openNoteRow = key => { const a = openVal(key, 'cy'), b = openVal(key, 'py'); return nz(a, b) ? [row(key === 'cor' ? 'Opening inventory' : 'Balance at the beginning of the year', '', a, b)] : []; };
-  const subRows = (key, extra) => { const s = subLines(eng, key).filter(x => Math.round(x.cy || 0) || Math.round(x.py || 0)).map(x => row(x.caption, '', x.cy, x.py));
+  // the opening balance of the cost of revenue schedule is the opening inventory – it refers to the inventory note
+  const openNoteRow = key => { const a = openVal(key, 'cy'), b = openVal(key, 'py'); return nz(a, b) ? [row(key === 'cor' ? 'Opening inventory' : 'Balance at the beginning of the year', key === 'cor' ? 'inv' : '', a, b)] : []; };
+  /* the note a ledger line refers to: set on the line (ref = schedule key), or the inventory note for the closing inventory in cost of revenue */
+  const lineRef = (key, x) => { const l = (x.lines || []).find(l0 => l0.ref && SMAP[l0.ref]); if (l) return l.ref; return key === 'cor' && /closing (inventory|stock)/i.test(x.caption) ? 'inv' : ''; };
+  const subRows = (key, extra) => { const s = subLines(eng, key).filter(x => Math.round(x.cy || 0) || Math.round(x.py || 0)).map(x => row(x.caption, lineRef(key, x), x.cy, x.py));
     const out = openNoteRow(key).concat(s, extra || []);
     /* a figure typed over this line in the statements: the note carries the difference so it still adds up */
     const dc = R(cy[FS_FIELD[key] || key]) - out.reduce((a, x) => a + R(x.cy), 0), dp = R(py[FS_FIELD[key] || key]) - out.reduce((a, x) => a + R(x.py), 0);
@@ -1524,7 +1527,7 @@ function buildReport(client, eng, prevEng){
     return out; };
   const total = (label, a, b) => row(label || '', '', a, b, 'tot');
   /* the corporate tax provision prints inside whichever schedule holds it */
-  const ctNoteRow = key => (cy.ctKey === key && nz(cy.ctProv, py.ctProv)) ? [row('Provision for corporate tax', '', cy.ctProv, py.ctProv)] : [];
+  const ctNoteRow = key => (cy.ctKey === key && nz(cy.ctProv, py.ctProv)) ? [row('Provision for corporate tax', 'ct', cy.ctProv, py.ctProv)] : [];
   // movements typed in the statement of changes in equity, one row per description
   const eqNoteRows = col => { const m = new Map(); (eng.soceItems || []).filter(x => R(x[col])).forEach(x => { const lbl = (x.label || 'Other movement').trim(), k2 = lbl.toLowerCase(); if (!m.has(k2)) m.set(k2, {lbl, cy: 0, py: 0}); m.get(k2)[x.yr] += R(x[col]); }); return [...m.values()].map(o => row(o.lbl, '', o.cy, o.py)); };
   const items = [];
