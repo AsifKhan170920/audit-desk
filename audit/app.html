@@ -3557,7 +3557,7 @@ function vExport(){
       <button class="dl" data-act="dl-word">${IC.down}<b>Word document</b><span>Same content and page setup, page numbers in the footer</span></button>
       <button class="dl" data-act="dl-excel">${IC.down}<b>Excel workbook</b><span>Statements and notes – can be retrieved into the software later</span></button>
       <button class="dl" data-act="obs-xlsx">${IC.down}<b>Comments &amp; observations</b><span>Your comments on every schedule and line, failed checks and checklist notes</span></button>
-      <button class="dl" data-act="wa-share">${IC.chat}<b>Send on WhatsApp</b><span>The PDF itself on phone and tablet, or a Google Drive link on a computer</span></button>
+      <button class="dl" data-act="wa-share">${IC.chat}<b>Send on WhatsApp</b><span>The PDF itself on phone, tablet and in the Windows app; a Google Drive link in a browser</span></button>
       <button class="dl" data-act="drive-pdf">${IC.upload}<b>Save PDF to Google Drive</b><span>Into ${e_(DB.settings.rootFolder || 'Fair Tax Clients')} / ${e_(c.name)} / FY${en.year}</span></button>
     </div></section>
   ${pageSetupPanel(en, M, true)}
@@ -4586,9 +4586,22 @@ async function waShare(t){
       try { await navigator.share({files: [file], title: name, text: waMessage(c, en)}); return; }
       catch (err) { if (err && err.name === 'AbortError') return; }
     }
-    waLinkModal(c, en, blob, name);
+    // the Windows app hands the file itself to WhatsApp; a browser can only send a Google Drive link
+    if (window.ftDesktop && ftDesktop.whatsapp && ftDesktop.whatsapp.sendFile) waDesktopModal(c, en, blob, name);
+    else waLinkModal(c, en, blob, name);
   } catch (err) { toast(err.message || 'Could not prepare the PDF', true); }
   finally { t.disabled = false; }
+}
+function waDesktopModal(c, en, blob, name){
+  UI.waFile = {blob, name};
+  const p = c.profile || {};
+  modal(`<div class="qd"><h2>Send on WhatsApp</h2>
+    <p class="sub">The PDF is saved and copied, and WhatsApp opens on the client's chat – press <b>Ctrl+V</b> in the message box and the file is attached, then Send.</p>
+    <div class="form-grid"><div class="field"><label for="wa-no">WhatsApp number (optional)</label><input id="wa-no" value="${e_(p.whatsapp || '')}" placeholder="971501234567"></div>
+      <div class="field wide"><label for="wa-msg">Message</label><textarea id="wa-msg" rows="2">${e_(waMessage(c, en))}</textarea></div></div>
+    <p class="small muted">Leave the number blank to pick the chat inside WhatsApp. The file is ${e_(name)}.</p>
+    <div class="foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn primary" data-act="wa-desk">${IC.chat}Open WhatsApp with the PDF</button></div></div>`, true);
 }
 function waLinkModal(c, en, blob, name){
   UI.waFile = {blob, name};
@@ -6639,6 +6652,29 @@ document.addEventListener('click', async ev => {
       }
       case 'ckl-xlsx': download(cklExcel(c, en), `${safeName(c.name)}_Checklist_${en.year}.xlsx`); break;
       case 'wa-share': await waShare(t); break;
+      case 'wa-desk': {
+        // Windows app: the PDF itself goes to WhatsApp (saved, copied as a file, chat opened – Ctrl+V attaches it)
+        const f = UI.waFile; if (!f){ toast('Prepare the PDF again', true); break; }
+        const noRaw = ((document.getElementById('wa-no') || {}).value || '').trim(), no = waDigits(noRaw);
+        const msg = ((document.getElementById('wa-msg') || {}).value || '').trim();
+        if (noRaw){ c.profile = c.profile || {}; c.profile.whatsapp = noRaw; }
+        t.disabled = true;
+        try {
+          const bytes = new Uint8Array(await f.blob.arrayBuffer());
+          const res = await ftDesktop.whatsapp.sendFile({name: f.name, phone: no, text: msg, bytes});
+          if (!res || !res.ok) throw new Error((res && res.error) || 'Could not hand the PDF to WhatsApp');
+          (en.reports = en.reports || []).push({name: f.name, url: '', at: new Date().toISOString(), shared: false, via: 'WhatsApp'}); save();
+          UI.waFile = null; closeModal();
+          modal(`<div class="qd"><h2>${res.opened ? 'WhatsApp is opening' : 'Open WhatsApp'}</h2>
+            <p class="sub">${res.clipboard ? 'The PDF is copied. In the chat, click the message box, press <b>Ctrl+V</b> – the file appears as an attachment – then press Send.' : 'The PDF could not be copied to the clipboard – attach it from the folder below (paper-clip → Document).'}</p>
+            ${res.opened ? '' : '<p class="small">WhatsApp did not open by itself – open it from the Start menu and pick the chat.</p>'}
+            <p class="small muted">Saved copy: ${e_(res.file || '')}</p>
+            <div class="foot"><button class="btn" data-act="wa-folder" data-file="${e_(res.file || '')}">Show the file</button><button class="btn primary" data-close>Done</button></div></div>`, true);
+        } catch (err) { toast(err.message || 'Could not hand the PDF to WhatsApp', true); }
+        finally { t.disabled = false; }
+        break;
+      }
+      case 'wa-folder': { if (window.ftDesktop && ftDesktop.whatsapp && ftDesktop.whatsapp.showFile) ftDesktop.whatsapp.showFile(t.dataset.file); break; }
       case 'wa-go': {
         const f = UI.waFile; if (!f){ toast('Prepare the PDF again', true); break; }
         const noRaw = ((document.getElementById('wa-no') || {}).value || '').trim(), no = waDigits(noRaw);

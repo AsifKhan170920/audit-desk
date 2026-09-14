@@ -23,6 +23,11 @@ if (TRUSTED) {
       abort: () => { speechHandler = null; return ipcRenderer.invoke('ft:speech-abort'); }
     },
     googleSignOut: () => ipcRenderer.invoke('ft:google-signout'),
-    retry: () => ipcRenderer.invoke('ft:retry')
+    retry: () => ipcRenderer.invoke('ft:retry'),
+    whatsapp: {
+      // saves the PDF, puts it on the clipboard as a file and opens the chat – Ctrl+V in WhatsApp attaches it
+      sendFile: (req) => ipcRenderer.invoke('ft:wa-file', { name: String(req.name || ''), phone: String(req.phone || ''), text: String(req.text || ''), bytes: req.bytes }),
+      showFile: (file) => ipcRenderer.invoke('ft:show-file', String(file || ''))
+    }
   });
 }

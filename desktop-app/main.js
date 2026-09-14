@@ -221,6 +221,39 @@ ipcMain.handle('ft:google-signout', async () => {
 });
 ipcMain.handle('ft:retry', () => { if (win) win.loadURL(SITE); return true; });
 
+/* ---------------- WhatsApp: hand a PDF to the WhatsApp app ----------------
+   A website cannot give WhatsApp a file. Here the PDF is saved under Documents\Fair Tax\WhatsApp,
+   put on the clipboard as a file (exactly as if it had been copied in File Explorer) and the chat is
+   opened in WhatsApp – Ctrl+V in the message box attaches it. */
+function runHidden(cmd, args) {
+  return new Promise((resolve, reject) => {
+    let err = '';
+    const p = spawn(cmd, args, { windowsHide: true });
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', reject);
+    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(err.trim() || `exit ${code}`))));
+  });
+}
+ipcMain.handle('ft:wa-file', async (_e, req) => {
+  const name = String((req && req.name) || 'report.pdf').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 120);
+  const bytes = req && req.bytes;
+  if (!bytes || !bytes.byteLength) return { ok: false, error: 'There is no file to send' };
+  const dir = path.join(app.getPath('documents'), 'Fair Tax', 'WhatsApp');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, Buffer.from(bytes));
+  let clipboard = true;
+  try { await runHidden('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Set-Clipboard -LiteralPath '${file.replace(/'/g, "''")}'`]); }
+  catch (e) { clipboard = false; }
+  const phone = String((req && req.phone) || '').replace(/\D/g, '');
+  const text = String((req && req.text) || '').slice(0, 1500);
+  let opened = true;
+  try { await shell.openExternal(`whatsapp://send?${phone ? `phone=${phone}&` : ''}text=${encodeURIComponent(text)}`); }
+  catch (e) { opened = false; }
+  return { ok: true, file, clipboard, opened };
+});
+ipcMain.handle('ft:show-file', (_e, file) => { if (typeof file === 'string' && file) shell.showItemInFolder(file); return true; });
+
 /* ---------------- speech (Windows speech recognition) ---------------- */
 let speechProc = null, speechFrame = null;
 function speechExe() {
