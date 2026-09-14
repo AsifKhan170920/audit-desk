@@ -1884,6 +1884,16 @@ function estHeight(items){
   });
   return h;
 }
+/* takes the outer margins off a run of nodes (the first node's top margin, the last node's bottom margin) and returns them */
+function trimOuterGap(list){
+  const firstOf = n => n && Array.isArray(n.stack) && n.stack.length ? firstOf(n.stack[0]) : n;
+  const lastOf = n => n && Array.isArray(n.stack) && n.stack.length ? lastOf(n.stack[n.stack.length - 1]) : n;
+  const a = firstOf(list[0]), b = lastOf(list[list.length - 1]);
+  let top = 0, bottom = 0;
+  if (a && Array.isArray(a.margin) && a.margin[1] > 0){ top = a.margin[1]; a.margin = [a.margin[0], 0, a.margin[2], a.margin[3]]; }
+  if (b && Array.isArray(b.margin) && b.margin[3] > 0){ bottom = b.margin[3]; b.margin = [b.margin[0], b.margin[1], b.margin[2], 0]; }
+  return {top, bottom};
+}
 function notesFlow(items, tokens, opt){
   const out = [];
   const ind = n => ({stack: [n], margin: [30, 0, 0, 0]});
@@ -1894,7 +1904,13 @@ function notesFlow(items, tokens, opt){
     if (it.k === 'group'){
       const inner = keepWithNext([].concat(...it.items.map(one)));
       // small notes stay together on one page; longer ones flow (tables themselves never split, headings never stranded)
-      return it.keep && estHeight(it.items) < 260 ? [{stack: inner, unbreakable: true}] : inner;
+      if (it.keep && estHeight(it.items) < 260){
+        // the gap above the heading and below the last line is spacing between notes, not part of the note –
+        // it is left outside the block that must fit, so a note that only just fits is not pushed to the next page
+        const gap = trimOuterGap(inner), sp = h => ({text: ' ', fontSize: 1, lineHeight: 1, margin: [0, 0, 0, Math.max(0, h - 1)]});
+        return [].concat(gap.top ? [sp(gap.top)] : [], [{stack: inner, unbreakable: true}], gap.bottom ? [sp(gap.bottom)] : []);
+      }
+      return inner;
     }
     const node = ind(pdfItem(it, tokens, opt)); if (it._tid) node.id = it._tid;
     return [node];
