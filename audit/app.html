@@ -1514,7 +1514,8 @@ function buildReport(client, eng, prevEng){
   /* ---------- numeric notes ---------- */
   const T = (rows) => ({k: 'fs', rows, noteCol: false, years: [Y, PY], noHead: true});
   const openVal = (key, col) => { const s0 = SMAP[key], v = s0 && s0.open ? s0.open[col] : undefined; return v === undefined || v === null || String(v).trim() === '' ? 0 : R(v); };
-  const openNoteRow = key => { const a = openVal(key, 'cy'), b = openVal(key, 'py'); return nz(a, b) ? [row('Balance at the beginning of the year', '', a, b)] : []; };
+  // the opening balance of the cost of revenue schedule is the opening inventory
+  const openNoteRow = key => { const a = openVal(key, 'cy'), b = openVal(key, 'py'); return nz(a, b) ? [row(key === 'cor' ? 'Opening inventory' : 'Balance at the beginning of the year', '', a, b)] : []; };
   const subRows = (key, extra) => { const s = subLines(eng, key).filter(x => Math.round(x.cy || 0) || Math.round(x.py || 0)).map(x => row(x.caption, '', x.cy, x.py));
     const out = openNoteRow(key).concat(s, extra || []);
     /* a figure typed over this line in the statements: the note carries the difference so it still adds up */
@@ -1605,7 +1606,9 @@ function buildReport(client, eng, prevEng){
         const payFin = subLines(eng, 'pay').filter(x => !/vat|tax|provision|advance/i.test(x.caption)).reduce((a, x) => a + (b === 'cy' ? x.cy : x.py), 0);
         const d = r[b];
         const rows = [{cells: [label], style: 'grp'}, {cells: ['Trade and other receivables', recFin + d.rprec, 0, recFin + d.rprec]}, {cells: ['Cash and bank balances', d.cash, 0, d.cash]},
-          {cells: ['Accounts payable and related parties', -(payFin + d.rppay), 0, -(payFin + d.rppay)]}, {cells: ['Loans and borrowings', -d.stb, -d.ltl, -(d.stb + d.ltl)]}];
+          {cells: ['Accounts payable and related parties', -(payFin + d.rppay), 0, -(payFin + d.rppay)]}];
+        // the borrowings row is left out when there were no loans in either year
+        if (nz(cy.stb + cy.ltl, py.stb + py.ltl)) rows.push({cells: ['Loans and borrowings', -d.stb, -d.ltl, -(d.stb + d.ltl)]});
         const w1 = recFin + d.rprec + d.cash - payFin - d.rppay - d.stb;
         rows.push({cells: ['Net liquidity gap', w1, -d.ltl, w1 - d.ltl], style: 'tot'});
         return rows;
