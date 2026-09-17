@@ -4719,6 +4719,8 @@ function obsItems(c, en){
   const has = s => !!String(s || '').trim();
   // the statements print closing balances for the reserves and the current account, so the letter does too
   const tot = (bk, k) => k === 're' ? bk.reClose : k === 'lr' ? bk.lrClose : k === 'ca' ? bk.caClose : bk[k];
+  // lines that print as one row of a note share a caption – the row's figure is their sum
+  const sumCap = (cap, col) => (en.tb || []).filter(x => (x.caption || '').trim().toLowerCase() === cap.toLowerCase()).reduce((a, x) => a + (col === 'amt' ? natural(x, en) : R(x.py)), 0);
   schedulesInOrder(en).forEach(s => {
     const k = s.key;
     if (has(s.remark)) items.push({title: s.label, where: 'Schedule', rows: [[s.label, tot(r.cy, k), tot(r.py, k)]], text: s.remark});
@@ -4729,11 +4731,13 @@ function obsItems(c, en){
         rows: [['Cost', q.costClose, q.costOpen], ['Accumulated depreciation', q.depClose, q.depOpen], ['Net book value', q.nbv, q.nbvPy]]});
     });
     (en.tb || []).filter(l => l.fs === k && has(l.remark)).forEach(l => {
-      const name = (l.caption || l.ledger || '').trim() || s.label;
+      // the ledger is the item; when it prints under a different caption in the report, that row is shown too
+      const name = (l.ledger || l.caption || '').trim() || s.label, cap = (l.caption || '').trim();
       const rows = [[name, natural(l, en), R(l.py)]];
+      if (cap && cap.toLowerCase() !== name.toLowerCase() && cap.toLowerCase() !== s.label.toLowerCase()) rows.push([`${cap} – in the report`, sumCap(cap, 'amt'), sumCap(cap, 'py')]);
       if (s.sec === 'eq' && ['re', 'lr', 'ca'].includes(k)) rows.push([`${s.label} – closing balance`, tot(r.cy, k), tot(r.py, k)]);
       else if (name.toLowerCase() !== s.label.toLowerCase()) rows.push([`${s.label} – total`, tot(r.cy, k), tot(r.py, k)]);
-      items.push({title: name, where: s.label, rows, text: l.remark});
+      items.push({title: name, where: cap && cap.toLowerCase() !== name.toLowerCase() ? `${s.label} · shown as “${cap}”` : s.label, rows, text: l.remark});
     });
   });
   (en.tb || []).filter(l => !sm[l.fs] && has(l.remark)).forEach(l => {
@@ -4790,8 +4794,9 @@ function obsLetterRead(){
    comment typed as one block is split at its full stops (abbreviations such as "Mr." and "No." stay together) */
 function obsParas(text){
   const ABBR = /\b(Mr|Mrs|Ms|Dr|No|Nos|vs|approx|Ltd|Co|St|Equip|Dept|Govt|e\.g|i\.e|cf)\.$/i, out = [];
-  String(text || '').split(/\r?\n+/).forEach(line => {
-    line = line.trim(); if (!line) return;
+  const lines = String(text || '').split(/\r?\n+/).map(x => x.trim()).filter(Boolean);
+  lines.forEach(line => {
+    if (lines.length > 1){ out.push(line); return; }   // typed line breaks are the points
     let cur = '';
     line.split(/(?<=[.!?])\s+(?=[A-Z“"(−–]|(?:19|20)\d\d\b)/).forEach(seg => { if (cur && ABBR.test(cur)) cur += ' ' + seg; else { if (cur) out.push(cur); cur = seg; } });
     if (cur) out.push(cur);
