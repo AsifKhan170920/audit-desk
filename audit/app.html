@@ -3606,7 +3606,7 @@ function vExport(){
       <button class="dl" data-act="print-pdf">${IC.print}<b>Print</b><span>Send the report to your printer · <u data-nav="layout">margins &amp; page numbers</u></span></button>
       <button class="dl" data-act="dl-word">${IC.down}<b>Word document</b><span>Same content and page setup, page numbers in the footer</span></button>
       <button class="dl" data-act="dl-excel">${IC.down}<b>Excel workbook</b><span>Statements and notes – can be retrieved into the software later</span></button>
-      <button class="dl" data-act="obs-xlsx">${IC.down}<b>Comments &amp; observations</b><span>Your comments on every schedule and line, failed checks and checklist notes</span></button>
+      <button class="dl" data-act="obs-letter">${IC.down}<b>Comments &amp; observations</b><span>A letter to the management (PDF) or an Excel list – every remark with the figures of both years, failed checks and checklist notes</span></button>
       <button class="dl" data-act="wa-share">${IC.chat}<b>Send on WhatsApp</b><span>The PDF itself on phone, tablet and in the Windows app; a Google Drive link in a browser</span></button>
       <button class="dl" data-act="drive-pdf">${IC.upload}<b>Save PDF to Google Drive</b><span>Into ${e_(DB.settings.rootFolder || 'Fair Tax Clients')} / ${e_(c.name)} / FY${en.year}</span></button>
     </div></section>
@@ -4470,7 +4470,7 @@ function vChecklist(){
     return `<section class="panel"><div class="row between"><h2>${label}</h2><span class="chip ${op ? 'warn' : 'ok'}">${op ? `${op} open` : 'cleared'}</span></div><ul class="ckl-list">${its.map(item).join('')}</ul></section>`; }).join('');
   const ov = (CK.overrides || []).slice().reverse();
   return `<section class="panel"><div class="head"><div><h1>Pre-issue checklist</h1><p class="sub">${e_(c.name)} · FY${en.year} · Clear every item before issuing the final report. Automatic items update as you work; review items need your tick – write the evidence in the note.</p></div>
-      <div class="row"><button class="btn" data-act="ckl-xlsx">${IC.down}Download checklist</button><button class="btn" data-act="obs-xlsx">${IC.down}Comments &amp; observations</button><button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div>
+      <div class="row"><button class="btn" data-act="ckl-xlsx">${IC.down}Download checklist</button><button class="btn" data-act="obs-letter">${IC.down}Comments &amp; observations</button><button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div>
     <div class="ckl-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Checklist cleared"><span style="width:${pct}%"></span></div>
     <div class="row between"><div class="row"><span class="chip bad">${cnt('bad')} issue${cnt('bad') === 1 ? '' : 's'}</span><span class="chip warn">${cnt('warn')} to check</span><span class="chip neutral">${cnt('todo')} to review</span><span class="chip ok">${cleared} of ${list.length} cleared</span></div>
       <button class="linkish" data-act="ckl-filter">${UI.cklOpenOnly ? 'Show all items' : 'Show only open items'}</button></div>
@@ -4707,6 +4707,137 @@ function obsExcel(c, en){
     let nm = String(wsLabel(en, key)).replace(/[\\\/?*\[\]:]/g, ' ').slice(0, 26) || 'Working'; if (used[nm]) nm = (nm + ' ' + (++used[nm])).slice(0, 31); else used[nm] = 1;
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), nm); });
   return new Blob([XLSX.write(wb, {bookType: 'xlsx', type: 'array'})], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+/* ============================================================
+   COMMENTS & OBSERVATIONS LETTER – every remark typed on a schedule, ledger line or
+   asset class, as a numbered item with the figures of both years and the remark below,
+   laid out as a letter to the management (PDF on the report's page setup). The Excel
+   list (obsExcel) stays for working with the same remarks in a sheet.
+   ============================================================ */
+function obsItems(c, en){
+  const r = compute(en, prevOf(c, en)), sm = SM(en), Y = en.year, PY = Y - 1, items = [];
+  const has = s => !!String(s || '').trim();
+  // the statements print closing balances for the reserves and the current account, so the letter does too
+  const tot = (bk, k) => k === 're' ? bk.reClose : k === 'lr' ? bk.lrClose : k === 'ca' ? bk.caClose : bk[k];
+  schedulesInOrder(en).forEach(s => {
+    const k = s.key;
+    if (has(s.remark)) items.push({title: s.label, where: 'Schedule', rows: [[s.label, tot(r.cy, k), tot(r.py, k)]], text: s.remark});
+    if (k === 'ppe') (en.ppe || []).forEach(p => {
+      if (!has(p.remark)) return;
+      const q = ppeRows(en).find(x => x.id === p.id) || {};
+      items.push({title: p.name || 'Asset class', where: 'Property, plant and equipment – asset class', text: p.remark,
+        rows: [['Cost', q.costClose, q.costOpen], ['Accumulated depreciation', q.depClose, q.depOpen], ['Net book value', q.nbv, q.nbvPy]]});
+    });
+    (en.tb || []).filter(l => l.fs === k && has(l.remark)).forEach(l => {
+      const name = (l.caption || l.ledger || '').trim() || s.label;
+      const rows = [[name, natural(l, en), R(l.py)]];
+      if (s.sec === 'eq' && ['re', 'lr', 'ca'].includes(k)) rows.push([`${s.label} – closing balance`, tot(r.cy, k), tot(r.py, k)]);
+      else if (name.toLowerCase() !== s.label.toLowerCase()) rows.push([`${s.label} – total`, tot(r.cy, k), tot(r.py, k)]);
+      items.push({title: name, where: s.label, rows, text: l.remark});
+    });
+  });
+  (en.tb || []).filter(l => !sm[l.fs] && has(l.remark)).forEach(l => {
+    const name = (l.caption || l.ledger || '').trim();
+    items.push({title: name, where: 'Not in any schedule', rows: [[name, R(l.amt), R(l.py)]], text: l.remark});
+  });
+  if (en.tbDocs && has(en.tbDocs.remark)) items.push({title: 'Trial balance', where: '', rows: [], text: en.tbDocs.remark});
+  const checks = r.checks.filter(k => k.level !== 'ok' && k.level !== 'info');
+  let ckl = []; try { ckl = cklEval(c, en).filter(i => ['bad', 'warn', 'todo'].includes(i.st) || has(i.note)); } catch (e) {}
+  return {items, checks, ckl, Y, PY};
+}
+const OBS_LETTER_DEFAULT = {
+  from: 'Fair Tax International FZC', signatory: '', title: 'Authorised Signatory', to: 'To,\nThe Management,', salutation: 'Dear Sir / Madam,',
+  intro: 'We set out below our comments and observations arising from the preparation of the financial statements of {name} for the year ended {yearEnd}. For each item the figures of the current year and of the comparative year are shown, followed by our observation. Amounts are in Arab Emirates Dirhams.',
+  closing: 'We request you to review the above and revert with your comments and the supporting documents, so that the financial statements can be finalised. We shall be pleased to discuss any of these matters and to provide further information as required.',
+  checks: true, ckl: false
+};
+const longDate = d => { d = d || new Date(); return `${d.getDate()} ${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][d.getMonth()]} ${d.getFullYear()}`; };
+function obsLetterOpts(c, en){
+  const p = c.profile || {}, o = Object.assign({}, OBS_LETTER_DEFAULT, DB.settings.obsLetter || {});
+  const yeText = `${p.yearEndText || 'December 31'}, ${en.year}`;
+  o.date = longDate();
+  o.subject = `Comments and observations – financial statements for the year ended ${yeText}`;
+  o.intro = o.intro.replace(/\{name\}/g, c.name).replace(/\{yearEnd\}/g, yeText);
+  return o;
+}
+function obsLetterModal(){
+  const c = client(), en = eng(); if (!c || !en) return;
+  const o = obsLetterOpts(c, en), {items, checks, ckl} = obsItems(c, en);
+  const f = (id, label, v, opts = {}) => `<div class="field${opts.wide ? ' wide' : ''}"><label for="${id}">${label}</label>${opts.area ? `<textarea id="${id}" rows="${opts.rows || 2}">${e_(v)}</textarea>` : `<input id="${id}" value="${e_(v)}">`}</div>`;
+  modal(`<h2>Comments &amp; observations letter</h2>
+    <p class="sub">${items.length ? `${items.length} item(s) with a remark` : 'No remarks yet'} – every comment typed on a schedule, ledger line or asset class becomes a numbered item: the item’s name, a table with the FY${en.year} and FY${en.year - 1} figures, and your remark below it. Printed as a letter on the report’s page setup (letterhead margins).${items.length ? '' : ' Type a comment on the Schedules screen (the “Comment” box of a line) or in a schedule’s window first.'}</p>
+    <div class="form-grid">
+      ${f('ol-date', 'Date', o.date)}${f('ol-from', 'From (firm)', o.from)}
+      ${f('ol-to', 'Addressed to', o.to, {area: true, rows: 2})}${f('ol-subject', 'Subject', o.subject, {area: true, rows: 2})}
+      ${f('ol-sal', 'Salutation', o.salutation)}${f('ol-sign', 'Signatory', o.signatory)}${f('ol-title', 'Signatory title', o.title)}
+      ${f('ol-intro', 'Opening paragraph', o.intro, {area: true, rows: 4, wide: true})}
+      ${f('ol-close', 'Closing paragraph', o.closing, {area: true, rows: 3, wide: true})}
+      <div class="field wide"><label class="check-lbl"><input type="checkbox" id="ol-checks"${o.checks ? ' checked' : ''}> Add the checks that need attention (${checks.length})</label>
+        <label class="check-lbl"><input type="checkbox" id="ol-ckl"${o.ckl ? ' checked' : ''}> Add the open pre-issue checklist items (${ckl.length})</label></div>
+    </div>
+    <div class="foot"><button class="btn" data-close>Cancel</button><button class="btn" data-act="obs-xlsx">${IC.down}Excel list</button><button class="btn primary" data-act="obs-pdf">${IC.down}Download PDF letter</button></div>`, true);
+}
+function obsLetterRead(){
+  const V = id => { const el = document.getElementById(id); return el ? (el.type === 'checkbox' ? el.checked : el.value) : undefined; };
+  const o = {date: V('ol-date'), from: V('ol-from'), to: V('ol-to'), subject: V('ol-subject'), salutation: V('ol-sal'), signatory: V('ol-sign'), title: V('ol-title'), intro: V('ol-intro'), closing: V('ol-close'), checks: V('ol-checks'), ckl: V('ol-ckl')};
+  // the firm, signatory, wording and choices are kept for the next letter; the date and subject are worked out each time
+  DB.settings.obsLetter = {from: o.from, signatory: o.signatory, title: o.title, to: o.to, salutation: o.salutation, closing: o.closing, checks: o.checks, ckl: o.ckl,
+    intro: (DB.settings.obsLetter || {}).intro || OBS_LETTER_DEFAULT.intro};
+  save();
+  return o;
+}
+async function obsLetterPdf(c, en, o){
+  const {items, checks, ckl, Y, PY} = obsItems(c, en);
+  const p = c.profile || {}, L = layoutOf(en), P = L.page, G = pageGeometry({layout: L});
+  const F = await pdfFontSet();
+  const money = v => typeof v === 'number' ? fmtN(v) : String(v ?? '');
+  const cell = (t, opt) => Object.assign({text: t}, opt || {});
+  const rule = (i, n) => i === 0 || i === 1 || i === n.table.body.length;
+  const tbl = rows => ({table: {headerRows: 1, widths: ['*', 88, 88], dontBreakRows: true,
+      body: [[cell('Particulars', {bold: true}), cell(`FY${Y}\nAED`, {bold: true, alignment: 'right'}), cell(`FY${PY}\nAED`, {bold: true, alignment: 'right'})]]
+        .concat(rows.map(rw => [cell(rw[0]), cell(money(rw[1]), {alignment: 'right'}), cell(money(rw[2]), {alignment: 'right'})]))},
+    layout: {hLineWidth: (i, n) => rule(i, n) ? 0.8 : 0.3, hLineColor: (i, n) => rule(i, n) ? '#000' : '#bbb', vLineWidth: () => 0, paddingTop: () => 3, paddingBottom: () => 3, paddingLeft: () => 2, paddingRight: () => 2},
+    margin: [0, 3, 0, 6]});
+  const para = (t, m) => ({text: String(t || ''), alignment: 'justify', margin: m || [0, 0, 0, 8]});
+  const content = [];
+  if (MM(P.letterhead) > 0) content.push({text: ' ', fontSize: 1, margin: [0, MM(P.letterhead), 0, 0]});
+  content.push({text: o.date, margin: [0, 0, 0, 14]});
+  content.push({text: [o.to, c.name, p.cityLine || `${p.emirate || ''}, U.A.E.`].filter(Boolean).join('\n'), margin: [0, 0, 0, 14]});
+  content.push({text: o.subject, bold: true, margin: [0, 0, 0, 10]});
+  content.push({text: o.salutation, margin: [0, 0, 0, 8]});
+  content.push(para(o.intro, [0, 0, 0, 12]));
+  let n = 0;
+  items.forEach(it => {
+    n++;
+    const head = [{text: `${n}. ${it.title}`, bold: true, fontSize: 11.5, margin: [0, 6, 0, 1]}];
+    if (it.where && it.where !== it.title) head.push({text: it.where, color: '#555', fontSize: 9.5, margin: [0, 0, 0, 2]});
+    if (it.rows.length) head.push(tbl(it.rows));
+    content.push({stack: head, unbreakable: true});
+    content.push(para(it.text, [0, 0, 0, 10]));
+  });
+  if (!items.length) content.push({text: 'No comments or observations have been recorded on the schedules, ledger lines or asset classes.', italics: true, margin: [0, 0, 0, 10]});
+  if (o.checks && checks.length){
+    n++;
+    content.push({text: `${n}. Checks that need attention`, bold: true, fontSize: 11.5, margin: [0, 6, 0, 3]});
+    content.push({ul: checks.map(k => `${k.level === 'bad' ? 'Issue' : 'Warning'}: ${k.text}`), margin: [0, 0, 0, 10]});
+  }
+  if (o.ckl && ckl.length){
+    n++;
+    content.push({text: `${n}. Pre-issue checklist – open items`, bold: true, fontSize: 11.5, margin: [0, 6, 0, 3]});
+    content.push({ul: ckl.map(i => `${CKL_CHIP[i.st][1]}: ${i.text}${i.auto && i.auto.msg ? ` – ${i.auto.msg}` : ''}${String(i.note || '').trim() ? ` (${i.note})` : ''}`), margin: [0, 0, 0, 10]});
+  }
+  content.push(para(o.closing, [0, 6, 0, 16]));
+  content.push({stack: [{text: 'Yours faithfully,'}, {text: `For ${o.from}`, bold: true, margin: [0, 2, 0, 34]}, {text: o.signatory || ' '}, {text: o.title || ' '}], unbreakable: true});
+  const def = {
+    pageSize: {width: G.pw, height: G.ph}, pageMargins: [G.left, G.top, G.right, G.bottom], content,
+    defaultStyle: {font: 'Carlito', fontSize: 11, lineHeight: 1.15},
+    header: () => (P.headerText || '').trim() ? {text: P.headerText.trim(), fontSize: 9, color: '#444', alignment: 'right', absolutePosition: {x: G.left, y: G.topM + 2}, margin: [G.left, 0, G.right, 0]} : null,
+    footer: (cur, total) => ({text: `Page ${cur} of ${total}`, fontSize: 9, alignment: 'center', margin: [G.left, 4, G.right, 0]}),
+    background: () => P.lhImage && P.lhInPdf ? {image: P.lhImage, width: G.pw, height: G.ph} : null,
+    info: {title: `${c.name} – Comments and observations FY${Y}`, author: 'Fair Tax Audit Desk'}
+  };
+  const bytes = await renderDef(def, F, true);
+  return new Blob([bytes], {type: 'application/pdf'});
 }
 function cklExcel(c, en){
   const list = cklEval(c, en), CK = en.checklist || {};
@@ -6815,6 +6946,8 @@ document.addEventListener('click', async ev => {
         break;
       }
       case 'obs-xlsx': download(obsExcel(c, en), `${safeName(c.name)}_Comments_${en.year}.xlsx`); break;
+      case 'obs-letter': obsLetterModal(); break;
+      case 'obs-pdf': { const o = obsLetterRead(); t.disabled = true; toast('Preparing the letter…'); try { download(await obsLetterPdf(c, en, o), `${safeName(c.name)}_Observations_${en.year}.pdf`); closeModal(); } catch (err) { toast('Could not make the PDF: ' + err.message, true); } t.disabled = false; break; }
       case 'ckl-go': closeModal(); UI.view = 'checklist'; save(); render(); window.scrollTo(0, 0); break;
       case 'ckl-override': {
         const reason = ((document.getElementById('ckl-reason') || {}).value || '').trim();
