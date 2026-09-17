@@ -2931,6 +2931,7 @@ async function pinRemove(){
   delete DB.settings.adminPin; UI.unlocked = true; save(); render(); toast('Admin passcode removed');
 }
 function toggleAdminOnly(id){
+  if (staffUser()) return;   // only the admin marks a client admin only
   const c = DB.clients.find(x => x.id === id); if (!c) return;
   if (clientLocked(c)){ pinAskModal(() => { toggleAdminOnly(id); }); return; }
   c.adminOnly = !c.adminOnly; save(); render();
@@ -2947,11 +2948,11 @@ function vClients(){
     const folder = c.drive && c.drive.folderId ? `<a class="folder" href="${folderUrl(c.drive.folderId)}" target="_blank" rel="noopener">${IC.folder}<span>Open Drive folder</span></a>` : '<span class="muted small">No Drive folder yet</span>';
     return `<tr${c.adminOnly ? ' class="locked"' : ''}><td><button class="link-strong" data-open="${c.id}">${e_(c.name)}</button>${c.adminOnly ? `<span class="lockchip" title="${pinSet() ? 'Admin only – hidden from staff accounts; asks for the passcode' : 'Admin only – hidden from staff accounts'}">🔒</span>` : ''}<div class="muted small">${e_((c.profile || {}).emirate || '')}</div></td>
       <td>${latest ? 'FY' + latest.year + ' · ' + e_(latest.type) : '–'}</td><td>${folder}</td><td>${status}</td>
-      <td class="r"><button class="icon-btn" data-act="lock-client" data-id="${c.id}" title="${c.adminOnly ? 'Open to everyone' : 'Admin only – hide this client from staff accounts'}">${c.adminOnly ? '🔒' : '🔓'}</button><button class="icon-btn" data-act="del-client" data-id="${c.id}" title="Delete client">${IC.trash}</button></td></tr>`;
+      <td class="r">${staffUser() ? '' : `<button class="icon-btn" data-act="lock-client" data-id="${c.id}" title="${c.adminOnly ? 'Open to everyone' : 'Admin only – hide this client from staff accounts'}">${c.adminOnly ? '🔒' : '🔓'}</button>`}<button class="icon-btn" data-act="del-client" data-id="${c.id}" title="Delete client">${IC.trash}</button></td></tr>`;
   }).join('');
   return `<section class="panel"><div class="head"><div><h1>Clients</h1><p class="sub">Open a client to prepare its financial statements, or create a new one.</p></div>
     <div class="row"><label class="btn" for="import-saved" title="Excel downloaded from this software, or a backup file">${IC.upload}Import saved statements</label><input id="import-saved" type="file" accept=".xlsx,.json" hidden><label class="btn" for="fs-in-client" title="The Fair Tax financial statements workbook (Bs, P&amp;L, Equity, Cf and notes)">${IC.upload}Import financial statements (Excel)</label><input id="fs-in-client" type="file" accept=".xlsx,.xls" hidden><button class="btn primary" data-act="wz-start">${IC.plus}New audit</button></div></div>
-    <p class="small muted" style="margin:10px 0 0">Four guided steps: the company and its documents, the financial year, the schedules to start from, and the audit setup. · <button class="linkish" data-act="new-client">Just add a client without the steps</button>${pinSet() && UI.unlocked ? ' · <button class="linkish" data-act="pin-lock">Lock admin-only clients again</button>' : ''}</p></section>
+    <p class="small muted" style="margin:10px 0 0">Four guided steps: the company and its documents, the financial year, the schedules to start from, and the audit setup. · <button class="linkish" data-act="new-client">Just add a client without the steps</button>${pinSet() && UI.unlocked && !staffUser() ? ' · <button class="linkish" data-act="pin-lock">Lock admin-only clients again</button>' : ''}</p></section>
     <section class="panel steps-panel"><div class="steps">
       <div class="step"><div class="step-n">1</div><div><b>Create client</b><span>Enter company details once. A Google Drive folder is created for the client.</span></div></div>
       <div class="step"><div class="step-n">2</div><div><b>Enter trial balance</b><span>Type, paste from Excel or import. Attach proof to any amount.</span></div></div>
@@ -3636,12 +3637,12 @@ function vSettings(){
     <div class="form-grid"><div class="field"><label for="set-aikey">Claude API key</label><input id="set-aikey" type="password" autocomplete="off" placeholder="sk-ant-…" value="${e_(AI.key())}"></div>
     ${field('set-aimodel', 'Model', AI.model(), {bind: 'settings.aiModel', select: AI_MODELS})}
     <div class="field"><label>Status</label><div class="row">${AI.key() ? '<span class="chip ok">Key saved</span><button class="btn small" data-act="ai-test">Test</button><button class="linkish" data-act="ai-key-remove">Remove</button>' : '<span class="chip neutral">No key</span><button class="btn small primary" data-act="ai-key">How to get a key</button>'}</div></div></div></section>
-  <section class="panel"><h2>Admin lock</h2>
+  ${staffUser() ? '' : `<section class="panel"><h2>Admin lock</h2>
     <p class="sub">A client marked <b>admin only</b> (the lock button on the Clients list) is private to the admin: staff signed in to the portal do not see it in the Audit Desk or the CRM. A passcode adds a lock on this computer as well, so other people using it cannot open those clients. It is a lock on the screen, not encryption – the admin's backup file still holds everything, so keep backups where only you can reach them.</p>
     <div class="row">${pinSet()
       ? `<span class="chip ok">Passcode set</span>${UI.unlocked ? '<span class="chip neutral">Unlocked for this session</span><button class="btn small" data-act="pin-lock">Lock again</button>' : ''}<button class="btn small" data-act="pin-set">Change passcode</button><button class="linkish" data-act="pin-remove">Remove</button>`
       : `<span class="chip neutral">No passcode</span><button class="btn small primary" data-act="pin-set">Set a passcode</button>`}</div>
-    ${DB.clients.some(c => c.adminOnly) ? `<p class="small muted" style="margin-top:10px">Admin only: ${DB.clients.filter(c => c.adminOnly).map(c => e_(c.name)).join(' · ')}${pinSet() ? '' : ' – hidden from staff; <b>set a passcode above</b> to lock them on this computer too.'}</p>` : '<p class="small muted" style="margin-top:10px">No client is marked admin only yet – use the lock button on the Clients list.</p>'}</section>
+    ${DB.clients.some(c => c.adminOnly) ? `<p class="small muted" style="margin-top:10px">Admin only: ${DB.clients.filter(c => c.adminOnly).map(c => e_(c.name)).join(' · ')}${pinSet() ? '' : ' – hidden from staff; <b>set a passcode above</b> to lock them on this computer too.'}</p>` : '<p class="small muted" style="margin-top:10px">No client is marked admin only yet – use the lock button on the Clients list.</p>'}</section>`}
   ${tplPanel()}
   <section class="panel"><h2>Backup</h2><div class="row">
     <button class="btn" data-act="backup-dl">${IC.down}Download backup file</button>
@@ -6602,7 +6603,7 @@ document.addEventListener('click', async ev => {
       case 'wz-back': UI.wz.step = Math.max(1, UI.wz.step - 1); render(); window.scrollTo(0, 0); break;
       case 'wz-finish': await wzFinish(); break;
       case 'lock-client': toggleAdminOnly(t.dataset.id); break;
-      case 'pin-set': pinSetModal(); break;
+      case 'pin-set': if (!staffUser()) pinSetModal(); break;
       case 'pin-save': await pinSave(); break;
       case 'pin-go': await pinCheck(); break;
       case 'pin-remove': await pinRemove(); break;
