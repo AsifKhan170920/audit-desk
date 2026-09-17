@@ -4786,6 +4786,18 @@ function obsLetterRead(){
   save();
   return o;
 }
+/* a remark is printed one point per line: every line typed in the comment box is a line of its own, and a
+   comment typed as one block is split at its full stops (abbreviations such as "Mr." and "No." stay together) */
+function obsParas(text){
+  const ABBR = /\b(Mr|Mrs|Ms|Dr|No|Nos|vs|approx|Ltd|Co|St|Equip|Dept|Govt|e\.g|i\.e|cf)\.$/i, out = [];
+  String(text || '').split(/\r?\n+/).forEach(line => {
+    line = line.trim(); if (!line) return;
+    let cur = '';
+    line.split(/(?<=[.!?])\s+(?=[A-Z“"(−–])/).forEach(seg => { if (cur && ABBR.test(cur)) cur += ' ' + seg; else { if (cur) out.push(cur); cur = seg; } });
+    if (cur) out.push(cur);
+  });
+  return out.map((p, i) => ({text: (out.length > 1 ? '– ' : '') + p, alignment: 'justify', margin: [out.length > 1 ? 8 : 0, 0, 0, i === out.length - 1 ? 0 : 3]}));
+}
 async function obsLetterPdf(c, en, o){
   const {items, checks, ckl, Y, PY} = obsItems(c, en);
   const p = c.profile || {}, L = layoutOf(en), P = L.page, G = pageGeometry({layout: L});
@@ -4813,7 +4825,7 @@ async function obsLetterPdf(c, en, o){
     if (it.where && it.where !== it.title) head.push({text: it.where, color: '#555', fontSize: 9.5, margin: [0, 0, 0, 2]});
     if (it.rows.length) head.push(tbl(it.rows));
     content.push({stack: head, unbreakable: true});
-    content.push(para(it.text, [0, 0, 0, 10]));
+    content.push({stack: obsParas(it.text), margin: [0, 0, 0, 10]});
   });
   if (!items.length) content.push({text: 'No comments or observations have been recorded on the schedules, ledger lines or asset classes.', italics: true, margin: [0, 0, 0, 10]});
   if (o.checks && checks.length){
