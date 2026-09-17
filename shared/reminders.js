@@ -218,6 +218,11 @@
     db = db || {};
     var P = policyOf(db), now = opts.now ? new Date(opts.now) : new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     var horizon = +opts.days || 7, me = opts.me || null, list = [];
+    // an admin-only client, and its tasks, are for the admin alone – never in a staff member's reminders
+    if (me && !me.admin && (db.clients || []).some(function (c) { return c && c.adminOnly; })) {
+      var priv = {}; (db.clients || []).forEach(function (c) { if (c && c.adminOnly) priv[c.id] = true; });
+      db = Object.assign({}, db, {clients: (db.clients || []).filter(function (c) { return !priv[c.id]; }), tasks: (db.tasks || []).filter(function (t) { return !(t && priv[t.clientId]); })});
+    }
     var clients = (db.clients || []).filter(function (c) { return c.status !== 'Inactive'; });
     var clientById = {}; (db.clients || []).forEach(function (c) { clientById[c.id] = c; });
     var tasks = db.tasks || [];

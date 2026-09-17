@@ -80,7 +80,7 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.who{display:none}}
 </style>
 <script src="shared/cloud.js?v=6"></script>
-<script src="shared/reminders.js?v=6"></script>
+<script src="shared/reminders.js?v=7"></script>
 <script src="shared/notify.js?v=6"></script>
 <script src="shared/ai-launcher.js?v=6"></script>
 </head>
@@ -140,8 +140,10 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
     if (params.get('go') === 'users' && me.role === 'admin'){ users(); return; }
     dashboard();
   }
-  /* every client the signed-in person may see, from the CRM and the Audit Desk, merged by name */
+  /* every client the signed-in person may see, from the CRM and the Audit Desk, merged by name –
+     a client marked admin only (in either app) is for the admin alone and is left out for staff */
   var CLIENTS = null, clFilter = '';
+  var maySee = function(c){ return !!c && (!c.adminOnly || me.role === 'admin'); };
   var norm = function(s){ return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
   async function loadClients(){
     if (CLIENTS) return CLIENTS;
@@ -156,16 +158,17 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
         await FT.pull('crm', FT.APPS.crm.key);
         var d = JSON.parse(localStorage.getItem(FT.APPS.crm.key) || '{}');
         var pn = {}; (d.partners || []).forEach(function(p){ pn[p.id] = p.name; });
-        (d.clients || []).forEach(function(c){ add(c.name, {name: c.name, crmId: c.id, partner: pn[c.partnerId] || '', services: c.services || [], status: c.status || ''}); });
+        (d.clients || []).filter(maySee).forEach(function(c){ add(c.name, {name: c.name, crmId: c.id, partner: pn[c.partnerId] || '', services: c.services || [], status: c.status || '', adminOnly: !!c.adminOnly}); });
       } catch (e) {}
     }
     if (FT.canOpen(me, 'audit')){
       try {
         await FT.pull('audit', FT.APPS.audit.key);
         var a = JSON.parse(localStorage.getItem(FT.APPS.audit.key) || '{}');
-        (a.clients || []).forEach(function(c){
+        (a.clients || []).filter(maySee).forEach(function(c){
           var ys = (c.engagements || []).map(function(e){ return e.year; }).sort();
-          add(c.name, {audit: true, auditYear: ys.length ? 'FY' + ys[ys.length - 1] : '', adminOnly: !!c.adminOnly});
+          var was = map[norm(c.name)];
+          add(c.name, {audit: true, auditYear: ys.length ? 'FY' + ys[ys.length - 1] : '', adminOnly: !!c.adminOnly || !!(was && was.adminOnly)});
         });
       } catch (e) {}
     }

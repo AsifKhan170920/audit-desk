@@ -97,6 +97,7 @@
   /* ---------------- automatic assignment ---------------- */
   function autoAssign(db, c, force) {
     var P = policy();
+    if (c.adminOnly) return null;   // an admin-only client is never handed to staff automatically
     if (!force && (!P.autoAssign || (c.staff || []).length)) return null;
     var pick = R.suggestAssignee(c, db, team());
     if (!pick) return null;

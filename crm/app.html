@@ -273,10 +273,30 @@ const BIZ_DEFAULT={name:'Fair Tax International FZC',licence:'SC252008901',addre
 function biz(){return Object.assign({},BIZ_DEFAULT,(load().business||{}));}
 function bizAddrBr(){return esc(biz().address).replace(/\n/g,'<br>');}
 function bizAddrLine(){return esc(biz().address).replace(/\n/g,', ');}
+/* ---------- admin-only clients ----------
+   A client ticked "Private – admin only" belongs to the portal admin alone. For a
+   staff member the client – with its tasks, quotations, agreements, invoices,
+   receipts and service schedules – is taken out of the working data when the CRM
+   loads and put back, untouched, every time the data is saved: a staff member's
+   save never drops it and their screens never list it. The Audit Desk does the
+   same with its admin-only clients, so the client is private in both places. */
+const PRIVATE_COLLS={tasks:'clientId',quotations:'refId',agreements:'clientId',invoices:'clientId',receipts:'clientId',services:'clientId'};
+let HIDDEN=null;
+function isStaffUser(){const m=window.FT&&FT.me;return !!(m&&m.role!=='admin');}
+function hidePrivate(m){
+  HIDDEN=null; if(!isStaffUser()) return m;
+  const ids=new Set((m.clients||[]).filter(c=>c&&c.adminOnly).map(c=>c.id)); if(!ids.size) return m;
+  HIDDEN={clients:m.clients.filter(c=>ids.has(c.id))}; m.clients=m.clients.filter(c=>!ids.has(c.id));
+  Object.keys(PRIVATE_COLLS).forEach(k=>{const f=PRIVATE_COLLS[k], own=x=>!!(x&&ids.has(x[f])&&(k!=='quotations'||x.forType==='client'));
+    HIDDEN[k]=(m[k]||[]).filter(own); m[k]=(m[k]||[]).filter(x=>!own(x));});
+  return m;
+}
+function withHidden(m){ if(!HIDDEN) return m; const out=Object.assign({},m); Object.keys(HIDDEN).forEach(k=>{out[k]=(m[k]||[]).concat(HIDDEN[k]);}); return out; }
+const privateChip=c=>c&&c.adminOnly?' <span class="pill high" title="Admin only – staff accounts do not see this client in the CRM or the Audit Desk">🔒 Admin only</span>':'';
 let mem=null;
 function load(){
   if(mem) return mem;
-  try{const r=localStorage.getItem(STORE_KEY); if(r){mem=migrate(JSON.parse(r)); return mem;}}catch(e){}
+  try{const r=localStorage.getItem(STORE_KEY); if(r){mem=hidePrivate(migrate(JSON.parse(r))); return mem;}}catch(e){}
   mem=seed(); save(); return mem;
 }
 function migrate(m){
@@ -285,7 +305,7 @@ function migrate(m){
   m.business=Object.assign({},BIZ_DEFAULT,(m.business||{}));
   return m;
 }
-function save(){ try{localStorage.setItem(STORE_KEY,JSON.stringify(mem));}catch(e){} }
+function save(){ try{localStorage.setItem(STORE_KEY,JSON.stringify(withHidden(mem)));}catch(e){} }
 function reset(){ mem=seed(); save(); route(); toast('Sample data restored'); }
 const uid=p=>(p||'id')+Math.random().toString(36).slice(2,8);
 const $=s=>document.querySelector(s);
@@ -768,7 +788,7 @@ function renderClients(){
   <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
     <thead><tr><th>Client</th><th>Services</th><th>Assigned to</th><th>Audit</th><th>VAT desk</th><th>BK desk</th><th></th></tr></thead>
     <tbody>${list.map(c=>`<tr>
-      <td><a class="nm" href="#/client/${c.id}">${esc(c.name)}</a>${c.status!=='Active'?` <span class="pill low">${esc(c.status)}</span>`:''}</td>
+      <td><a class="nm" href="#/client/${c.id}">${esc(c.name)}</a>${c.status!=='Active'?` <span class="pill low">${esc(c.status)}</span>`:''}${privateChip(c)}</td>
       <td>${svcCell(c)}</td>
       <td>${staffSel(db,c,'staff')}</td>
       <td class="desk">${deskCell(c,'audit')}</td>
@@ -818,7 +838,7 @@ function renderClientDetail(id){
   const rel=db.tasks.filter(t=>t.clientId===c.id);
   app.innerHTML=`
   <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/clients">←</a>
-    <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="margin-top:4px;color:var(--muted);font-size:13px"><span class="pill active">${c.status}</span> &nbsp;👤 ${esc(p?p.name:'Unassigned')}${c.trn&&c.trn!=='-'?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
+    <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="margin-top:4px;color:var(--muted);font-size:13px"><span class="pill active">${c.status}</span>${privateChip(c)} &nbsp;👤 ${esc(p?p.name:'Unassigned')}${c.trn&&c.trn!=='-'?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><a class="btn" href="../audit/?client=${encodeURIComponent(c.name)}" title="Open this client in the Audit Desk – financial statements and the audit report" style="text-decoration:none">📊 Audit Desk</a><a class="btn" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive" style="text-decoration:none">📁 Cloud folder</a><button class="btn" data-act="edit-client" data-id="${c.id}">✎ Edit</button><button class="btn" data-act="gen-client-tasks" data-id="${c.id}">⟳ Deadlines</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
   <div class="detail-grid">
     <div>
@@ -1727,6 +1747,7 @@ function openEditClient(id){const db=load();const c=db.clients.find(x=>x.id===id
     <div class="two-col"><div class="field"><label>Portal ID</label><input id="c_pid" value="${esc(c.portalId||'')}"></div><div class="field"><label>Portal Password</label><input id="c_ppw" value="${esc(c.portalPassword||'')}"></div></div>
     <div class="two-col"><div class="field"><label>Contract Expiry</label><input type="date" id="c_exp" value="${c.contractExpiry||''}"></div><div class="field"><label>Address</label><input id="c_addr" value="${esc(c.address)}"></div></div>
     <div class="field"><label>Services (comma separated)</label><input id="c_svc" value="${esc((c.services||[]).join(', '))}"></div>
+    ${isStaffUser()?'':`<div class="field"><label>Privacy</label><label style="display:flex;gap:8px;align-items:center;text-transform:none;font-size:14px;font-weight:500;color:var(--ink);letter-spacing:0"><input type="checkbox" id="c_private" style="width:18px;height:18px;padding:0;margin:0;flex:0 0 auto" ${c.adminOnly?'checked':''}> Private – admin only. Staff accounts do not see this client, or its tasks and documents, in the CRM or the Audit Desk.</label></div>`}
     <button class="btn btn-primary" style="width:100%" data-act="save-edit-client" data-id="${id}">Save Changes</button></div>`);}
 
 /* ============================================================= CLICK HANDLER */
@@ -1764,7 +1785,7 @@ function handleAct(act,el){
     case'new-client':{const c={id:uid('c'),name:'New client',status:'Active',partnerId:(db.partners[0]||{}).id||'p_un',email:'',phone:'',trn:'-',tradeLicence:'',services:[],staff:[],ledger:[],notes:[],invoiced:0,received:0};
       db.clients.unshift(c);save();openEditClient(c.id);break;}
     case'edit-client':openEditClient(id);break;
-    case'save-edit-client':{const c=db.clients.find(x=>x.id===id);if(c){c.name=$('#c_name').value.trim()||c.name;c.status=$('#c_status').value;c.partnerId=$('#c_partner').value;c.email=$('#c_email').value;c.phone=$('#c_phone').value;c.trn=$('#c_trn').value;c.tradeLicence=$('#c_licence').value;c.vatCycle=$('#c_vat').value;c.taxYearEnd=$('#c_ye').value;c.portalId=$('#c_pid').value;c.portalPassword=$('#c_ppw').value;c.contractExpiry=$('#c_exp').value;c.address=$('#c_addr').value;c.services=$('#c_svc').value.split(',').map(s=>s.trim()).filter(Boolean);save();closeModal();toast('Client updated');route();}break;}
+    case'save-edit-client':{const c=db.clients.find(x=>x.id===id);if(c){c.name=$('#c_name').value.trim()||c.name;c.status=$('#c_status').value;c.partnerId=$('#c_partner').value;c.email=$('#c_email').value;c.phone=$('#c_phone').value;c.trn=$('#c_trn').value;c.tradeLicence=$('#c_licence').value;c.vatCycle=$('#c_vat').value;c.taxYearEnd=$('#c_ye').value;c.portalId=$('#c_pid').value;c.portalPassword=$('#c_ppw').value;c.contractExpiry=$('#c_exp').value;c.address=$('#c_addr').value;c.services=$('#c_svc').value.split(',').map(s=>s.trim()).filter(Boolean);if($('#c_private')){if($('#c_private').checked)c.adminOnly=true;else delete c.adminOnly;}save();closeModal();toast('Client updated');route();}break;}
     case'toggle-mask':{const span=el.closest('.v');const m=span.getAttribute('data-mask');const showing=el.textContent==='hide';span.childNodes[0].textContent=(showing?'••••••••':m)+' ';el.textContent=showing?'show':'hide';break;}
     case'new-task':openNewTask();break;
     case'new-task-for':openNewTask({client:el.getAttribute('data-client')});break;

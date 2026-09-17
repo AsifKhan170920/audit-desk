@@ -1077,7 +1077,7 @@ function savedStatementsList(data){
   // returns [{clientName, profile, eng}]
   if (!data) return [];
   if (data.app === 'fairtax-audit-desk' && data.eng) return [{clientName: data.client.name, profile: data.client.profile, eng: data.eng}];
-  if (Array.isArray(data.clients)) return data.clients.flatMap(c => (c.engagements || []).map(e => ({clientName: c.name, profile: c.profile, eng: e})));
+  if (Array.isArray(data.clients)) return data.clients.flatMap(c => (c.engagements || []).map(e => ({clientName: c.name, profile: c.profile, eng: e, adminOnly: !!c.adminOnly})));
   return [];
 }
 /* ============================================================
@@ -2720,6 +2720,21 @@ function gillExample(){
    ============================================================ */
 const STORE_KEY = 'fairtax-audit-desk-v1';
 let DB = null;
+/* ---------- admin-only clients ----------
+   A client ticked "admin only" belongs to the portal admin alone. A staff member
+   signed in through the portal never sees it: it is taken out of the working data
+   when the page loads and put back, untouched, every time the data is saved – so a
+   staff member's save never drops it and their backup file never holds it. On the
+   admin's own screen (and when the software runs without the portal) the client is
+   listed as usual, behind the passcode when one is set. */
+const staffUser = () => !!(window.FT && FT.me && FT.me.role !== 'admin');
+let HIDDEN = [];   // admin-only clients kept out of DB for a staff member
+function hideAdminOnly(){
+  HIDDEN = [];
+  if (!staffUser() || !DB || !Array.isArray(DB.clients)) return;
+  DB.clients = DB.clients.filter(c => { if (c && c.adminOnly){ HIDDEN.push(c); return false; } return true; });
+}
+function withHidden(db){ return HIDDEN.length ? Object.assign({}, db, {clients: (db.clients || []).concat(HIDDEN)}) : db; }
 const UI = {view: 'clients', clientId: null, engId: null, stTab: 'sofp', textOpen: 'auditorReport', tbFilter: '', tbSearch: '', preview: false};
 
 function load(){
@@ -2728,6 +2743,7 @@ function load(){
     DB = {clients: [gillExample()], settings: {clientId: '', rootFolder: 'Fair Tax Clients'}, version: 1};
   }
   DB.settings = Object.assign({clientId: '', rootFolder: 'Fair Tax Clients', dec: 0}, DB.settings || {});
+  hideAdminOnly();
   setAmtDec();
   try { Object.assign(UI, JSON.parse(localStorage.getItem(STORE_KEY + '-ui')) || {}); } catch (e) {}
   UI.preview = false; UI.justAdded = {};
@@ -2741,7 +2757,7 @@ function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(DB));
+      localStorage.setItem(STORE_KEY, JSON.stringify(withHidden(DB)));
       localStorage.setItem(STORE_KEY + '-ui', JSON.stringify({view: UI.view, clientId: UI.clientId, engId: UI.engId, stTab: UI.stTab, tbMode: UI.tbMode, showEmpty: UI.showEmpty, collapsed: UI.collapsed}));
       const el = document.getElementById('saved'); if (el){ el.textContent = 'All changes saved'; }
     } catch (e) { toast('Could not save in this browser: ' + e.message, true); }
@@ -2865,9 +2881,11 @@ function pageTitle(){
 
 /* ---------- views ---------- */
 /* ============================================================
-   ADMIN LOCK – a passcode in front of the clients you choose.
-   It keeps other people in the office out of a file; it is not
-   encryption, so anyone with the backup file can still read it.
+   ADMIN LOCK – the clients you choose are for the admin only.
+   Staff signed in through the portal do not see them at all (see
+   hideAdminOnly), and a passcode can be put in front of them on the
+   admin's own computer. It is not encryption, so anyone with the
+   admin's backup file can still read it.
    ============================================================ */
 async function pinHash(pin){
   const t = 'fairtax:' + String(pin);
@@ -2917,8 +2935,8 @@ function toggleAdminOnly(id){
   if (clientLocked(c)){ pinAskModal(() => { toggleAdminOnly(id); }); return; }
   c.adminOnly = !c.adminOnly; save(); render();
   toast(c.adminOnly
-    ? (pinSet() ? `${c.name} now asks for the admin passcode` : `${c.name} is marked admin only – set a passcode in Settings to make it ask`)
-    : `${c.name} opens without the passcode`);
+    ? (pinSet() ? `${c.name} is admin only – hidden from staff, and asks for the passcode here` : `${c.name} is admin only – hidden from staff accounts. Set a passcode in Settings to lock it on this computer too`)
+    : `${c.name} is open to everyone`);
 }
 
 function vClients(){
@@ -2927,9 +2945,9 @@ function vClients(){
     let status = '<span class="chip neutral">No trial balance</span>';
     if (latest && latest.tb.length){ const r = compute(latest, prevOf(c, latest)); const bad = r.checks.filter(x => x.level === 'bad').length; status = bad ? `<span class="chip warn">${bad} check(s) open</span>` : '<span class="chip ok">Ready</span>'; }
     const folder = c.drive && c.drive.folderId ? `<a class="folder" href="${folderUrl(c.drive.folderId)}" target="_blank" rel="noopener">${IC.folder}<span>Open Drive folder</span></a>` : '<span class="muted small">No Drive folder yet</span>';
-    return `<tr${c.adminOnly ? ' class="locked"' : ''}><td><button class="link-strong" data-open="${c.id}">${e_(c.name)}</button>${c.adminOnly ? `<span class="lockchip" title="${pinSet() ? 'Admin only – asks for the passcode' : 'Admin only – set a passcode in Settings to make it ask'}">🔒</span>` : ''}<div class="muted small">${e_((c.profile || {}).emirate || '')}</div></td>
+    return `<tr${c.adminOnly ? ' class="locked"' : ''}><td><button class="link-strong" data-open="${c.id}">${e_(c.name)}</button>${c.adminOnly ? `<span class="lockchip" title="${pinSet() ? 'Admin only – hidden from staff accounts; asks for the passcode' : 'Admin only – hidden from staff accounts'}">🔒</span>` : ''}<div class="muted small">${e_((c.profile || {}).emirate || '')}</div></td>
       <td>${latest ? 'FY' + latest.year + ' · ' + e_(latest.type) : '–'}</td><td>${folder}</td><td>${status}</td>
-      <td class="r"><button class="icon-btn" data-act="lock-client" data-id="${c.id}" title="${c.adminOnly ? 'Open to everyone' : 'Admin only'}">${c.adminOnly ? '🔒' : '🔓'}</button><button class="icon-btn" data-act="del-client" data-id="${c.id}" title="Delete client">${IC.trash}</button></td></tr>`;
+      <td class="r"><button class="icon-btn" data-act="lock-client" data-id="${c.id}" title="${c.adminOnly ? 'Open to everyone' : 'Admin only – hide this client from staff accounts'}">${c.adminOnly ? '🔒' : '🔓'}</button><button class="icon-btn" data-act="del-client" data-id="${c.id}" title="Delete client">${IC.trash}</button></td></tr>`;
   }).join('');
   return `<section class="panel"><div class="head"><div><h1>Clients</h1><p class="sub">Open a client to prepare its financial statements, or create a new one.</p></div>
     <div class="row"><label class="btn" for="import-saved" title="Excel downloaded from this software, or a backup file">${IC.upload}Import saved statements</label><input id="import-saved" type="file" accept=".xlsx,.json" hidden><label class="btn" for="fs-in-client" title="The Fair Tax financial statements workbook (Bs, P&amp;L, Equity, Cf and notes)">${IC.upload}Import financial statements (Excel)</label><input id="fs-in-client" type="file" accept=".xlsx,.xls" hidden><button class="btn primary" data-act="wz-start">${IC.plus}New audit</button></div></div>
@@ -3619,11 +3637,11 @@ function vSettings(){
     ${field('set-aimodel', 'Model', AI.model(), {bind: 'settings.aiModel', select: AI_MODELS})}
     <div class="field"><label>Status</label><div class="row">${AI.key() ? '<span class="chip ok">Key saved</span><button class="btn small" data-act="ai-test">Test</button><button class="linkish" data-act="ai-key-remove">Remove</button>' : '<span class="chip neutral">No key</span><button class="btn small primary" data-act="ai-key">How to get a key</button>'}</div></div></div></section>
   <section class="panel"><h2>Admin lock</h2>
-    <p class="sub">Put the clients you choose behind a passcode, so other people using this computer cannot open them. It is a lock on the screen, not encryption – a backup file still holds everything, so keep backups where only you can reach them.</p>
+    <p class="sub">A client marked <b>admin only</b> (the lock button on the Clients list) is private to the admin: staff signed in to the portal do not see it in the Audit Desk or the CRM. A passcode adds a lock on this computer as well, so other people using it cannot open those clients. It is a lock on the screen, not encryption – the admin's backup file still holds everything, so keep backups where only you can reach them.</p>
     <div class="row">${pinSet()
       ? `<span class="chip ok">Passcode set</span>${UI.unlocked ? '<span class="chip neutral">Unlocked for this session</span><button class="btn small" data-act="pin-lock">Lock again</button>' : ''}<button class="btn small" data-act="pin-set">Change passcode</button><button class="linkish" data-act="pin-remove">Remove</button>`
       : `<span class="chip neutral">No passcode</span><button class="btn small primary" data-act="pin-set">Set a passcode</button>`}</div>
-    ${DB.clients.some(c => c.adminOnly) ? `<p class="small muted" style="margin-top:10px">Admin only: ${DB.clients.filter(c => c.adminOnly).map(c => e_(c.name)).join(' · ')}${pinSet() ? '' : ' – <b>set a passcode above</b>, otherwise they open like any other client.'}</p>` : '<p class="small muted" style="margin-top:10px">No client is marked admin only yet – use the lock button on the Clients list.</p>'}</section>
+    ${DB.clients.some(c => c.adminOnly) ? `<p class="small muted" style="margin-top:10px">Admin only: ${DB.clients.filter(c => c.adminOnly).map(c => e_(c.name)).join(' · ')}${pinSet() ? '' : ' – hidden from staff; <b>set a passcode above</b> to lock them on this computer too.'}</p>` : '<p class="small muted" style="margin-top:10px">No client is marked admin only yet – use the lock button on the Clients list.</p>'}</section>
   ${tplPanel()}
   <section class="panel"><h2>Backup</h2><div class="row">
     <button class="btn" data-act="backup-dl">${IC.down}Download backup file</button>
@@ -3948,7 +3966,7 @@ async function importSavedFile(file){
   let added = 0, skipped = 0, firstC = null, firstE = null;
   list.forEach(x => {
     let cl = DB.clients.find(k => k.name.trim().toLowerCase() === String(x.clientName || '').trim().toLowerCase());
-    if (!cl){ cl = {id: uid(), name: x.clientName, drive: {}, profile: JSON.parse(JSON.stringify(x.profile || {})), engagements: []}; DB.clients.unshift(cl); }
+    if (!cl){ cl = {id: uid(), name: x.clientName, drive: {}, profile: JSON.parse(JSON.stringify(x.profile || {})), engagements: []}; if (x.adminOnly) cl.adminOnly = true; DB.clients.unshift(cl); }
     if (cl.engagements.some(e => e.year === x.eng.year)){ skipped++; return; }
     const e = JSON.parse(JSON.stringify(x.eng)); e.id = uid(); ensureSchedules(e); migrateLines(e); layoutOf(e);
     e.pyInfo = e.pyInfo || {cf: {}}; e.pyInfo.cf = Object.assign({otherOp: 0, otherInv: 0, otherFin: 0}, e.pyInfo.cf || {});
@@ -7075,7 +7093,7 @@ document.addEventListener('change', async ev => {
   }
   if (el.id === 'restore-in' && el.files[0]){
     try { const data = JSON.parse(await el.files[0].text()); if (!Array.isArray(data.clients)) throw new Error('This is not an Audit Desk backup file');
-      if (confirm(`Restore ${data.clients.length} client(s)? This replaces the data in this browser.`)){ DB = data; save(); render(); toast('Backup restored'); } }
+      if (confirm(`Restore ${data.clients.length} client(s)? This replaces the data in this browser.`)){ DB = data; if (staffUser()) DB.clients = DB.clients.filter(c => !(c && c.adminOnly)); save(); render(); toast('Backup restored'); } }
     catch (err) { toast(err.message, true); } el.value = ''; return;
   }
   if (el.id === 'show-empty'){ UI.showEmpty = el.checked; save(); render(); return; }
