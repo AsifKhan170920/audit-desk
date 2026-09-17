@@ -675,6 +675,8 @@ function subLines(eng, key){
 
 /* equity modes: first year from the settings or the date established; reserve ledger lines as opening or closing balances */
 function engClient(en){ return (typeof DB !== 'undefined' && DB && (DB.clients || []).find(c => (c.engagements || []).includes(en))) || null; }
+/* single-year statements (first financial statements): no comparative column is printed and the prior-year checks are not run */
+function singleYearOf(en){ return !!(en && en.settings && en.settings.singleYear === 'yes'); }
 function estYearOf(en){ const c = engClient(en), m = String((c && c.profile && c.profile.estDate) || '').match(/\b(19|20)\d{2}\b/g); return m ? +m[m.length - 1] : null; }
 function eqModes(eng, cy, py){
   const PYI = eng.pyInfo || {}, S = eng.settings || {}, tol = 10;
@@ -895,10 +897,11 @@ function compute(eng, prevEng){
   cfp = applyCfLayout(eng, cf, cfp, cy, py);
   const checks = [];
   let K = '';
-  const add = (ok, text, level) => checks.push({ok, text, level: ok ? 'ok' : (level || 'bad'), key: K});
+  const single = singleYearOf(eng);   // single-year statements: the prior-year figures are not printed, so they are not checked
+  const add = (ok, text, level) => { if (single && /-py$|pydiff$/.test(K)) return; checks.push({ok, text, level: ok ? 'ok' : (level || 'bad'), key: K}); };
   K = 'tb'; { const crT = cr - eqTbAdj, note = eqTbAdj ? ' (reserves taken as closing balances)' : ''; add(dr === crT, dr === crT ? 'Trial balance balances' + note : `Trial balance is out by ${fmtN(dr - crT)}${note}`); }
   K = 'unmapped'; add(unmapped === 0, unmapped ? `${unmapped} ledger line(s) not in any schedule` : 'All ledger lines are in schedules');
-  K = 'ct'; for (const [b, col, FY] of [[cy, 'amt', eng.year], [py, 'py', eng.year - 1]]){
+  K = 'ct'; for (const [b, col, FY] of (single ? [[cy, 'amt', eng.year]] : [[cy, 'amt', eng.year], [py, 'py', eng.year - 1]])){
     const tl = ctPayLines(eng, col);
     if (!b.ctLedger && !b.ctInPay && b.ct && tl.length) add(false, `Corporate tax FY${FY} may be counted twice – the payables ledger holds “${tl[0].ledger || tl[0].caption}” ${fmtN(tl.reduce((a, l) => a + R(l[col]), 0))} and the provision ${fmtN(b.ct)} is added to payables again`);
     else if (b.ctLedger && b.ct !== b.ctCalc && (col === 'amt' ? S.ctMode !== 'manual' : PYI.ctMode !== 'manual')) add(false, `Corporate tax FY${FY} in the ledger (${fmtN(b.ct)}) differs from 9% above AED 375,000 on the profit before tax (${fmtN(b.ctCalc)}) – check the tax adjustments`, 'warn');
@@ -921,11 +924,11 @@ function compute(eng, prevEng){
   K = 'cf-py'; add(cfp.diff === 0, cfp.diff === 0 ? `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} = cash and cash equivalents ${fmtN(cfp.cashBal)}` : `Cash flow ${eng.year-1} ends at ${fmtN(cfp.close)} but cash and cash equivalents are ${fmtN(cfp.cashBal)} – difference ${fmtN(cfp.diff)}${eng.cfManual && !R((eng.cfPy || {}).cashBal) && !(eng.fx || {})['CFP:cashBal'] ? ' (enter the cash and cash equivalents balance in the cash flow table)' : ''}`);
   K = 'lr'; if (cy.lrClose < Math.round(cy.cap * cy.lrRule.cap / 100) && cy.pat > 0 && cy.lrTransfer === 0) add(false, `Legal reserve below ${cy.lrRule.cap}% of capital – suggested transfer ${fmtN(cy.lrSuggest)}`, 'warn');
   { const Y0 = eng.year, P0 = eng.year - 1;
-    K = 're'; if (py.reAdj) add(false, `Retained earnings at the end of FY${P0} (${fmtN(py.reClose)}) differ from the FY${P0} profit less transfers (${fmtN(py.reClose - py.reAdj)}) by ${fmtN(py.reAdj)} – shown as ${Math.abs(py.reAdj) <= 10 ? 'a rounding difference' : 'a difference'} in changes in equity`, 'warn');
+    K = 're'; if (py.reAdj && !single) add(false, `Retained earnings at the end of FY${P0} (${fmtN(py.reClose)}) differ from the FY${P0} profit less transfers (${fmtN(py.reClose - py.reAdj)}) by ${fmtN(py.reAdj)} – shown as ${Math.abs(py.reAdj) <= 10 ? 'a rounding difference' : 'a difference'} in changes in equity`, 'warn');
     if (cy.reAdj) add(false, `Retained earnings at the end of FY${Y0} (${fmtN(cy.reClose)}) differ from FY${P0} closing + profit − dividend − transfer (${fmtN(cy.reClose - cy.reAdj)}) by ${fmtN(cy.reAdj)}`, 'warn');
     if (cy.reOpenDiff) add(false, `Retained earnings at the start of FY${Y0} (${fmtN(cy.reOpen)}) differ from the FY${P0} closing balance (${fmtN(py.reClose)}) by ${fmtN(cy.reOpenDiff)} – if the FY${Y0} ledger shows the closing balance, choose “Closing balances” for the FY${Y0} retained earnings and legal reserve lines`, 'warn');
     K = 'lr'; if (cy.lrOpenDiff) add(false, `Legal reserve at the start of FY${Y0} (${fmtN(cy.lrOpen)}) differs from the FY${P0} closing balance (${fmtN(py.lrClose)}) by ${fmtN(cy.lrOpenDiff)}`, 'warn');
-    K = 'soce'; if (!firstPy && EQ.firstMode === 'auto' && EQ.estYear === null && EQ.hasPy && py.reOpen < 0) add(false, `Retained earnings at the start of FY${P0} work back to ${fmtN(py.reOpen)} – if FY${P0} was the company’s first year, answer “Yes” to “Was FY${P0} the company’s first year?” (click any equity amount in the statements) or enter the date established in the company profile`, 'warn');
+    K = 'soce'; if (!single && !firstPy && EQ.firstMode === 'auto' && EQ.estYear === null && EQ.hasPy && py.reOpen < 0) add(false, `Retained earnings at the start of FY${P0} work back to ${fmtN(py.reOpen)} – if FY${P0} was the company’s first year, answer “Yes” to “Was FY${P0} the company’s first year?” (click any equity amount in the statements) or enter the date established in the company profile`, 'warn');
   }
   K = 'docs'; if (eng.tb.length) add(docsCount === eng.tb.length, `${docsCount} of ${eng.tb.length} ledger lines have supporting documents`, 'info');
   return {cy, py, dr, cr, crT: cr - eqTbAdj, eqTbAdj, unmapped, docsCount, ppe, ppeT, ppeLines, depLines, cf, cfp, checks};
@@ -1339,7 +1342,9 @@ function buildReport(client, eng, prevEng){
   const p = client.profile || {};
   const Y = eng.year, PY = eng.year - 1, isAudit = eng.type === 'Audit';
   const cy = r.cy, py = r.py;
-  const nz = (a, b) => Math.round(a || 0) !== 0 || Math.round(b || 0) !== 0;
+  /* single-year statements: only the FY column is printed – lines that are nil this year are left out even if last year had a figure */
+  const single = singleYearOf(eng), YRS = single ? [Y] : [Y, PY];
+  const nz = (a, b) => Math.round(a || 0) !== 0 || (!single && Math.round(b || 0) !== 0);
   const yeText = (p.yearEndText || 'December 31');
   const openText = /december\s*31/i.test(yeText) ? `January 01, ${PY}` : `beginning of ${PY}`;
   const period = `FOR THE YEAR ENDED ${yeText.toUpperCase()}, ${Y}`;
@@ -1386,7 +1391,7 @@ function buildReport(client, eng, prevEng){
     title: (isAudit ? 'FINANCIAL STATEMENTS AND\nINDEPENDENT AUDITOR’S REPORT\n' : 'FINANCIAL STATEMENTS\n') + period, rows: []});
 
   /* ---------- auditor report / company info / management report ---------- */
-  const blocks = (text) => ({k: 'blocks', blocks: parseMarkup(fillVars(text, v))});
+  const blocks = (text) => ({k: 'blocks', blocks: parseMarkup(fillVars(single ? String(text || '').replace(/\s*\(\{prevYear\}:[^()]*\)/g, '') : text, v))});
   if (isAudit){
     sections.push({id: 'ar', kind: 'plain', letterhead: true, items: [
       {k: 'title', text: 'INDEPENDENT AUDITOR’S REPORT'}, blocks(eng.texts.auditorReport)
@@ -1440,7 +1445,7 @@ function buildReport(client, eng, prevEng){
     row('TOTAL EQUITY AND LIABILITIES', '', cy.tel, py.tel, 'grand'));
   const signLabel = p.statementSignatory || '(Managing Director)';
   sections.push({id: 'sofp', kind: 'statement', head: statementHead('STATEMENT OF FINANCIAL POSITION', asAt), items: [
-    {k: 'fs', rows: sofp, noteCol: true, years: [Y, PY]},
+    {k: 'fs', rows: sofp, noteCol: true, years: YRS},
     {k: 'small', text: `The financial statements were approved by management on ${p.reportDate || '…'}. The accompanying notes form an integral part of these financial statements.${isAudit && !LAY.hide.ar ? ' The report of the auditor is set out on pages {{AR_PAGES}}.' : ''}`},
     {k: 'sign', label: signLabel}]});
 
@@ -1454,7 +1459,7 @@ function buildReport(client, eng, prevEng){
     row('Profit after tax', '', cy.pat, py.pat, 'tot'), row('Other comprehensive income', '', 0, 0), GAP,
     row('Total comprehensive income for the year', '', cy.pat, py.pat, 'grand'));
   sections.push({id: 'soci', kind: 'statement', head: statementHead('STATEMENT OF PROFIT OR LOSS AND OTHER COMPREHENSIVE INCOME', period), items: [
-    {k: 'fs', rows: soci, noteCol: true, years: [Y, PY]}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
+    {k: 'fs', rows: soci, noteCol: true, years: YRS}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
 
   const eqItems = eng.soceItems || [], anyIt = col => eqItems.some(x => R(x[col]));
   const hasCA = nz(cy.caClose, py.caClose) || nz(py.caOpen, 0) || anyIt('ca'), hasLR = nz(cy.lrClose, py.lrClose) || nz(py.lrOpen, 0) || anyIt('lr') || nz(cy.lrOpenDiff, 0), hasOR = nz(cy.xeq, py.xeq) || anyIt('oth');
@@ -1462,9 +1467,11 @@ function buildReport(client, eng, prevEng){
   const eqRow = (label, cap, lr, re, ca, style, oth) => { const vals = [cap].concat(hasLR ? [lr] : [], [re], hasCA ? [ca] : [], hasOR ? [oth || 0] : []); return {cells: [label].concat(vals, [vals.reduce((a, b) => a + b, 0)]), style: style || ''}; };
   const moveRows = yr => soceMoves(eng, r, yr, {report: true, hasCA, hasOR}).map(m => eqRow(m.label, m.vals.cap || 0, m.vals.lr || 0, m.vals.re || 0, m.vals.ca || 0, '', m.vals.oth || 0));
   const EQM = cy.eqModes || {}, estInPy = EQM.firstPy && EQM.estYear === PY && p.estDate;
-  const soceRows = [eqRow(estInPy ? `At ${p.estDate} (date of establishment)` : `At ${openText}`, py.capOpen, py.lrOpen, py.reOpen, py.caOpen, 'bold', py.othOpen),
-    ...moveRows('py')];
-  soceRows.push(eqRow(`At ${yeText}, ${PY}`, py.cap, py.lrClose, py.reClose, py.caClose, 'tot', py.xeq), {cells: [], style: 'gap'}, ...moveRows('cy'));
+  const estInCy = EQM.estYear === Y && p.estDate;
+  const soceRows = single
+    ? [eqRow(estInCy ? `At ${p.estDate} (date of establishment)` : `At ${openText.replace(String(PY), String(Y))}`, py.cap, py.lrClose, py.reClose, py.caClose, 'bold', py.xeq), ...moveRows('cy')]
+    : [eqRow(estInPy ? `At ${p.estDate} (date of establishment)` : `At ${openText}`, py.capOpen, py.lrOpen, py.reOpen, py.caOpen, 'bold', py.othOpen), ...moveRows('py')];
+  if (!single) soceRows.push(eqRow(`At ${yeText}, ${PY}`, py.cap, py.lrClose, py.reClose, py.caClose, 'tot', py.xeq), {cells: [], style: 'gap'}, ...moveRows('cy'));
   soceRows.push(eqRow(`At ${yeText}, ${Y}`, cy.cap, cy.lrClose, cy.reClose, cy.caClose, 'grand', cy.xeq));
   sections.push({id: 'soce', kind: 'statement', head: statementHead('STATEMENT OF CHANGES IN SHAREHOLDERS’ EQUITY', period), items: [
     {k: 'grid', drill: 'soce', plain: true, header: [''].concat(eqCols), sub: [''].concat(eqCols.map(() => 'AED')), rows: soceRows, firstWidth: '*', numWidth: eqCols.length >= 6 ? 52 : 57, small: true},
@@ -1488,7 +1495,7 @@ function buildReport(client, eng, prevEng){
     Object.assign(row('Cash and cash equivalents at the beginning of the year', '', cf.open, cfp.open), {cf: 'open'}),
     row('Cash and cash equivalents at the end of the year', 'cash', cf.close, cfp.close, 'grand'));
   sections.push({id: 'socf', kind: 'statement', head: statementHead('STATEMENT OF CASH FLOWS', period), items: [
-    {k: 'fs', rows: socf, noteCol: true, years: [Y, PY]}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
+    {k: 'fs', rows: socf, noteCol: true, years: YRS}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
 
   /* ---------- policies (notes 1-4) ---------- */
   const sh = (p.shareholders || []).filter(s => s.name);
@@ -1513,7 +1520,7 @@ function buildReport(client, eng, prevEng){
 
   /* ---------- numeric notes ---------- */
   // a note table gets a note column when one of its lines refers to another note (e.g. the tax provision in payables → the corporate tax note)
-  const T = (rows) => ({k: 'fs', rows, noteCol: rows.some(r => r.note), years: [Y, PY], noHead: true});
+  const T = (rows) => ({k: 'fs', rows, noteCol: rows.some(r => r.note), years: YRS, noHead: true});
   const openVal = (key, col) => { const s0 = SMAP[key], v = s0 && s0.open ? s0.open[col] : undefined; return v === undefined || v === null || String(v).trim() === '' ? 0 : R(v); };
   // the opening balance of the cost of revenue schedule is the opening inventory – it refers to the inventory note
   const openNoteRow = key => { const a = openVal(key, 'cy'), b = openVal(key, 'py'); return nz(a, b) ? [row(key === 'cor' ? 'Opening inventory' : 'Balance at the beginning of the year', key === 'cor' ? 'inv' : '', a, b)] : []; };
@@ -1548,11 +1555,12 @@ function buildReport(client, eng, prevEng){
           pr(`Opening balance as at ${d(Y, true)}`, 'depOpen'), pr('Charged during the year', 'charge'));
         if (r.ppeT.depDisp) rows.push(pr('Relating to disposals', 'depDisp', '', true));
         rows.push(pr(`Closing balance as at ${d(Y, false)}`, 'depClose', 'tot'), {cells: [], style: 'gap'},
-          pr(`Net book value as at ${d(Y, false)}`, 'nbv', 'grand'), pr(`Net book value as at ${d(PY, false)}`, 'nbvPy'));
+          pr(`Net book value as at ${d(Y, false)}`, 'nbv', 'grand'));
+        if (!single) rows.push(pr(`Net book value as at ${d(PY, false)}`, 'nbvPy'));
         grp.push({k: 'grid', plain: true, header: [''].concat(cols, ['Total']), sub: [''].concat(cols.map(() => 'AED'), ['AED']), rows, firstWidth: '*', numWidth: 70, small: true});
       } else grp.push(T(subRows('ppe').concat([total('', cy.ppe, py.ppe)])));
       grp.push({k: 'small', text: `# Depreciation is charged on the ${eng.settings.deprMethod || 'straight-line'} method.`}, {k: 'small', text: '# As per management, there is no impairment in the value of property, plant and equipment.'});
-      if (r.ppe.length){
+      if (r.ppe.length && !single){
         // current-year schedule on its own page; comparative (written down value) on the next page, same note number
         items.push({k: 'group', items: grp.splice(0), keep: false, noYears: true}, {k: 'pagebreak'});
         const T2 = r.ppeT;
@@ -1565,9 +1573,9 @@ function buildReport(client, eng, prevEng){
       }
     } else if (key === 'cap'){
       grp.push(head(key, NT('cap', 'SHARE CAPITAL')), {k: 'p', text: `The shareholding as at ${yeText}, ${Y} was as follows:`},
-        {k: 'grid', boxed: true, header: ['Name of shareholder', 'Nationality', '%', `${Y} AED`, `${PY} AED`],
-          rows: sh.map(s => { const amt = (+s.shares || 0) * (+s.value || 0); return {cells: [s.name, s.country || s.nationality || '', capTot ? `${Math.round(amt / capTot * 100)}%` : '', capTot ? Math.round(cy.cap * amt / capTot) : amt, capTot ? Math.round(py.cap * amt / capTot) : amt]}; }),
-          widths: ['*', 58, 34, 64, 64], small: true});
+        {k: 'grid', boxed: true, header: ['Name of shareholder', 'Nationality', '%', `${Y} AED`].concat(single ? [] : [`${PY} AED`]),
+          rows: sh.map(s => { const amt = (+s.shares || 0) * (+s.value || 0); return {cells: [s.name, s.country || s.nationality || '', capTot ? `${Math.round(amt / capTot * 100)}%` : '', capTot ? Math.round(cy.cap * amt / capTot) : amt].concat(single ? [] : [capTot ? Math.round(py.cap * amt / capTot) : amt])}; }),
+          widths: single ? ['*', 58, 34, 64] : ['*', 58, 34, 64, 64], small: true});
     } else if (key === 'lr'){
       grp.push(head(key, NT('lr', 'LEGAL RESERVE')), T([row('Balance at the beginning of the year', '', cy.lrOpen, py.lrOpen), row('Transfer for the year', '', cy.lrTransfer, py.lrTransfer)].concat(eqNoteRows('lr'), [total('Balance at the end of the year', cy.lrClose, py.lrClose)])));
     } else if (key === 're'){
@@ -1616,7 +1624,7 @@ function buildReport(client, eng, prevEng){
         rows.push({cells: ['Net liquidity gap', w1, -d.ltl, w1 - d.ltl], style: 'tot'});
         return rows;
       };
-      const matTable = {k: 'grid', plain: true, header: ['', 'Within\n1 year', 'More than\n1 year', 'Total'], rows: mat('cy', `As at ${yeText}, ${Y}`).concat([{cells: [], style: 'gap'}], mat('py', `As at ${yeText}, ${PY}`)), firstWidth: '*', numWidth: 80};
+      const matTable = {k: 'grid', plain: true, header: ['', 'Within\n1 year', 'More than\n1 year', 'Total'], rows: single ? mat('cy', `As at ${yeText}, ${Y}`) : mat('cy', `As at ${yeText}, ${Y}`).concat([{cells: [], style: 'gap'}], mat('py', `As at ${yeText}, ${PY}`)), firstWidth: '*', numWidth: 80};
       grp.push(head(key, 'FINANCIAL RISK MANAGEMENT'), Object.assign(blocks(eng.texts.riskText), {tokens: {MATURITY_TABLE: matTable}}));
     } else if (key === 'capital'){ grp.push(head(key, 'CAPITAL RISK MANAGEMENT'), blocks(eng.texts.capitalText)); }
     else if (key === 'contingent'){ grp.push(head(key, 'CONTINGENT LIABILITIES'), blocks(eng.texts.contingentText)); }
@@ -1646,13 +1654,13 @@ function buildReport(client, eng, prevEng){
     items.push({k: 'group', items: grp, keep: !['risk', 'fi', 'ppe'].includes(key)});
   });
   items.push({k: 'marker', id: 'notes-end'});
-  sections.push({id: 'notes', kind: 'notes', head: statementHead('NOTES TO THE FINANCIAL STATEMENTS', period), items, years: [Y, PY]});
+  sections.push({id: 'notes', kind: 'notes', head: statementHead('NOTES TO THE FINANCIAL STATEMENTS', period), items, years: YRS});
   { // ratio analysis – management information after the notes
     const rrows = [], rl = ratioList(r);
     RATIO_GROUPS.forEach(([g, gl]) => { const list = rl.filter(x => x.d.g === g); if (!list.length) return; if (rrows.length) rrows.push({cells: [], style: 'gap'}); rrows.push({cells: [gl], style: 'grp'});
-      list.forEach(x => rrows.push({cells: [x.d.name, x.d.how, ratioFmt(x.d, x.a.v), ratioFmt(x.d, x.b.v)], drill: 'ratio:' + x.d.id})); });
+      list.forEach(x => rrows.push({cells: [x.d.name, x.d.how, ratioFmt(x.d, x.a.v)].concat(single ? [] : [ratioFmt(x.d, x.b.v)]), drill: 'ratio:' + x.d.id})); });
     sections.push({id: 'ratios', kind: 'statement', head: statementHead('RATIO ANALYSIS', period), items: [
-      {k: 'grid', plain: true, leftCols: [0, 1], header: ['', 'Calculation', String(Y), String(PY)], rows: rrows, widths: ['*', 190, 66, 66], small: true},
+      {k: 'grid', plain: true, leftCols: [0, 1], header: ['', 'Calculation', String(Y)].concat(single ? [] : [String(PY)]), rows: rrows, widths: single ? ['*', 190, 66] : ['*', 190, 66, 66], small: true},
       {k: 'small', text: `Ratios are worked out from the year-end balances in these financial statements.${isAudit ? ' This page is management information and does not form part of the audited financial statements.' : ''}`}]});
   }
   if (isAudit){ const ar = sections.find(s => s.id === 'ar'); ar.items.push({k: 'marker', id: 'ar-end'}); }
@@ -1731,13 +1739,13 @@ function vFont(v, base){ return v >= 0.85 ? base : v >= 0.68 ? base - 0.5 : v >=
 function vLine(v){ return v >= 0.68 ? 1.12 : v >= 0.52 ? 1.05 : 1.0; }
 function pdfFs(item, opt){
   const v = vs(opt);
-  const noteCol = item.noteCol;
-  const widths = noteCol ? ['*', 34, 78, 78] : ['*', 78, 78];
+  const noteCol = item.noteCol, yrs = item.years || [], one = yrs.length === 1;   // one = single-year statements (no comparative column)
+  const widths = (noteCol ? ['*', 34, 78, 78] : ['*', 78, 78]).slice(0, one ? -1 : undefined);
   const body = [];
   if (!item.noHead){
     const hdr = noteCol ? [{text: ''}, {text: 'Note', bold: true, alignment: 'center'}] : [{text: ''}];
-    body.push(hdr.concat([{text: String(item.years[0]), bold: true, alignment: 'right', border: [false, false, false, true]}, {text: String(item.years[1]), bold: true, alignment: 'right', border: [false, false, false, true]}]));
-    body.push((noteCol ? ['', ''] : ['']).map(t => ({text: t})).concat([{text: 'AED', alignment: 'right', fontSize: 9.5}, {text: 'AED', alignment: 'right', fontSize: 9.5}]));
+    body.push(hdr.concat(yrs.map(y => ({text: String(y), bold: true, alignment: 'right', border: [false, false, false, true]}))));
+    body.push((noteCol ? ['', ''] : ['']).map(t => ({text: t})).concat(yrs.map(() => ({text: 'AED', alignment: 'right', fontSize: 9.5}))));
   }
   item.rows.forEach(r => {
     if (r.style === 'gap'){ body.push(widths.map(() => ({text: '', fontSize: Math.max(1, 3 * v), lineHeight: 1, margin: [0, 0, 0, 0]}))); return; }
@@ -1746,9 +1754,10 @@ function pdfFs(item, opt){
     const amtBorder = r.style === 'tot' ? [false, true, false, false] : r.style === 'grand' ? [false, true, false, true] : undefined;
     const cells = [{text: r.label, bold}];
     if (noteCol) cells.push({text: r.note || '', alignment: 'center'});
-    cells.push({text: nf(r.cy), alignment: 'right', bold, border: amtBorder}, {text: nf(r.py), alignment: 'right', bold, border: amtBorder});
+    cells.push({text: nf(r.cy), alignment: 'right', bold, border: amtBorder});
+    if (!one) cells.push({text: nf(r.py), alignment: 'right', bold, border: amtBorder});
     body.push(cells);
-    if (r.style === 'grand'){ const sp = (noteCol ? ['', ''] : ['']).map(() => ({text: '', fontSize: 1})); sp.push({text: '', fontSize: 1, border: [false, true, false, false]}, {text: '', fontSize: 1, border: [false, true, false, false]}); body.push(sp); }
+    if (r.style === 'grand'){ const sp = (noteCol ? ['', ''] : ['']).map(() => ({text: '', fontSize: 1})); sp.push({text: '', fontSize: 1, border: [false, true, false, false]}); if (!one) sp.push({text: '', fontSize: 1, border: [false, true, false, false]}); body.push(sp); }
   });
   return tableNode({table: {widths, body, dontBreakRows: true}, layout: fsLayout(v), margin: [0, 0, 0, 6 * v], fontSize: vFont(v, 10.5), lineHeight: vLine(v)}, opt);
 }
@@ -1810,9 +1819,9 @@ function pdfHead(h, years, W, v){
   const st = [{text: h.name, bold: true, fontSize: 12}, {text: h.city}, {text: ' ', fontSize: Math.max(1, 6 * v), lineHeight: 1}, {text: h.title, bold: true, fontSize: 11.5},
     {text: h.period, bold: true}, {text: '(In Arab Emirates Dirhams)', fontSize: 9.5},
     {canvas: [{type: 'line', x1: 0, y1: 3, x2: W || 470, y2: 3, lineWidth: 0.8}], margin: [0, 0, 0, years ? 4 : 10 * v]}];
-  if (years) st.push({table: {widths: ['*', 78, 78], body: [
-      [{text: ''}, {text: String(years[0]), bold: true, alignment: 'right', border: [false, false, false, true]}, {text: String(years[1]), bold: true, alignment: 'right', border: [false, false, false, true]}],
-      [{text: ''}, {text: 'AED', alignment: 'right', fontSize: 9.5}, {text: 'AED', alignment: 'right', fontSize: 9.5}]]},
+  if (years) st.push({table: {widths: ['*'].concat(years.map(() => 78)), body: [
+      [{text: ''}].concat(years.map(y => ({text: String(y), bold: true, alignment: 'right', border: [false, false, false, true]}))),
+      [{text: ''}].concat(years.map(() => ({text: 'AED', alignment: 'right', fontSize: 9.5})))]},
     layout: fsLayout(), fontSize: 10.5, margin: [30, 0, 0, 4]});
   return {stack: st};
 }
@@ -2131,13 +2140,14 @@ function htmlBlocks(item, tokens, o){
 }
 function htmlFs(it, o){
   const amt = (r, v, yr) => { const d = o.interactive && typeof v === 'number' ? (r.drill || (r.cf ? 'cf:' + r.cf : '') || r.fs || it.drill || it.fs || '') : ''; return d ? `<button class="amt-btn" data-drill="${esc(d)}" data-yr="${yr}" title="Click to see and change">${nf(v)}</button>` : nf(v); };
-  const cg = it.noteCol ? '<colgroup><col><col class="cn"><col class="ca"><col class="ca"></colgroup>' : '<colgroup><col><col class="ca"><col class="ca"></colgroup>';
-  let h = `<table class="rfs">${cg}${it.noHead ? '' : `<thead><tr><td></td>${it.noteCol ? '<td class="c">Note</td>' : ''}<td class="r yr">${it.years[0]}</td><td class="r yr">${it.years[1]}</td></tr><tr><td></td>${it.noteCol ? '<td></td>' : ''}<td class="r aed">AED</td><td class="r aed">AED</td></tr></thead>`}<tbody>`;
+  const yrs = it.years || [], one = yrs.length === 1;   // single-year statements: no comparative column
+  const cg = `<colgroup><col>${it.noteCol ? '<col class="cn">' : ''}${yrs.map(() => '<col class="ca">').join('')}</colgroup>`;
+  let h = `<table class="rfs">${cg}${it.noHead ? '' : `<thead><tr><td></td>${it.noteCol ? '<td class="c">Note</td>' : ''}${yrs.map(y => `<td class="r yr">${y}</td>`).join('')}</tr><tr><td></td>${it.noteCol ? '<td></td>' : ''}${yrs.map(() => '<td class="r aed">AED</td>').join('')}</tr></thead>`}<tbody>`;
   it.rows.forEach(r => {
-    const cols = it.noteCol ? 4 : 3;
+    const cols = (it.noteCol ? 2 : 1) + yrs.length;
     if (r.style === 'gap'){ h += `<tr class="gap"><td colspan="${cols}"></td></tr>`; return; }
     if (r.style === 'grp'){ h += `<tr class="grp"><td colspan="${cols}">${esc(r.label)}</td></tr>`; return; }
-    h += `<tr class="${r.style}"><td>${esc(r.label)}</td>${it.noteCol ? `<td class="c">${esc(r.note || '')}</td>` : ''}<td class="r a">${amt(r, r.cy, 'cy')}</td><td class="r a">${amt(r, r.py, 'py')}</td></tr>`;
+    h += `<tr class="${r.style}"><td>${esc(r.label)}</td>${it.noteCol ? `<td class="c">${esc(r.note || '')}</td>` : ''}<td class="r a">${amt(r, r.cy, 'cy')}</td>${one ? '' : `<td class="r a">${amt(r, r.py, 'py')}</td>`}</tr>`;
   });
   return h + '</tbody></table>';
 }
@@ -2172,7 +2182,7 @@ function htmlItem(it, tokens, o){
     default: return '';
   }
 }
-function htmlYears(y){ return `<table class="rfs yrs"><tbody><tr><td></td><td class="r yr"><b>${y[0]}</b></td><td class="r yr"><b>${y[1]}</b></td></tr><tr><td></td><td class="r aed">AED</td><td class="r aed">AED</td></tr></tbody></table>`; }
+function htmlYears(y){ return `<table class="rfs yrs"><tbody><tr><td></td>${y.map(x => `<td class="r yr"><b>${x}</b></td>`).join('')}</tr><tr><td></td>${y.map(() => '<td class="r aed">AED</td>').join('')}</tr></tbody></table>`; }
 function htmlHead(h){ return `<div class="shead"><b>${esc(h.name)}</b><br>${esc(h.city)}<br><br><b>${esc(h.title)}</b><br><b>${esc(h.period)}</b><br><span class="unit">(In Arab Emirates Dirhams)</span></div>`; }
 function reportHtml(M, o){
   o = o || {};
@@ -2257,7 +2267,7 @@ function excelFile(M){
     const s = M.sections.find(x => x.id === sid); if (!s) return;
     const aoa = [[client.name], [s.head.title], [s.head.period], ['(In Arab Emirates Dirhams)'], []];
     s.items.forEach(it => {
-      if (it.k === 'fs'){ aoa.push(['', 'Note', it.years[0], it.years[1]]); it.rows.forEach(r => aoa.push(r.style === 'gap' ? [] : r.style === 'grp' ? [r.label] : [r.label, r.note || '', Math.round(r.cy || 0), Math.round(r.py || 0)])); }
+      if (it.k === 'fs'){ const one = (it.years || []).length === 1; aoa.push(['', 'Note'].concat(it.years)); it.rows.forEach(r => aoa.push(r.style === 'gap' ? [] : r.style === 'grp' ? [r.label] : [r.label, r.note || '', Math.round(r.cy || 0)].concat(one ? [] : [Math.round(r.py || 0)]))); }
       if (it.k === 'grid'){ aoa.push(it.header.map(h => String(h).replace(/\n/g, ' '))); it.rows.forEach(r => aoa.push((r.cells || []).map(c => typeof c === 'number' ? Math.round(c) : c))); }
     });
     const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{wch: 55}, {wch: 8}, {wch: 16}, {wch: 16}, {wch: 16}, {wch: 16}]; XLSX.utils.book_append_sheet(wb, ws, name);
@@ -2267,7 +2277,7 @@ function excelFile(M){
   const walk = (it) => {
     if (it.k === 'group') return it.items.forEach(walk);
     if (it.k === 'noteHead') aoa.push([], [it.num + ' ' + it.title]);
-    if (it.k === 'fs') it.rows.forEach(r => aoa.push(r.style === 'gap' ? [] : r.style === 'grp' ? [r.label] : [r.label, Math.round(r.cy || 0), Math.round(r.py || 0)]));
+    if (it.k === 'fs') it.rows.forEach(r => aoa.push(r.style === 'gap' ? [] : r.style === 'grp' ? [r.label] : [r.label, Math.round(r.cy || 0)].concat((it.years || []).length === 1 ? [] : [Math.round(r.py || 0)])));
     if (it.k === 'grid'){ aoa.push(it.header.map(h => String(h).replace(/\n/g, ' '))); it.rows.forEach(r => aoa.push((r.cells || []).map(c => typeof c === 'number' ? Math.round(c) : c))); }
   };
   notes.items.forEach(walk);
@@ -3053,7 +3063,7 @@ function wzStep2(){
       ${opt('type', 'I will type them', `the FY${PY} column sits next to FY${en.year} on the Schedules screen`)}
       ${opt('excel', 'Last year’s financial statements (Excel)', 'the Fair Tax statements workbook – figures, notes, PPE and the cash flow are read into the FY' + PY + ' column')}
       <div class="row ay-file"><label class="btn small" for="wz-file">${IC.upload}Choose Excel file</label><input id="wz-file" type="file" accept=".xlsx,.xls" hidden><span class="small muted" id="wz-file-name">${W.file ? e_(W.file.name) : 'No file chosen'}</span></div>
-      ${opt('first', `FY${en.year} is the company’s first year`, `the FY${PY} column stays empty`)}
+      ${opt('first', `FY${en.year} is the company’s first year`, `single-year statements – no FY${PY} column is printed (can be changed later on Tax, reserve &amp; prior year)`)}
     </div>
     <p class="note">FY${PY} can also be added later as its own year, with FY${en.year} linked live to it – <b>+ Add financial year</b> on the left.</p>
     <div class="foot"><button class="btn" data-act="wz-back">← Back</button><button class="btn primary" data-act="wz-next">Next – schedules →</button></div></section>`;
@@ -3126,6 +3136,7 @@ async function wzFinish(){
     .forEach(x => { const [k, id] = x.split(':'); const val = V(id); if (val !== '') p[k] = val; });
   DB.settings.dec = +V('wz-dec') === 2 ? 2 : 0; setAmtDec();
   en.settings.ctPay = V('wz-ct') || 'auto';
+  if (W.cmp === 'first') en.settings.singleYear = 'yes';
   const tp = tplList().find(x => x.id === W.tplId);
   let msg = `${c.name} FY${en.year} is ready`;
   if (tp){ const res = tplApply(c, en, tp, false); msg += ` – ${res.lines} ledger lines from “${tp.name}” with the amounts empty`; }
@@ -3511,6 +3522,7 @@ function vAdjust(){
     ${field('draft', 'Footer on report pages', S.draft ? '1' : '0', {bind: 'eng.settings.draftSel', select: [['1', 'Show “Draft for review”'], ['0', 'Final – no draft label']]})}
   </div></section>
   <section class="panel"><h2>Prior year FY${en.year - 1} details</h2><div class="form-grid three">
+    ${field('single-yr', 'Comparative column in the statements', singleYearOf(en) ? 'yes' : 'no', {bind: 'eng.settings.singleYear', wide: true, select: [['no', `Show FY${en.year - 1} comparatives next to FY${en.year} (standard)`], ['yes', `Single year – first financial statements: print FY${en.year} only, no FY${en.year - 1} column`]], hint: singleYearOf(en) ? `The report, Word and Excel print one year: the changes in equity start at the FY${en.year} opening balances, the PPE note has no comparative page, the prior-year checks are switched off and “(${en.year - 1}: AED …)” is dropped from the report texts. FY${en.year - 1} figures typed on the Schedules screen are kept but not printed.` : 'Choose “Single year” when these are the company’s first financial statements or the prior-year figures are not to be presented.'})}
     ${r.py.ctLedger ? `<div class="field wide"><label>Corporate tax</label><div class="static">Taken from the ledger (“Corporate tax (in the ledger)” schedule) · 9% calculation ${fmtN(r.py.ctCalc)} <button class="linkish" data-act="check-why" data-key="ct">details</button></div></div>` : `${field('py-ct-mode', `Corporate tax FY${en.year - 1}`, P.ctMode, {bind: 'eng.pyInfo.ctMode', select: [['auto', 'Calculate at 9% above AED 375,000'], ['manual', 'Enter amount']]})}
     ${P.ctMode === 'manual' ? field('py-ct-amt', 'Amount', P.ctAmount, {bind: 'eng.pyInfo.ctAmount', num: true}) : field('py-ct-adj', 'Tax adjustments', P.ctAdjust, {bind: 'eng.pyInfo.ctAdjust', num: true})}`}
     <div class="field"><label>Corporate tax FY${en.year - 1}</label><div class="static"${fxRefAttr(`{${en.year}:C:ct:py}`)}>${fmtN(r.py.ct)}</div></div>
@@ -3529,7 +3541,7 @@ function vStatements(){
   const tabs = [['sofp', 'Financial position'], ['soci', 'Profit or loss'], ['soce', 'Changes in equity'], ['socf', 'Cash flows'], ['notes', 'Notes'], ['ratios', 'Ratios']];
   const checks = checksList(M.r);
   const ratiosOff = UI.stTab === 'ratios' && M.layout.hide.ratios;
-  return `<section class="panel"><div class="head"><div><h1>Financial statements FY${en.year}</h1><p class="sub">Built live from the trial balance with FY${en.year - 1} comparatives. Click any amount to see where it comes from and change it right there.</p></div>
+  return `<section class="panel"><div class="head"><div><h1>Financial statements FY${en.year}</h1><p class="sub">Built live from the trial balance${singleYearOf(en) ? ` – single-year statements, the FY${en.year - 1} column is not printed` : ` with FY${en.year - 1} comparatives`}. Click any amount to see where it comes from and change it right there.</p></div>
     <div class="row">${UI.stTab === 'soce' ? `<button class="btn" data-act="soce-open">✎ Items in changes in equity</button>` : ''}<button class="btn primary" data-nav="export">${IC.down}Download reports</button></div></div><ul class="checks">${checks}</ul></section>
   <section class="panel"><div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${UI.stTab === k}" data-sttab="${k}">${l}</button>`).join('')}</div>
     ${ratiosOff ? `<p class="small muted">Ratio analysis is left out of the report – switch it on under <button class="linkish" data-nav="layout">Report layout</button>.</p>` : ''}
@@ -3728,7 +3740,8 @@ function vLayout(){
   <section class="panel"><div class="head"><div><h2>Order of notes</h2><p class="sub">Notes 1–4 (legal status, basis of preparation, policies, judgments) stay first. Drag the others; note numbers in the statements follow automatically.</p></div><button class="linkish" data-act="lay-reset-notes">Standard order</button></div>
     <div class="row"><button class="btn small" data-act="lay-notes-fs">Renumber the notes to follow the statements</button></div>
     <ul class="lay-list" data-list="note">${noteRows}</ul>
-    <div class="box ny-box"><h3 class="h3">Year columns (${en.year} · ${en.year - 1}) at the top of notes pages</h3>
+    <div class="box ny-box"><h3 class="h3">Year columns (${singleYearOf(en) ? `${en.year} only – single-year statements` : `${en.year} · ${en.year - 1}`}) at the top of notes pages</h3>
+      <p class="small muted">${singleYearOf(en) ? `Single-year statements are on: no FY${en.year - 1} column is printed anywhere.` : `First financial statements? Print FY${en.year} only – `}<button class="linkish" data-act="go-adjust">Tax, reserve &amp; prior year → Comparative column</button></p>
       ${[['all', 'Every page', 'standard'], ['amounts', 'Only pages that have amount tables', 'text-only pages such as financial risk, contingent liabilities and approval show just the heading'], ['custom', 'I choose page by page', `open <button class="linkish" data-act="pdf-preview">Preview pages</button> and tick or untick “Show the year columns” above each notes page`]]
         .map(([v, t, d]) => `<label class="radio-row"><input type="radio" name="notes-years" value="${v}" ${(L.notesYears || 'all') === v ? 'checked' : ''}><span><b>${t}</b> – ${d}</span></label>`).join('')}
       ${L.notesYears === 'custom' ? `<p class="small muted">${Object.keys(L.yearsOff || {}).length} page(s) without year columns. If notes move to other pages after changes, check the preview again.</p>` : ''}</div></section>
@@ -4152,7 +4165,7 @@ function cfLineBody(k, yr){
       <tr class="${yr === 'py' ? 'q-hlr' : ''}"><th scope="row">FY${PY}${std('py')}</th><td class="r">${inp('py')}</td></tr>
     </tbody></table></div>
     <p class="small muted">Type a figure, or a formula starting with = (pick amounts from the FY${Y} or FY${PY} list).${src ? ` Figures behind this line: <button class="linkish" data-drill="${src}" data-yr="${yr}">${e_(schedLabel(en, src))}</button>.` : ''}</p>
-    <ul class="checks"><li class="ck ${cf.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${Y} ends at ${fmtN(cf.close)}, cash ${fmtN(cf.cashBal)}${cf.diff ? ' – difference ' + fmtN(cf.diff) : ''}</li><li class="ck ${cfp.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${PY} ends at ${fmtN(cfp.close)}, cash ${fmtN(cfp.cashBal)}${cfp.diff ? ' – difference ' + fmtN(cfp.diff) : ''}</li></ul>
+    <ul class="checks"><li class="ck ${cf.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${Y} ends at ${fmtN(cf.close)}, cash ${fmtN(cf.cashBal)}${cf.diff ? ' – difference ' + fmtN(cf.diff) : ''}</li>${singleYearOf(en) ? '' : `<li class="ck ${cfp.diff ? 'bad' : 'ok'}"><span class="dot"></span>Cash flow FY${PY} ends at ${fmtN(cfp.close)}, cash ${fmtN(cfp.cashBal)}${cfp.diff ? ' – difference ' + fmtN(cfp.diff) : ''}</li>`}</ul>
     <div class="foot"><button class="btn" data-act="edit-cfpy">All cash flow lines</button><button class="btn primary" data-close>Done</button></div></div>`);
 }
 function soceModal(){ liveModal(soceBody); }
@@ -5807,7 +5820,7 @@ function pyCfTable(en, r){
     <div class="table-wrap"><table class="ui matrix cfpy cfman"><colgroup><col style="width:78px"><col><col style="width:170px"><col style="width:170px"><col style="width:48px"></colgroup>
       <thead><tr><th></th><th>Line</th><th class="r">FY${Y}</th><th class="r">FY${PY}</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
     ${removed.length ? `<p class="small muted cf-removed">Removed lines: ${removed.map(x => `${e_(x.label)} <button class="linkish" data-act="cf-restore" data-k="${x.key}">restore</button>`).join(' · ')}</p>` : ''}
-    <div class="row between"><p class="small">${cf.diff === 0 ? `<span class="ok-t">FY${Y} ends at ${fmtN(cf.close)} = cash ${fmtN(cf.cashBal)}</span>` : `<span class="bad-t">FY${Y} ends at ${fmtN(cf.close)}, cash is ${fmtN(cf.cashBal)} – difference ${fmtN(cf.diff)}</span>`} · ${cfp.diff === 0 ? `<span class="ok-t">FY${PY} ends at ${fmtN(cfp.close)} = cash ${fmtN(cfp.cashBal)}</span>` : `<span class="bad-t">FY${PY} ends at ${fmtN(cfp.close)}, cash is ${fmtN(cfp.cashBal)} – difference ${fmtN(cfp.diff)}</span>`}</p>
+    <div class="row between"><p class="small">${cf.diff === 0 ? `<span class="ok-t">FY${Y} ends at ${fmtN(cf.close)} = cash ${fmtN(cf.cashBal)}</span>` : `<span class="bad-t">FY${Y} ends at ${fmtN(cf.close)}, cash is ${fmtN(cf.cashBal)} – difference ${fmtN(cf.diff)}</span>`}${singleYearOf(en) ? '' : ` · ${cfp.diff === 0 ? `<span class="ok-t">FY${PY} ends at ${fmtN(cfp.close)} = cash ${fmtN(cfp.cashBal)}</span>` : `<span class="bad-t">FY${PY} ends at ${fmtN(cfp.close)}, cash is ${fmtN(cfp.cashBal)} – difference ${fmtN(cfp.diff)}</span>`}`}</p>
       <span class="row"><button class="btn small" data-act="cf-std-fx" title="Only lines that are still empty get a formula">Standard formulas in empty lines</button><button class="linkish" data-act="cf-std-fx-all">Standard formulas in every FY${Y} line</button>${pe ? `<button class="linkish" data-act="cf-std-fx-py">Link every FY${PY} line to FY${pe.year}</button>` : ''}${changed ? `<button class="linkish" data-act="cf-reset-layout">Standard cash flow lines</button>` : ''}</span></div>`;
 }
 
@@ -6865,6 +6878,7 @@ document.addEventListener('click', async ev => {
         cfLayoutOf(en).custom.forEach(u => { if (en.cfCy) delete en.cfCy[u.key]; if (en.cfPy) delete en.cfPy[u.key]; if (en.fx){ delete en.fx['CFC:' + u.key]; delete en.fx['CFP:' + u.key]; } });
         delete en.cfLayout; save(); render(); } break;
       case 'edit-cfpy': closeModal(); UI.view = 'statements'; UI.stTab = 'socf'; save(); render(); { const el = document.getElementById('py-cf'); if (el) el.scrollIntoView({block: 'start'}); } break;
+      case 'go-adjust': closeModal(); UI.view = 'adjust'; save(); render(); { const el = document.getElementById('single-yr'); if (el){ el.scrollIntoView({block: 'center'}); el.focus(); } } break;
       case 'cf-std-fx': { const n = cfApplyStd(c, en, ['cy', 'py'], true); save(); render(); toast(n ? `Standard formula put in ${n} empty line(s)` : 'No empty lines with a standard formula'); break; }
       case 'cf-std-fx-all': if (confirm(`Replace every FY${en.year} cash flow figure with its standard formula (from the FY${en.year} schedules)? Lines you added keep their figures.`)){ const n = cfApplyStd(c, en, ['cy'], false); save(); render(); toast(`${n} FY${en.year} line(s) now use the standard formula`); } break;
       case 'cf-std-fx-py': if (confirm(`Link every FY${en.year - 1} cash flow figure to the FY${en.year - 1} cash flow in this software?`)){ const n = cfApplyStd(c, en, ['py'], false); save(); render(); toast(`${n} FY${en.year - 1} line(s) linked`); } break;
