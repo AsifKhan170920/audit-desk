@@ -4793,7 +4793,7 @@ function obsParas(text){
   String(text || '').split(/\r?\n+/).forEach(line => {
     line = line.trim(); if (!line) return;
     let cur = '';
-    line.split(/(?<=[.!?])\s+(?=[A-Z“"(−–])/).forEach(seg => { if (cur && ABBR.test(cur)) cur += ' ' + seg; else { if (cur) out.push(cur); cur = seg; } });
+    line.split(/(?<=[.!?])\s+(?=[A-Z“"(−–]|(?:19|20)\d\d\b)/).forEach(seg => { if (cur && ABBR.test(cur)) cur += ' ' + seg; else { if (cur) out.push(cur); cur = seg; } });
     if (cur) out.push(cur);
   });
   return out.map((p, i) => ({text: (out.length > 1 ? '– ' : '') + p, alignment: 'justify', margin: [out.length > 1 ? 8 : 0, 0, 0, i === out.length - 1 ? 0 : 3]}));
