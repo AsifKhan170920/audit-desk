@@ -554,6 +554,7 @@ const CATALOG = [
   {key:'ga',   label:'General and administrative expenses', sec:'exp', dr:true, note:'GENERAL AND ADMINISTRATIVE EXPENSES', folder:'07 Revenue & Expenses'},
   {key:'sell', label:'Selling and distribution expenses', sec:'exp', dr:true, note:'SELLING AND DISTRIBUTION EXPENSES', folder:'07 Revenue & Expenses'},
   {key:'dep',  label:'Depreciation', sec:'exp', dr:true, folder:'05 Fixed Assets & Inventory', hint:'Taken from the PPE schedule unless you add ledger lines here', noNote:true},
+  {key:'imp',  label:'Impairment loss on property, plant and equipment', sec:'exp', dr:true, folder:'05 Fixed Assets & Inventory', hint:'Taken from the “Impairment loss for the year” row of the PPE schedule unless you add ledger lines here', noNote:true},
   {key:'fin',  label:'Finance costs', sec:'exp', dr:true, note:'FINANCE COSTS', folder:'03 Bank & Loans'},
   {key:'ctx',  label:'Corporate tax (in the ledger)', sec:'exp', dr:true, folder:'08 Tax & VAT', hint:'Only when the books already hold the corporate tax expense: it becomes the tax charge below profit before tax, and the provision already typed in payables is not added again', noNote:true}
 ];
@@ -654,13 +655,14 @@ function migrateLines(eng){
 }
 function ppeRows(eng){
   return (eng.ppe || []).map(p => {
-    const o = {...p}; ['costOpen','add','disp','depOpen','charge','depDisp'].forEach(k => o[k] = R(p[k]));
-    o.costClose = o.costOpen + o.add - o.disp; o.depClose = o.depOpen + o.charge - o.depDisp;
+    const o = {...p}; ['costOpen','add','disp','depOpen','charge','imp','depDisp'].forEach(k => o[k] = R(p[k]));
+    // an impairment loss for the year sits with the accumulated depreciation (accumulated depreciation and impairment)
+    o.costClose = o.costOpen + o.add - o.disp; o.depClose = o.depOpen + o.charge + o.imp - o.depDisp;
     o.nbv = o.costClose - o.depClose; o.nbvPy = o.costOpen - o.depOpen; o.dispWdv = o.disp - o.depDisp;
     return o;
   });
 }
-const PPE_KEYS = ['costOpen','add','disp','costClose','depOpen','charge','depDisp','depClose','nbv','nbvPy','dispWdv'];
+const PPE_KEYS = ['costOpen','add','disp','costClose','depOpen','charge','imp','depDisp','depClose','nbv','nbvPy','dispWdv'];
 
 function subLines(eng, key){
   const out = []; const idx = {};
@@ -776,24 +778,26 @@ function compute(eng, prevEng){
   const ppe = ppeRows(eng);
   const ppeT = PPE_KEYS.reduce((a, k) => (a[k] = ppe.reduce((s2, p) => s2 + p[k], 0), a), {});
   const PP = eng.ppePy || {};
-  ppeT.pyAdd = R(PP.add); ppeT.pyDispWdv = R(PP.disp); ppeT.pyCharge = R(PP.charge);
-  ppeT.nbvPyOpenAuto = ppeT.nbvPy - ppeT.pyAdd + ppeT.pyDispWdv + ppeT.pyCharge;
+  ppeT.pyAdd = R(PP.add); ppeT.pyDispWdv = R(PP.disp); ppeT.pyCharge = R(PP.charge); ppeT.pyImp = R(PP.imp);
+  ppeT.nbvPyOpenAuto = ppeT.nbvPy - ppeT.pyAdd + ppeT.pyDispWdv + ppeT.pyCharge + ppeT.pyImp;
   ppeT.pyOpenTyped = PP.open !== undefined && PP.open !== null && PP.open !== '';
   ppeT.nbvPyOpen = ppeT.pyOpenTyped ? R(PP.open) : ppeT.nbvPyOpenAuto;
-  ppeT.pyCloseCalc = ppeT.nbvPyOpen + ppeT.pyAdd - ppeT.pyDispWdv - ppeT.pyCharge;
+  ppeT.pyCloseCalc = ppeT.nbvPyOpen + ppeT.pyAdd - ppeT.pyDispWdv - ppeT.pyCharge - ppeT.pyImp;
   ppeT.pyDiff = ppeT.pyCloseCalc - ppeT.nbvPy;
-  const ppeLines = {cy: cy.ppe, py: py.ppe, n: lineCount.ppe || 0}, depLines = {cy: cy.dep, py: py.dep, n: lineCount.dep || 0};
+  const ppeLines = {cy: cy.ppe, py: py.ppe, n: lineCount.ppe || 0}, depLines = {cy: cy.dep, py: py.dep, n: lineCount.dep || 0}, impLines = {cy: cy.imp, py: py.imp, n: lineCount.imp || 0};
   if (ppe.length){
     if (!ppeLines.n) dr += ppeT.nbv;
     cy.ppe = ppeT.nbv; py.ppe = ppeT.nbvPy;
     if (!depLines.n){ dr += ppeT.charge; cy.dep = ppeT.charge; py.dep = ppeT.pyCharge; }
+    // the impairment loss of the PPE schedule is the profit or loss charge unless ledger lines hold it
+    if (!impLines.n){ dr += ppeT.imp; cy.imp = ppeT.imp; py.imp = ppeT.pyImp; }
   }
   const custom = sec => scheds.filter(s => s.custom && s.sec === sec);
   for (const b of [cy, py]){
     const col = b === cy ? 'cy' : 'py';
     ['nca', 'ca', 'eq', 'ncl', 'cl', 'inc', 'dc', 'exp'].forEach(sec => { b['x' + sec] = custom(sec).reduce((a, s) => a + b[s.key], 0) + (sec === 'eq' ? 0 : fsUserSum(eng, sec, col)); });
     b.gp = b.rev - b.cor - b.xdc;
-    b.pbt = b.gp - b.ga - b.sell - b.dep - b.fin - b.xexp + b.gain + b.oi + b.xinc;
+    b.pbt = b.gp - b.ga - b.sell - b.dep - b.imp - b.fin - b.xexp + b.gain + b.oi + b.xinc;
   }
   cy.ctAdj = R(S.ctAdjust);
   // corporate tax already booked in the ledger ("Corporate tax (in the ledger)" schedule): that figure is the charge and the provision is not added to payables again
@@ -868,8 +872,8 @@ function compute(eng, prevEng){
   }
   // cash flow – current year
   const cf = {custom: {}};
-  cf.pat = cy.pat; cf.dep = cy.dep; cf.gain = -cy.gain; cf.eosb = cy.eosb - py.eosb;
-  cf.opBefore = cf.pat + cf.dep + cf.gain + cf.eosb;
+  cf.pat = cy.pat; cf.dep = cy.dep; cf.imp = cy.imp; cf.gain = -cy.gain; cf.eosb = cy.eosb - py.eosb;
+  cf.opBefore = cf.pat + cf.dep + cf.imp + cf.gain + cf.eosb;
   cf.inv = py.inv - cy.inv; cf.rec = py.rec - cy.rec; cf.rprec = py.rprec - cy.rprec;
   cf.pay = cy.payTot - py.payTot; cf.rppay = cy.rppay - py.rppay;
   scheds.filter(s => s.custom).forEach(s => { cf.custom[s.key] = ['ca', 'nca'].includes(s.sec) ? py[s.key] - cy[s.key] : ['cl', 'ncl', 'eq'].includes(s.sec) ? cy[s.key] - py[s.key] : 0; });
@@ -886,8 +890,8 @@ function compute(eng, prevEng){
   else if (prevEng){ cfp = compute(prevEng, null).cf; }
   else {
     const mm = PYI.cf || {}; cfp = {custom: {}};
-    cfp.pat = py.pat; cfp.dep = py.dep; cfp.gain = -py.gain; cfp.eosb = R(mm.eosb);
-    cfp.opBefore = cfp.pat + cfp.dep + cfp.gain + cfp.eosb;
+    cfp.pat = py.pat; cfp.dep = py.dep; cfp.imp = py.imp; cfp.gain = -py.gain; cfp.eosb = R(mm.eosb);
+    cfp.opBefore = cfp.pat + cfp.dep + cfp.imp + cfp.gain + cfp.eosb;
     cfp.inv = R(mm.inv); cfp.rec = R(mm.rec); cfp.rprec = R(mm.rprec); cfp.pay = R(mm.pay); cfp.rppay = R(mm.rppay); cfp.otherOp = R(mm.otherOp);
     cfp.op = cfp.opBefore + cfp.inv + cfp.rec + cfp.rprec + cfp.pay + cfp.rppay + cfp.otherOp;
     cfp.additions = ppe.length ? -ppeT.pyAdd : R(mm.additions); cfp.proceeds = R(mm.proceeds); cfp.otherInv = R(mm.otherInv); cfp.invTot = cfp.additions + cfp.proceeds + cfp.otherInv;
@@ -916,6 +920,9 @@ function compute(eng, prevEng){
     if (depLines.n){
       K = 'dep-cy'; add(depLines.cy === ppeT.charge, depLines.cy === ppeT.charge ? 'Depreciation agrees with PPE schedule' : `Depreciation differs from PPE schedule by ${fmtN(depLines.cy - ppeT.charge)}`);
       K = 'dep-py'; add(depLines.py === ppeT.pyCharge, depLines.py === ppeT.pyCharge ? 'Prior year depreciation agrees with PPE schedule' : `Prior year depreciation differs from PPE schedule by ${fmtN(depLines.py - ppeT.pyCharge)}`, 'warn');
+    }
+    if (impLines.n){
+      K = 'imp-cy'; add(impLines.cy === ppeT.imp, impLines.cy === ppeT.imp ? 'Impairment loss agrees with PPE schedule' : `Impairment loss ledger lines differ from the PPE schedule by ${fmtN(impLines.cy - ppeT.imp)}`);
     }
     K = 'ppe-pydiff'; if (ppeT.pyDiff) { const n0 = v => Math.round(v || 0).toLocaleString('en-US'); add(false, `PPE comparative ${eng.year - 1} does not add up: opening ${n0(ppeT.nbvPyOpen)} + additions ${n0(ppeT.pyAdd)} − disposals ${n0(ppeT.pyDispWdv)} − depreciation ${n0(ppeT.pyCharge)} = ${n0(ppeT.pyCloseCalc)}, but the ${eng.year} opening balances give ${n0(ppeT.nbvPy)} – difference ${n0(ppeT.pyDiff)}`); }
     K = 'ppe-pydiff'; if (!ppeT.pyOpenTyped && ppeT.nbvPyOpen < 0) add(false, `Comparative PPE opening written down value is negative (${fmtN(ppeT.nbvPyOpen)}) – check prior year additions and depreciation`, 'warn');
@@ -965,7 +972,7 @@ function rollForward(client, eng){
   n.pyInfo.caOpen = r.cy.caOpen; n.pyInfo.lrTransfer = r.cy.lrTransfer; n.pyInfo.ctMode = 'manual'; n.pyInfo.ctAmount = r.cy.ct; n.pyInfo.ctPay = r.cy.ctInPay ? 'ledger' : (eng.settings.ctPay || 'auto');
   n.pyInfo.cf = {};
   n.ppe = r.ppe.map(p => ({id: uid(), name: p.name, life: p.life, costOpen: p.costClose, add: 0, disp: 0, depOpen: p.depClose, charge: 0, depDisp: 0, docs: []}));
-  n.ppePy = {add: r.ppeT.add, disp: r.ppeT.dispWdv, charge: r.ppeT.charge};
+  n.ppePy = {add: r.ppeT.add, disp: r.ppeT.dispWdv, charge: r.ppeT.charge, imp: r.ppeT.imp};
   n.layout = JSON.parse(JSON.stringify(layoutOf(eng)));
   if (eng.cfLayout) n.cfLayout = JSON.parse(JSON.stringify(eng.cfLayout));
   if (eng.fsLayout) n.fsLayout = JSON.parse(JSON.stringify(eng.fsLayout));
@@ -1377,7 +1384,7 @@ function buildReport(client, eng, prevEng){
   const allNoteOrder = mergeOrder(LAY.noteOrder, allNotes);
   const numericNotes = allNoteOrder.filter(k => wanted[k]);
   numericNotes.forEach((k, i) => { noteNo[k] = i + 5; });
-  if (noteNo.ppe) noteNo.dep = noteNo.ppe;
+  if (noteNo.ppe){ noteNo.dep = noteNo.ppe; noteNo.imp = noteNo.ppe; }
 
   const row = (label, key, a, b, style) => ({label, note: key && noteNo[key] ? String(noteNo[key]) : '', cy: a, py: b, style: style || '', fs: key && SMAP[key] ? key : ''});
   const G = (label) => ({label, style: 'grp'}), GAP = {style: 'gap'};
@@ -1453,7 +1460,7 @@ function buildReport(client, eng, prevEng){
   fsRows(soci, 'inc', ['rev']);
   fsRows(soci, 'dc', ['cor', '*'], -1);
   soci.push(row('Gross profit', '', cy.gp, py.gp, 'tot'), GAP);
-  fsRows(soci, 'exp', ['ga', 'sell', '*', 'dep', 'fin'], -1);
+  fsRows(soci, 'exp', ['ga', 'sell', '*', 'dep', 'imp', 'fin'], -1);
   fsRows(soci, 'inc', ['gain', 'oi', '*']);
   soci.push(GAP, row('Profit before tax', '', cy.pbt, py.pbt, 'tot'), Object.assign(row('Corporate tax', 'ct', -cy.ct, -py.ct), {drill: 'ct'}), GAP,
     row('Profit after tax', '', cy.pat, py.pat, 'tot'), row('Other comprehensive income', '', 0, 0), GAP,
@@ -1553,13 +1560,18 @@ function buildReport(client, eng, prevEng){
         if (r.ppeT.disp) rows.push(pr('Disposals during the year', 'disp', '', true));
         rows.push(pr(`Closing balance as at ${d(Y, false)}`, 'costClose', 'tot'), {cells: ['Less: Accumulated depreciation'], style: 'grp'},
           pr(`Opening balance as at ${d(Y, true)}`, 'depOpen'), pr('Charged during the year', 'charge'));
+        if (r.ppeT.imp) rows.push(pr('Impairment loss for the year', 'imp'));
         if (r.ppeT.depDisp) rows.push(pr('Relating to disposals', 'depDisp', '', true));
         rows.push(pr(`Closing balance as at ${d(Y, false)}`, 'depClose', 'tot'), {cells: [], style: 'gap'},
           pr(`Net book value as at ${d(Y, false)}`, 'nbv', 'grand'));
         if (!single) rows.push(pr(`Net book value as at ${d(PY, false)}`, 'nbvPy'));
         grp.push({k: 'grid', plain: true, header: [''].concat(cols, ['Total']), sub: [''].concat(cols.map(() => 'AED'), ['AED']), rows, firstWidth: '*', numWidth: 70, small: true});
       } else grp.push(T(subRows('ppe').concat([total('', cy.ppe, py.ppe)])));
-      grp.push({k: 'small', text: `# Depreciation is charged on the ${eng.settings.deprMethod || 'straight-line'} method.`}, {k: 'small', text: '# As per management, there is no impairment in the value of property, plant and equipment.'});
+      grp.push({k: 'small', text: `# Depreciation is charged on the ${eng.settings.deprMethod || 'straight-line'} method.`});
+      if (r.ppeT.imp){
+        const impCls = r.ppe.filter(x => x.imp).map(x => x.name.toLowerCase()).join(', ');
+        grp.push({k: 'small', text: (SMAP.ppe.impText || '').trim() || `# An impairment loss of AED ${fmtN(r.ppeT.imp)} was recognised during the year on ${impCls}, whose carrying amount was written down to the recoverable amount.`});
+      } else grp.push({k: 'small', text: '# As per management, there is no impairment in the value of property, plant and equipment.'});
       if (r.ppe.length && !single){
         // current-year schedule on its own page; comparative (written down value) on the next page, same note number
         items.push({k: 'group', items: grp.splice(0), keep: false, noYears: true}, {k: 'pagebreak'});
@@ -1568,7 +1580,9 @@ function buildReport(client, eng, prevEng){
         wdv[0].label = 'Opening written down value';
         wdv.push(row('Add: Additions during the year', '', T2.add, T2.pyAdd));
         if (nz(T2.dispWdv, T2.pyDispWdv)) wdv.push(row('Less: Disposals at written down value', '', -T2.dispWdv, -T2.pyDispWdv));
-        wdv.push(row('Less: Depreciation charge for the period', '', -T2.charge, -T2.pyCharge), row('Closing written down value', '', T2.nbv, T2.nbvPy, 'grand'));
+        wdv.push(row('Less: Depreciation charge for the period', '', -T2.charge, -T2.pyCharge));
+        if (nz(T2.imp, T2.pyImp)) wdv.push(row('Less: Impairment loss for the period', '', -T2.imp, -T2.pyImp));
+        wdv.push(row('Closing written down value', '', T2.nbv, T2.nbvPy, 'grand'));
         grp.push({k: 'noteHead', num: noteNo.ppe + '.', title: NT('ppe', 'PROPERTY, PLANT AND EQUIPMENT') + ' (CONTINUED)'}, T(wdv));
       }
     } else if (key === 'cap'){
@@ -1637,7 +1651,7 @@ function buildReport(client, eng, prevEng){
       grp.push(head(key, NT(key)), T(subRows(key, ctNoteRow(key)).concat([total('', cy[key], py[key])])));
     }
     // free text the user adds above / below a schedule's table in its note
-    const sch = SMAP[key === 'dep' ? 'ppe' : key];
+    const sch = SMAP[key === 'dep' || key === 'imp' ? 'ppe' : key];
     if (sch && (sch.textAbove || '').trim() && !(key === 'ppe' && r.ppe.length)){ const at = grp.findIndex((g, i) => i > 0 && g.k !== 'p'); grp.splice(at < 0 ? grp.length : at, 0, blocks(sch.textAbove)); }
     /* sub-tables the user added under this schedule, e.g. revenue by geography */
     if (sch && key !== 'dep') (sch.subs || []).forEach(sb => {
@@ -1650,7 +1664,7 @@ function buildReport(client, eng, prevEng){
       grp.push(T(body));
     });
     if (sch && (sch.textBelow || '').trim()) grp.push(blocks(sch.textBelow));
-    { const fk = key === 'dep' ? 'ppe' : key; grp.forEach(g => { if (g.k === 'fs' && !g.fs && !g.drill){ if (key === 'ct') g.drill = 'ct'; else if (SMAP[fk]) g.fs = fk; } if (g.k === 'grid' && key === 'ppe' && !g.drill) g.drill = 'ppe'; }); }
+    { const fk = key === 'dep' || key === 'imp' ? 'ppe' : key; grp.forEach(g => { if (g.k === 'fs' && !g.fs && !g.drill){ if (key === 'ct') g.drill = 'ct'; else if (SMAP[fk]) g.fs = fk; } if (g.k === 'grid' && key === 'ppe' && !g.drill) g.drill = 'ppe'; }); }
     items.push({k: 'group', items: grp, keep: !['risk', 'fi', 'ppe'].includes(key)});
   });
   items.push({k: 'marker', id: 'notes-end'});
@@ -3316,13 +3330,13 @@ function ppeMatrix(en, r){
       ${inRow(`Opening balance as at ${d(Y, true)}`, 'costOpen')}${inRow('Additions during the year', 'add')}${inRow('Disposals during the year', 'disp')}
       ${calcRow(`Closing balance as at ${d(Y, false)}`, 'costClose', 'tot')}
       ${sub('Less: Accumulated depreciation')}
-      ${inRow(`Opening balance as at ${d(Y, true)}`, 'depOpen')}${inRow('Charged during the year', 'charge')}${inRow('Relating to disposals', 'depDisp')}
+      ${inRow(`Opening balance as at ${d(Y, true)}`, 'depOpen')}${inRow('Charged during the year', 'charge')}${inRow('Impairment loss for the year', 'imp')}${inRow('Relating to disposals', 'depDisp')}
       ${calcRow(`Closing balance as at ${d(Y, false)}`, 'depClose', 'tot')}
       ${calcRow(`Net book value as at ${d(Y, false)}`, 'nbv', 'grand')}${calcRow(`Net book value as at ${d(PY, false)}`, 'nbvPy')}
       <tr class="mdocs"><th scope="row">Proof</th>${cls.map(x => `<td>${docCell('ppe', orig(x.id))}</td>`).join('')}<td></td></tr>
       <tr class="mdel"><th scope="row"></th>${cls.map(x => `<td class="r"><button class="icon-btn" data-act="del-ppe" data-id="${x.id}" title="Remove ${e_(x.name)}">${IC.trash}</button></td>`).join('')}<td></td></tr>
     </tbody></table></div>
-    <p class="matrix-note">Prints alone on one page for FY${Y}. Disposals are entered as positive numbers.</p>
+    <p class="matrix-note">Prints alone on one page for FY${Y}. Disposals are entered as positive numbers. An impairment loss is added to the accumulated depreciation and charged to profit or loss as “Impairment loss on property, plant and equipment”.</p>
     ${ppeComparative(en, r, d)}`;
 }
 function ppeComparative(en, r, d){
@@ -3340,6 +3354,7 @@ function ppeComparative(en, r, d){
         ${row('Add: Additions during the year', fmtN(T.add), pin('add', 'Additions'))}
         ${row('Less: Disposals at written down value', neg(T.dispWdv), pin('disp', 'Disposals at written down value'))}
         ${row('Less: Depreciation charge for the period', neg(T.charge), pin('charge', 'Depreciation charge'))}
+        ${T.imp || T.pyImp ? row('Less: Impairment loss for the period', neg(T.imp), pin('imp', 'Impairment loss')) : ''}
         ${row('Closing written down value', fmtN(T.nbv), calc(T.nbvPy), 'grand')}
         ${T.pyDiff ? `<tr class="wdv-diff"><th scope="row">FY${PY} figures above add up to ${fmtN(T.pyCloseCalc)} – difference</th><td></td><td class="r bad-t b">${fmtN(T.pyDiff)}</td></tr>` : ''}
       </tbody></table></div>
@@ -3399,7 +3414,7 @@ function vTB(){
       /* a typed opening balance or the tax provision keeps a schedule on screen even with no ledger lines */
       const extra = !!(x.open && (x.open.cy !== undefined || x.open.py !== undefined)) || (x.subs || []).length > 0 || (r.cy.ctKey === x.key && !!(R(r.cy.ctProv) || R(r.py.ctProv)));
       if (!lines.length && !extra && !(x.key === 'ppe' && en.ppe.length) && !UI.showEmpty && !UI.justAdded?.[x.key]) return false;
-      if (x.key === 'dep' && en.ppe.length && !lines.length && !UI.justAdded?.dep) return false;
+      if ((x.key === 'dep' || x.key === 'imp') && en.ppe.length && !lines.length && !UI.justAdded?.[x.key]) return false;
       if (q && !lines.filter(match).length) return false;
       return true;
     });
@@ -4087,12 +4102,12 @@ function docsModal(type, id){
    QUICK EDIT FROM THE FINANCIAL STATEMENTS – click any amount: its schedule opens in a window,
    figures can be changed and lines added there; the statements update behind the window
    ============================================================ */
-const CF_SOURCE = {dep: 'dep', gain: 'gain', eosb: 'eosb', inv: 'inv', rec: 'rec', rprec: 'rprec', pay: 'pay', rppay: 'rppay', additions: 'ppe', loans: 'ltl', ca: 'ca', div: 'div', shareCap: 'cap', open: 'cash'};
+const CF_SOURCE = {dep: 'dep', imp: 'imp', gain: 'gain', eosb: 'eosb', inv: 'inv', rec: 'rec', rprec: 'rprec', pay: 'pay', rppay: 'rppay', additions: 'ppe', loans: 'ltl', ca: 'ca', div: 'div', shareCap: 'cap', open: 'cash'};
 function drillModal(key, yr){ liveModal(() => drillBody(key, yr || 'cy')); }
 function drillBody(key, yr){
   const c = client(), en = eng(); if (!en) return;
   const r = compute(en, prev()), sm = SM(en), Y = en.year, PY = Y - 1, T = r.ppeT;
-  const k = key === 'dep' && en.ppe.length && !en.tb.some(l => l.fs === 'dep') ? 'ppe' : key, s = sm[k];
+  const k = (key === 'dep' || key === 'imp') && en.ppe.length && !en.tb.some(l => l.fs === key) ? 'ppe' : key, s = sm[k];
   if (!s){ toast('This amount is calculated – change the figures it is made of', true); return; }
   let noteNo = ''; try { noteNo = buildReport(c, en, prev()).noteNo[k] || ''; } catch (e) {}
   const lines = en.tb.filter(l => l.fs === k), hl = y => yr === y ? ' q-hl' : '';
@@ -4111,9 +4126,9 @@ function drillBody(key, yr){
     const P = en.ppePy || {};
     const pIn = (p, f) => `<input class="numi${fxCls(en, `P:${p.id}:${f}`)}" id="q-pm-${f}-${p.id}" data-ppe="${p.id}" data-field="${f}"${fxAttrs(en, `P:${p.id}:${f}`, `{${Y}:P:${p.id}:${f}}`)} value="${fmtIn(p[f])}" inputmode="decimal" aria-label="${e_(p.name)} ${f}">`;
     const rp = r.ppe;
-    extra = `<h3 class="h3">Asset classes FY${Y}</h3><div class="table-wrap"><table class="ui compact q-tab q-ppe"><thead><tr><th>Class</th><th class="r">Cost opening</th><th class="r">Additions</th><th class="r">Disposals</th><th class="r">Depreciation opening</th><th class="r">Charge</th><th class="r">On disposals</th><th class="r">Net book value</th><th></th></tr></thead>
-      <tbody>${en.ppe.map((p, i) => `<tr><td><input id="q-pm-name-${p.id}" data-ppe="${p.id}" data-field="name" value="${e_(p.name)}" placeholder="Class name" aria-label="Asset class"></td>${['costOpen', 'add', 'disp', 'depOpen', 'charge', 'depDisp'].map(f => `<td>${pIn(p, f)}</td>`).join('')}<td class="r b">${fmtN(rp[i] ? rp[i].nbv : 0)}</td><td><button class="icon-btn" data-act="del-ppe" data-id="${p.id}" title="Remove class">${IC.trash}</button></td></tr>`).join('')}</tbody>
-      <tfoot><tr><td>Total</td>${['costOpen', 'add', 'disp', 'depOpen', 'charge', 'depDisp', 'nbv'].map(f => `<td class="r">${fmtN(T[f])}</td>`).join('')}<td></td></tr></tfoot></table></div>
+    extra = `<h3 class="h3">Asset classes FY${Y}</h3><div class="table-wrap"><table class="ui compact q-tab q-ppe"><thead><tr><th>Class</th><th class="r">Cost opening</th><th class="r">Additions</th><th class="r">Disposals</th><th class="r">Depreciation opening</th><th class="r">Charge</th><th class="r">Impairment</th><th class="r">On disposals</th><th class="r">Net book value</th><th></th></tr></thead>
+      <tbody>${en.ppe.map((p, i) => `<tr><td><input id="q-pm-name-${p.id}" data-ppe="${p.id}" data-field="name" value="${e_(p.name)}" placeholder="Class name" aria-label="Asset class"></td>${['costOpen', 'add', 'disp', 'depOpen', 'charge', 'imp', 'depDisp'].map(f => `<td>${pIn(p, f)}</td>`).join('')}<td class="r b">${fmtN(rp[i] ? rp[i].nbv : 0)}</td><td><button class="icon-btn" data-act="del-ppe" data-id="${p.id}" title="Remove class">${IC.trash}</button></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Total</td>${['costOpen', 'add', 'disp', 'depOpen', 'charge', 'imp', 'depDisp', 'nbv'].map(f => `<td class="r">${fmtN(T[f])}</td>`).join('')}<td></td></tr></tfoot></table></div>
       <div class="row"><button class="btn small" data-act="q-add-ppe">${IC.plus}Add asset class</button></div>
       <h3 class="h3">Written down value FY${PY}</h3>${figT(
         fig('Opening written down value', fmtN(T.nbvPy), `<input class="numi${T.pyOpenTyped ? ' ov' : ''}${fxCls(en, 'B:ppePy.open')}" id="q-ppy-open" data-bind="eng.ppePy.open" data-num="1" inputmode="decimal"${fxAttrs(en, 'B:ppePy.open', '')} value="${T.pyOpenTyped ? e_(R(P.open).toLocaleString('en-US')) : ''}" placeholder="${e_(fmtN(T.nbvPyOpenAuto))} (auto)" aria-label="Opening WDV FY${PY}">`)
@@ -5437,11 +5452,11 @@ function parseRows(aoa, en, target, mode){
      L line (amt|py) · S schedule total (cy|py) · P PPE class or * total (field) · C calculated item (cy|py) · F cash flow line (cy|py)
    Formula targets (eng.fx keys): L:lineId:amt|py · P:ppeId:field · B:path.in.engagement · CFP:cashFlowKey
    ============================================================ */
-const FX_FIELDS_PPE = {costOpen: 'cost opening', add: 'additions', disp: 'disposals', costClose: 'cost closing', depOpen: 'depreciation opening', charge: 'depreciation charge', depDisp: 'depreciation on disposals', depClose: 'depreciation closing', nbv: 'net book value', nbvPy: 'net book value PY', dispWdv: 'disposals at WDV'};
+const FX_FIELDS_PPE = {costOpen: 'cost opening', add: 'additions', disp: 'disposals', costClose: 'cost closing', depOpen: 'depreciation opening', imp: 'impairment', charge: 'depreciation charge', depDisp: 'depreciation on disposals', depClose: 'depreciation closing', nbv: 'net book value', nbvPy: 'net book value PY', dispWdv: 'disposals at WDV'};
 const FX_CALC = [['pbt', 'Profit before tax'], ['ct', 'Corporate tax'], ['pat', 'Profit after tax'], ['gp', 'Gross profit'], ['reOpen', 'Retained earnings opening'], ['reClose', 'Retained earnings closing'],
   ['lrOpen', 'Legal reserve opening'], ['lrTransfer', 'Legal reserve transfer'], ['lrClose', 'Legal reserve closing'], ['caOpen', 'Current account opening'], ['caMove', 'Current account movement'], ['caClose', 'Current account closing'],
   ['payTot', 'Payables incl. corporate tax'], ['nca', 'Total non-current assets'], ['caTot', 'Total current assets'], ['ta', 'Total assets'], ['eq', 'Total equity'], ['ncl', 'Total non-current liabilities'], ['cl', 'Total current liabilities'], ['tl', 'Total liabilities']];
-const FX_CF = [['pat', 'Profit for the year'], ['dep', 'Depreciation'], ['gain', 'Gain on disposal'], ['eosb', 'End of service benefits'], ['opBefore', 'Operating profit before working capital changes'],
+const FX_CF = [['pat', 'Profit for the year'], ['dep', 'Depreciation'], ['imp', 'Impairment loss'], ['gain', 'Gain on disposal'], ['eosb', 'End of service benefits'], ['opBefore', 'Operating profit before working capital changes'],
   ['inv', 'Change in inventory'], ['rec', 'Change in receivables'], ['rprec', 'Change due from related parties'], ['pay', 'Change in payables'], ['rppay', 'Change due to related parties'], ['otherOp', 'Other working capital movements'], ['op', 'Net cash from operating activities'],
   ['additions', 'Additions to PPE'], ['proceeds', 'Disposal proceeds'], ['otherInv', 'Other investing movements'], ['invTot', 'Net cash from investing activities'],
   ['shareCap', 'Share capital introduced'], ['loans', 'Net movement in loans'], ['ca', 'Movement in current account'], ['div', 'Dividend paid'], ['otherFin', 'Other financing movements'], ['finTot', 'Net cash from financing activities'],
@@ -5821,16 +5836,16 @@ const fxLinkedCount = en => Object.values(en.fx || {}).filter(f => [...String(f)
 /* ============================================================
    PRIOR YEAR CASH FLOW – every line can be typed (blank = automatic)
    ============================================================ */
-const CFPY_KEYS = ['pat', 'dep', 'gain', 'eosb', 'inv', 'rec', 'rprec', 'pay', 'rppay', 'otherOp', 'additions', 'proceeds', 'otherInv', 'shareCap', 'loans', 'ca', 'div', 'otherFin', 'open'];
+const CFPY_KEYS = ['pat', 'dep', 'imp', 'gain', 'eosb', 'inv', 'rec', 'rprec', 'pay', 'rppay', 'otherOp', 'additions', 'proceeds', 'otherInv', 'shareCap', 'loans', 'ca', 'div', 'otherFin', 'open'];
 /* cash flow lines: the standard lines, custom schedule movements and lines the user added – renamed, removed and reordered per year */
 const CF_SECS = [['adj', 'Cash flows from operating activities', 'opBefore', 'Operating profit before working capital changes'], ['wc', 'Working capital changes', 'op', 'Net cash generated from / (used in) operating activities (A)'],
   ['inv', 'Cash flows from investing activities', 'invTot', 'Net cash used in investing activities (B)'], ['fin', 'Cash flows from financing activities', 'finTot', 'Net cash generated from / (used in) financing activities (C)']];
-const CF_STD = {pat: ['adj', 'Profit for the year'], dep: ['adj', 'Depreciation on property, plant and equipment'], gain: ['adj', 'Gain on disposal of property, plant and equipment'], eosb: ['adj', 'Provision for end of service benefits (net)'],
+const CF_STD = {pat: ['adj', 'Profit for the year'], dep: ['adj', 'Depreciation on property, plant and equipment'], imp: ['adj', 'Impairment loss on property, plant and equipment'], gain: ['adj', 'Gain on disposal of property, plant and equipment'], eosb: ['adj', 'Provision for end of service benefits (net)'],
   inv: ['wc', '(Increase) / decrease in inventory'], rec: ['wc', '(Increase) / decrease in accounts and other receivables'], rprec: ['wc', '(Increase) / decrease in due from related parties'], pay: ['wc', 'Increase / (decrease) in accounts and other payables'], rppay: ['wc', 'Increase / (decrease) in due to related parties'], otherOp: ['wc', 'Other working capital movements'],
   additions: ['inv', 'Additions to property, plant and equipment'], proceeds: ['inv', 'Proceeds from disposal of property, plant and equipment'], otherInv: ['inv', 'Other investing movements'],
   shareCap: ['fin', 'Proceeds from issue of share capital'], loans: ['fin', 'Net movement in loans and borrowings'], ca: ['fin', 'Net movement in shareholder’s current account'], div: ['fin', 'Dividend paid'], otherFin: ['fin', 'Other financing movements']};
 const CF_ALWAYS = ['pat', 'dep', 'rec', 'pay', 'additions'];
-const CF_NOTE = {dep: 'dep', gain: 'gain', eosb: 'eosb', additions: 'ppe', ca: 'ca', div: 're'};
+const CF_NOTE = {dep: 'dep', imp: 'dep', gain: 'gain', eosb: 'eosb', additions: 'ppe', ca: 'ca', div: 're'};
 /* ============================================================
    STATEMENT LINES – rename, reorder, hide, note number, typed figures, extra lines
    Every line of the statement of financial position and the statement of profit or
@@ -5910,10 +5925,10 @@ function cfStdFormula(c, en, x, side){
   if (side === 'py'){
     const pe = prevOf(c, en);
     if (pe){ if (x.kind === 'sched' && !SM(pe)[k]) return null; return `={${Y - 1}:F:${k}:cy}`; }
-    return {pat: `={${Y}:C:pat:py}`, dep: `=${S('dep', 'py')}`, gain: `=-${S('gain', 'py')}`, div: `=-${S('div', 'py')}`}[k] || null;
+    return {pat: `={${Y}:C:pat:py}`, dep: `=${S('dep', 'py')}`, imp: `=${S('imp', 'py')}`, gain: `=-${S('gain', 'py')}`, div: `=-${S('div', 'py')}`}[k] || null;
   }
   if (x.kind === 'sched'){ const sc = SM(en)[k]; if (!sc) return null; return ['ca', 'nca'].includes(sc.sec) ? `=${S(k, 'py')}-${S(k, 'cy')}` : `=${S(k, 'cy')}-${S(k, 'py')}`; }
-  const F = {pat: `={${Y}:C:pat:cy}`, dep: `=${S('dep', 'cy')}`, gain: `=-${S('gain', 'cy')}`, eosb: `=${S('eosb', 'cy')}-${S('eosb', 'py')}`,
+  const F = {pat: `={${Y}:C:pat:cy}`, dep: `=${S('dep', 'cy')}`, imp: `=${S('imp', 'cy')}`, gain: `=-${S('gain', 'cy')}`, eosb: `=${S('eosb', 'cy')}-${S('eosb', 'py')}`,
     inv: `=${S('inv', 'py')}-${S('inv', 'cy')}`, rec: `=${S('rec', 'py')}-${S('rec', 'cy')}`, rprec: `=${S('rprec', 'py')}-${S('rprec', 'cy')}`,
     pay: `={${Y}:C:payTot:cy}-{${Y}:C:payTot:py}`, rppay: `=${S('rppay', 'cy')}-${S('rppay', 'py')}`,
     additions: (en.ppe || []).length ? `=-{${Y}:P:*:add}` : null,
