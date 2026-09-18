@@ -1,0 +1,18 @@
+<!doctype html><html><body><div id="log">loading</div>
+<script type="module">
+import * as pdfjsLib from './pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+const log = m => document.getElementById('log').textContent = m;
+const q = new URLSearchParams(location.search); const file = q.get('f'), from = +(q.get('from') || 1), to = +(q.get('to') || 999), scale = +(q.get('scale') || 1.6);
+const pdf = await pdfjsLib.getDocument(file).promise;
+window.__pages = pdf.numPages; let done = 0;
+for (let p = from; p <= Math.min(to, pdf.numPages); p++){
+  const page = await pdf.getPage(p); const vp = page.getViewport({scale});
+  const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+  await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
+  const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+  await fetch('/__save?name=' + encodeURIComponent(file.split('/').pop().replace('.pdf', '') + '_p' + String(p).padStart(2, '0') + '.png'), {method: 'POST', body: blob});
+  done++; log('done ' + done);
+}
+window.__done = true; log('ALL DONE ' + done);
+</script></body></html>
