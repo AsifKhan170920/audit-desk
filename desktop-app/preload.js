@@ -24,6 +24,7 @@ if (TRUSTED) {
     },
     googleSignOut: () => ipcRenderer.invoke('ft:google-signout'),
     retry: () => ipcRenderer.invoke('ft:retry'),
+    quit: () => ipcRenderer.invoke('ft:quit'),
     whatsapp: {
       // saves the PDF, puts it on the clipboard as a file and opens the chat – Ctrl+V in WhatsApp attaches it
       sendFile: (req) => ipcRenderer.invoke('ft:wa-file', { name: String(req.name || ''), phone: String(req.phone || ''), text: String(req.text || ''), bytes: req.bytes }),

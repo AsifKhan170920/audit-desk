@@ -5,7 +5,7 @@
    with the loud Fair Tax sound even when the window is closed, and speech
    recognition for the AI assistant (Windows speech, via speech\FairTaxSpeech.exe).
    ============================================================ */
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, nativeImage, powerMonitor } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, nativeImage, powerMonitor, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -19,7 +19,7 @@ const START_HIDDEN = process.argv.includes('--hidden');
 const AUTH_HOSTS = ['fair-tax-audit-desk.firebaseapp.com', 'accounts.google.com', 'apis.google.com', 'www.google.com', 'accounts.youtube.com', 'myaccount.google.com'];
 
 let win = null, tray = null, soundWin = null, quitting = false;
-let settings = { autoStartSet: false, trayTipShown: false };
+let settings = { autoStartSet: false, trayTipShown: false, closeAction: '' };   // closeAction: '' = ask, 'tray' or 'quit'
 let reminders = { items: [], fired: {}, updatedAt: null };
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -101,6 +101,7 @@ function createWindow() {
     if (input.type !== 'keyDown') return;
     const k = input.key;
     if (k === 'F5' || (input.control && k.toLowerCase() === 'r')) { e.preventDefault(); if (wc.getURL().startsWith('file:')) win.loadURL(SITE); else wc.reload(); }
+    else if (input.control && k.toLowerCase() === 'q') { e.preventDefault(); quitApp(); }
     else if (input.control && input.shift && k.toLowerCase() === 'i') { e.preventDefault(); wc.toggleDevTools(); }
     else if (input.alt && k === 'ArrowLeft') { e.preventDefault(); if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); }
     else if (input.control && (k === '=' || k === '+')) { e.preventDefault(); wc.setZoomLevel(Math.min(4, wc.getZoomLevel() + 0.5)); }
@@ -108,15 +109,27 @@ function createWindow() {
     else if (input.control && k === '0') { e.preventDefault(); wc.setZoomLevel(0); }
   });
   win.on('session-end', () => { quitting = true; });
+  // the X: quit, or keep running in the tray for the reminders – asked the first time, remembered if wanted
   win.on('close', (e) => {
     if (quitting) return;
-    e.preventDefault(); win.hide();
-    if (!settings.trayTipShown) {
-      settings.trayTipShown = true; writeJson('settings.json', settings);
-      toast('Fair Tax is still running', 'Reminders keep popping up. Open Fair Tax again from the tray icon near the clock.', null);
-    }
+    e.preventDefault();
+    if (settings.closeAction === 'quit') { quitApp(); return; }
+    if (settings.closeAction === 'tray') { win.hide(); return; }
+    dialog.showMessageBox(win, {
+      type: 'question', title: 'Close Fair Tax', message: 'Close Fair Tax?',
+      detail: 'Keep it running in the tray (near the clock) so reminders keep popping up, or quit it completely.',
+      buttons: ['Keep running in the tray', 'Quit Fair Tax', 'Cancel'], defaultId: 0, cancelId: 2, noLink: true,
+      checkboxLabel: 'Always do this when I close the window', checkboxChecked: false
+    }).then(({ response, checkboxChecked }) => {
+      if (response === 2) return;
+      const action = response === 1 ? 'quit' : 'tray';
+      if (checkboxChecked) { settings.closeAction = action; writeJson('settings.json', settings); refreshTrayMenu(); }
+      if (action === 'quit') quitApp(); else win.hide();
+    }).catch(() => win.hide());
   });
 }
+
+function quitApp() { quitting = true; stopSpeech(true); app.quit(); }
 
 function showWindow(url) {
   if (!win) return;
@@ -148,8 +161,13 @@ function refreshTrayMenu() {
     { label: 'Send a test reminder', click: () => testReminder() },
     { type: 'separator' },
     { label: 'Start with Windows', type: 'checkbox', checked: auto, click: (item) => { setAutoStart(item.checked); refreshTrayMenu(); } },
+    { label: 'When I close the window', submenu: [
+      { label: 'Ask me', type: 'radio', checked: !settings.closeAction, click: () => { settings.closeAction = ''; writeJson('settings.json', settings); } },
+      { label: 'Keep running in the tray', type: 'radio', checked: settings.closeAction === 'tray', click: () => { settings.closeAction = 'tray'; writeJson('settings.json', settings); } },
+      { label: 'Quit Fair Tax', type: 'radio', checked: settings.closeAction === 'quit', click: () => { settings.closeAction = 'quit'; writeJson('settings.json', settings); } }
+    ] },
     { type: 'separator' },
-    { label: 'Quit Fair Tax (reminders stop)', click: () => { quitting = true; stopSpeech(true); app.quit(); } }
+    { label: 'Quit Fair Tax (reminders stop)', click: () => quitApp() }
   ]));
 }
 function setAutoStart(on) {
@@ -220,6 +238,7 @@ ipcMain.handle('ft:google-signout', async () => {
   return true;
 });
 ipcMain.handle('ft:retry', () => { if (win) win.loadURL(SITE); return true; });
+ipcMain.handle('ft:quit', () => { setTimeout(quitApp, 50); return true; });
 
 /* ---------------- WhatsApp: hand a PDF to the WhatsApp app ----------------
    A website cannot give WhatsApp a file. Here the PDF is saved under Documents\Fair Tax\WhatsApp,

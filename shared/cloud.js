@@ -436,10 +436,11 @@
       if (host) {
         host.innerHTML = '<span class="ft-state" id="ft-state"></span>' +
           '<button id="ft-refresh" type="button" title="Save what is pending, then load the latest data and program version from the cloud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>Refresh</button>' +
-          '<button id="ft-out" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/></svg>Sign out</button>';
+          '<button id="ft-out" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/></svg>Sign out</button>' +
+          (desktopQuit() ? '<button id="ft-quit" type="button" title="Close the Fair Tax app completely (reminders stop until it is opened again)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/><path d="M12 2v10"/></svg>Quit Fair Tax</button>' : '');
       } else {
         var b = document.createElement('div'); b.className = 'ft-bar';
-        b.innerHTML = '<a href="../" title="Back to the dashboard">◀ Dashboard</a><span>' + esc(me.name || me.id) + '</span><span class="ft-state" id="ft-state"></span><button id="ft-refresh" title="Save what is pending, then load the latest data and program version from the cloud">Refresh</button><button id="ft-out">Sign out</button>';
+        b.innerHTML = '<a href="../" title="Back to the dashboard">◀ Dashboard</a><span>' + esc(me.name || me.id) + '</span><span class="ft-state" id="ft-state"></span><button id="ft-refresh" title="Save what is pending, then load the latest data and program version from the cloud">Refresh</button><button id="ft-out">Sign out</button>' + (desktopQuit() ? '<button id="ft-quit">Quit</button>' : '');
         document.body.appendChild(b);
       }
       var out = document.getElementById('ft-out');
@@ -454,10 +455,23 @@
       // through the loader, which pulls the latest shared data and the latest program files
       var rf = document.getElementById('ft-refresh');
       if (rf) rf.onclick = function () { FT.refresh(this); };
+      var qb = document.getElementById('ft-quit');
+      if (qb) qb.onclick = function () { FT.quitDesktop(this); };
       var stEl = document.getElementById('ft-state');
       if (stEl) stEl.onclick = function () { if (this.classList.contains('reload')) location.reload(); };
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+  };
+  // the Windows app: quit from inside the page (the X of the window asks whether to keep running in the tray)
+  function desktopQuit() { try { return !!(window.ftDesktop && window.ftDesktop.quit); } catch (e) { return false; } }
+  FT.quitDesktop = async function (btn) {
+    if (!desktopQuit()) return;
+    if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+    FT.badge('Saving, then closing…');
+    try { await FT.flushAll(); } catch (e) {}
+    if (FT.pendingSave() && !confirm('Some changes could not be saved to the cloud yet. Quit anyway and lose them?')) { if (btn) { btn.disabled = false; btn.style.opacity = ''; } FT.badge(''); return; }
+    FT.leaving = true;
+    try { await window.ftDesktop.quit(); } catch (e) { if (btn) { btn.disabled = false; btn.style.opacity = ''; } FT.badge('Could not close the app – use the tray icon near the clock', 'bad'); }
   };
   FT.refresh = async function (btn) {
     if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
