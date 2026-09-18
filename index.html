@@ -79,7 +79,7 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
 @media(max-width:520px){.askrow button.talk{display:none}}.phone b{display:block;font-size:16px;margin-bottom:4px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.who{display:none}}
 </style>
-<script src="shared/cloud.js?v=7"></script>
+<script src="shared/cloud.js?v=8"></script>
 <script src="shared/reminders.js?v=7"></script>
 <script src="shared/notify.js?v=6"></script>
 <script src="shared/ai-launcher.js?v=6"></script>
@@ -343,7 +343,7 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
     if (t.dataset.go === 'users') return users();
     if (t.dataset.go === 'password') return password();
     if (t.dataset.go === 'notify-on'){ t.disabled = true; await FTNotify.enable(); var pc = document.getElementById('phone-state'); if (pc) pc.outerHTML = phoneState(); return; }
-    if (t.dataset.go === 'signout'){ t.textContent = 'Signing out…'; await FT.signOut(); return login('You are signed out.'); }
+    if (t.dataset.go === 'signout'){ t.textContent = 'Signing out…'; var ok = await FT.signOut(); if (ok === false){ t.textContent = 'Sign out'; return; } return login('You are signed out.'); }
     if (t.dataset.block){ t.disabled = true; try { await FT.setUserActive(t.dataset.block, t.dataset.active !== '1'); msg('l-msg2', 'Saved.', 'ok'); await list(); await refreshTeam(); } catch (err) { msg('l-msg2', FT.friendlyError(err)); t.disabled = false; } return; }
     if (t.dataset.pw){
       var row = t.closest('tr'), old = document.getElementById('pw-row'); if (old) old.remove();

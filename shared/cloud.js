@@ -208,9 +208,13 @@
     }
     return out.j;
   };
+  FT.pendingSave = function () { return Object.keys(state).some(function (k) { return state[k].pending; }); };
   FT.signOut = async function () {
     await FT.init();
     try { await FT.flushAll(); } catch (e) {}
+    // a change that could not reach the cloud would be lost with the local copy – ask first
+    if (FT.pendingSave() && !confirm('Some changes could not be saved to the cloud yet. Sign out anyway and lose them?')) return false;
+    FT.leaving = true;
     // remove local copies so the next person on this computer cannot see the data –
     // but only when the cloud already holds a complete copy (never lose data that was not uploaded yet)
     for (var a in FT.APPS) {
@@ -228,6 +232,7 @@
     }
     try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
     await FT.auth.signOut();
+    return true;
   };
 
   /* ---------- Claude AI key shared with staff (set by the admin) ---------- */
@@ -438,7 +443,13 @@
         document.body.appendChild(b);
       }
       var out = document.getElementById('ft-out');
-      if (out) out.onclick = async function () { this.textContent = 'Signing out…'; await FT.signOut(); location.href = '../'; };
+      if (out) out.onclick = async function () {
+        var btn = this, label = btn.innerHTML; btn.textContent = 'Signing out…';
+        var ok;
+        try { ok = await FT.signOut(); } catch (e) { ok = null; FT.badge('Could not sign out – ' + FT.friendlyError(e), 'bad'); }
+        if (ok === false || ok === null) { btn.innerHTML = label; FT.leaving = false; return; }
+        location.href = '../';
+      };
       // Refresh: no need to sign out and in again – pending changes are saved first, then the page reloads
       // through the loader, which pulls the latest shared data and the latest program files
       var rf = document.getElementById('ft-refresh');
@@ -452,8 +463,8 @@
     if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
     FT.badge('Saving, then refreshing…');
     try { await FT.flushAll(); } catch (e) {}
-    var pending = Object.keys(state).some(function (k) { return state[k].pending; });
-    if (pending && !confirm('Some changes could not be saved to the cloud yet. Refresh anyway and lose them?')) { if (btn) { btn.disabled = false; btn.style.opacity = ''; } FT.badge(''); return; }
+    if (FT.pendingSave() && !confirm('Some changes could not be saved to the cloud yet. Refresh anyway and lose them?')) { if (btn) { btn.disabled = false; btn.style.opacity = ''; } FT.badge(''); return; }
+    FT.leaving = true;
     var u = new URL(location.href); u.searchParams.set('r', String(Date.now())); location.replace(u.toString());
   };
   FT.badge = function (text, cls) {
@@ -490,7 +501,7 @@
       document.open(); document.write(html); document.close();
       var done = function () {
         // (listeners must be added after document.write, which clears earlier ones)
-        window.addEventListener('beforeunload', function (e) { var st = state[key]; if (st && st.pending) { e.preventDefault(); e.returnValue = ''; } });
+        window.addEventListener('beforeunload', function (e) { if (FT.leaving) return; var st = state[key]; if (st && st.pending) { e.preventDefault(); e.returnValue = ''; } });
         FT.bar(me); if (afterWrite) afterWrite(me);
         if (localStorage.getItem(key + '-local-backup')) FT.localChoice(app, key);
       };
