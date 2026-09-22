@@ -1521,7 +1521,7 @@ function buildReport(client, eng, prevEng){
     if (!on) return;
     polItems.push(blocks(`## 3.${pn++} ${pol.title}\n${pol.text}`));
   });
-  polItems.push({k: 'noteHead', num: '4.', title: 'CRITICAL ACCOUNTING JUDGMENTS AND KEY SOURCES OF ESTIMATION UNCERTAINTY'}, blocks(eng.texts.note4), {k: 'marker', id: 'pol-end'});
+  polItems.push({k: 'noteHead', num: '4.', title: 'CRITICAL ACCOUNTING JUDGMENTS AND KEY SOURCES OF ESTIMATION UNCERTAINTY'}, blocks(eng.texts.note4));
   sections.push({id: 'pol', kind: 'notes', head: statementHead('NOTES TO THE FINANCIAL STATEMENTS', period), items: polItems,
     tokens: {SHARE_TABLE: shareTable, USEFUL_LIVES: lives}});
 
@@ -1667,7 +1667,6 @@ function buildReport(client, eng, prevEng){
     { const fk = key === 'dep' || key === 'imp' ? 'ppe' : key; grp.forEach(g => { if (g.k === 'fs' && !g.fs && !g.drill){ if (key === 'ct') g.drill = 'ct'; else if (SMAP[fk]) g.fs = fk; } if (g.k === 'grid' && key === 'ppe' && !g.drill) g.drill = 'ppe'; }); }
     items.push({k: 'group', items: grp, keep: !['risk', 'fi', 'ppe'].includes(key)});
   });
-  items.push({k: 'marker', id: 'notes-end'});
   sections.push({id: 'notes', kind: 'notes', head: statementHead('NOTES TO THE FINANCIAL STATEMENTS', period), items, years: YRS});
   { // ratio analysis – management information after the notes
     const rrows = [], rl = ratioList(r);
@@ -1677,7 +1676,6 @@ function buildReport(client, eng, prevEng){
       {k: 'grid', plain: true, leftCols: [0, 1], header: ['', 'Calculation', String(Y)].concat(single ? [] : [String(PY)]), rows: rrows, widths: single ? ['*', 190, 66] : ['*', 190, 66, 66], small: true},
       {k: 'small', text: `Ratios are worked out from the year-end balances in these financial statements.${isAudit ? ' This page is management information and does not form part of the audited financial statements.' : ''}`}]});
   }
-  if (isAudit){ const ar = sections.find(s => s.id === 'ar'); ar.items.push({k: 'marker', id: 'ar-end'}); }
   // ---------- apply the report layout: order, sections left out, index entries ----------
   const byId = Object.fromEntries(sections.map(s => [s.id, s]));
   const body = LAY.order.map(id => byId[id]).filter(s => s && !LAY.hide[s.id]);
