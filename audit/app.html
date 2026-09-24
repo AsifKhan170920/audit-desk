@@ -1315,7 +1315,9 @@ function reportVars(client, eng, r){
 function articleAn(w){ w = String(w || '').trim(); return !!w && ((/^[aeiou]/i.test(w) && !/^(one\b|onc|uni|use|usu|eu|ure)/i.test(w)) || /^(hour|honest|honou?r)/i.test(w) || /^[FHLMNRSX](?:\.|[A-Z]*\b)(?![a-z])/.test(w)); }
 function fillVars(text, v){
   // “registered as a {legalForm}” reads “an Individual Company …” when the legal form starts with a vowel
-  return String(text || '').replace(/\b([Aa]) \{legalForm\}/g, (m, a) => (articleAn(v.legalForm) ? a + 'n' : a) + ' {legalForm}').replace(/\{(\w+)\}/g, (m, k) => (v[k] !== undefined ? v[k] : m));
+  return String(text || '').replace(/\b([Aa]) \{legalForm\}/g, (m, a) => (articleAn(v.legalForm) ? a + 'n' : a) + ' {legalForm}').replace(/\{(\w+)\}/g, (m, k) => (v[k] !== undefined ? v[k] : m))
+    // a placeholder that fills in empty must not leave a double space behind (leading indent is kept)
+    .replace(/(\S) {2,}/g, '$1 ');
 }
 
 /* markup -> blocks */
