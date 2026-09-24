@@ -1604,9 +1604,20 @@ function buildReport(client, eng, prevEng){
         grp.push({k: 'noteHead', num: noteNo.ppe + '.', title: NT('ppe', 'PROPERTY, PLANT AND EQUIPMENT') + ' (CONTINUED)'}, T(wdv));
       }
     } else if (key === 'cap'){
+      /* the holdings are shown pro-rata, so the last one absorbs the rounding and the column foots to the capital */
+      const shAmt = sh.map(s => (+s.shares || 0) * (+s.value || 0));
+      const alloc = (tot) => {
+        if (!capTot) return shAmt.slice();
+        const a = shAmt.map(x => Math.round(tot * x / capTot));
+        if (a.length) a[a.length - 1] += Math.round(tot) - a.reduce((s, n) => s + n, 0);
+        return a;
+      };
+      const capCy = alloc(cy.cap), capPy = alloc(py.cap);
+      const capRows = sh.map((s, i) => ({cells: [s.name, s.country || s.nationality || '', capTot ? `${Math.round(shAmt[i] / capTot * 100)}%` : '', capCy[i]].concat(single ? [] : [capPy[i]])}));
+      if (capRows.length) capRows.push({style: 'grand', cells: ['', '', capTot ? '100%' : '', Math.round(cy.cap)].concat(single ? [] : [Math.round(py.cap)])});
       grp.push(head(key, NT('cap', 'SHARE CAPITAL')), {k: 'p', text: `The shareholding as at ${yeText}, ${Y} was as follows:`},
         {k: 'grid', boxed: true, header: ['Name of shareholder', 'Nationality', '%', `${Y} AED`].concat(single ? [] : [`${PY} AED`]),
-          rows: sh.map(s => { const amt = (+s.shares || 0) * (+s.value || 0); return {cells: [s.name, s.country || s.nationality || '', capTot ? `${Math.round(amt / capTot * 100)}%` : '', capTot ? Math.round(cy.cap * amt / capTot) : amt].concat(single ? [] : [capTot ? Math.round(py.cap * amt / capTot) : amt])}; }),
+          rows: capRows,
           widths: single ? ['*', 58, 34, 64] : ['*', 58, 34, 64, 64], small: true});
     } else if (key === 'lr'){
       grp.push(head(key, NT('lr', 'LEGAL RESERVE')), T([row('Balance at the beginning of the year', '', cy.lrOpen, py.lrOpen), row('Transfer for the year', '', cy.lrTransfer, py.lrTransfer)].concat(eqNoteRows('lr'), [total('Balance at the end of the year', cy.lrClose, py.lrClose)])));
