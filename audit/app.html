@@ -1409,13 +1409,19 @@ function buildReport(client, eng, prevEng){
 
   /* ---------- auditor report / company info / management report ---------- */
   const blocks = (text) => ({k: 'blocks', blocks: parseMarkup(fillVars(single ? String(text || '').replace(/\s*\(\{prevYear\}:[^()]*\)/g, '') : text, v))});
+  /* Financial statements without an audit: there is no auditor to name, so the "Auditors" block is
+     dropped from the company information page and from the management report. The wording stays in
+     the engagement's text - switch the engagement to Audit and it prints again. */
+  const dropAuditors = (text) => isAudit ? text : String(text || '')
+    .replace(/(^|\n)##[ \t]*Auditors?[ \t]*\r?\n[\s\S]*?(?=\n##[ \t]|\n\[\[|$)/i, '$1')
+    .replace(/\n{3,}/g, '\n\n').trim();
   if (isAudit){
     sections.push({id: 'ar', kind: 'plain', letterhead: true, items: [
       {k: 'title', text: 'INDEPENDENT AUDITOR’S REPORT'}, blocks(eng.texts.auditorReport)
     ], tokens: {AUDITOR_SIGNATURE: {k: 'lines', lines: [`For ${p.auditor || ''}`, '', '', '', p.partner || '', p.partnerTitle || 'Managing Partner', `Registration No. ${p.auditorReg || ''}`, p.reportDate || '', `${p.auditorCity || ''}, United Arab Emirates`]}}});
   }
-  sections.push({id: 'ci', kind: 'plain', items: [{k: 'coHead', name: client.name, title: 'COMPANY INFORMATION'}, blocks(eng.texts.companyInfo)]});
-  sections.push({id: 'mr', kind: 'plain', items: [{k: 'coHead', name: client.name, title: 'MANAGEMENT REPORT'}, blocks(eng.texts.managementReport)],
+  sections.push({id: 'ci', kind: 'plain', items: [{k: 'coHead', name: client.name, title: 'COMPANY INFORMATION'}, blocks(dropAuditors(eng.texts.companyInfo))]});
+  sections.push({id: 'mr', kind: 'plain', items: [{k: 'coHead', name: client.name, title: 'MANAGEMENT REPORT'}, blocks(dropAuditors(eng.texts.managementReport))],
     tokens: {MANAGEMENT_SIGNATURE: {k: 'signBlock', lines: [`For ${client.name}`, cityLine], label: p.signatory || 'Authorised Signatory'}}});
 
   /* ---------- statements ---------- */
