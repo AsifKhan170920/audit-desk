@@ -1343,6 +1343,14 @@ function inlineRuns(text){ // -> [{text, bold}]
 /* ============================================================
    REPORT MODEL – one structure, three outputs (PDF, Word/HTML, Excel)
    ============================================================ */
+/* Caption that follows the sign: "Profit"/"Loss", or both when the two years differ. */
+function plCap(a, b, pos, neg, mix){
+  const n = [a, b].filter(v => typeof v === 'number' && Math.abs(v) > 0.005);
+  if (!n.length) return pos;
+  if (n.every(v => v < 0)) return neg;
+  if (n.every(v => v > 0)) return pos;
+  return mix;
+}
 function buildReport(client, eng, prevEng){
   const r = compute(eng, prevEng);
   const v = reportVars(client, eng, r);
@@ -1459,12 +1467,12 @@ function buildReport(client, eng, prevEng){
   const soci = [];
   fsRows(soci, 'inc', ['rev']);
   fsRows(soci, 'dc', ['cor', '*'], -1);
-  soci.push(row('Gross profit', '', cy.gp, py.gp, 'tot'), GAP);
+  soci.push(row(plCap(cy.gp, py.gp, 'Gross profit', 'Gross loss', 'Gross profit / (loss)'), '', cy.gp, py.gp, 'tot'), GAP);
   fsRows(soci, 'exp', ['ga', 'sell', '*', 'dep', 'imp', 'fin'], -1);
   fsRows(soci, 'inc', ['gain', 'oi', '*']);
-  soci.push(GAP, row('Profit before tax', '', cy.pbt, py.pbt, 'tot'), Object.assign(row('Corporate tax', 'ct', -cy.ct, -py.ct), {drill: 'ct'}), GAP,
-    row('Profit after tax', '', cy.pat, py.pat, 'tot'), row('Other comprehensive income', '', 0, 0), GAP,
-    row('Total comprehensive income for the year', '', cy.pat, py.pat, 'grand'));
+  soci.push(GAP, row(plCap(cy.pbt, py.pbt, 'Profit before tax', 'Loss before tax', 'Profit / (loss) before tax'), '', cy.pbt, py.pbt, 'tot'), Object.assign(row('Corporate tax', 'ct', -cy.ct, -py.ct), {drill: 'ct'}), GAP,
+    row(plCap(cy.pat, py.pat, 'Profit after tax', 'Loss after tax', 'Profit / (loss) after tax'), '', cy.pat, py.pat, 'tot'), row('Other comprehensive income', '', 0, 0), GAP,
+    row(plCap(cy.pat, py.pat, 'Total comprehensive income for the year', 'Total comprehensive loss for the year', 'Total comprehensive income / (loss) for the year'), '', cy.pat, py.pat, 'grand'));
   sections.push({id: 'soci', kind: 'statement', head: statementHead('STATEMENT OF PROFIT OR LOSS AND OTHER COMPREHENSIVE INCOME', period), items: [
     {k: 'fs', rows: soci, noteCol: true, years: YRS}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
 
@@ -1593,7 +1601,7 @@ function buildReport(client, eng, prevEng){
     } else if (key === 'lr'){
       grp.push(head(key, NT('lr', 'LEGAL RESERVE')), T([row('Balance at the beginning of the year', '', cy.lrOpen, py.lrOpen), row('Transfer for the year', '', cy.lrTransfer, py.lrTransfer)].concat(eqNoteRows('lr'), [total('Balance at the end of the year', cy.lrClose, py.lrClose)])));
     } else if (key === 're'){
-      const rr = [row('Balance at the beginning of the year', '', cy.reOpen, py.reOpen), row('Total comprehensive income for the year', '', cy.pat, py.pat)];
+      const rr = [row('Balance at the beginning of the year', '', cy.reOpen, py.reOpen), row(plCap(cy.pat, py.pat, 'Total comprehensive income for the year', 'Total comprehensive loss for the year', 'Total comprehensive income / (loss) for the year'), '', cy.pat, py.pat)];
       if (nz(cy.div, py.div)) rr.push(row('Dividend paid', '', -cy.div, -py.div));
       if (nz(cy.lrTransfer, py.lrTransfer)) rr.push(row('Transfer to legal reserve', '', -cy.lrTransfer, -py.lrTransfer));
       rr.push(...eqNoteRows('re'));
@@ -5036,7 +5044,7 @@ function soceMoves(en, r, yr, o){
   o = o || {};
   const b = r[yr], rows = [], cols = ['cap', 'lr', 're', 'ca', 'oth'];
   const add = (key, label, vals, show, extra) => { if (show) rows.push(Object.assign({key, label, vals}, extra || {})); };
-  add('tci', 'Total comprehensive income for the year', {re: b.pat}, true);
+  add('tci', plCap(b.pat, b.pat, 'Total comprehensive income for the year', 'Total comprehensive loss for the year', 'Total comprehensive income / (loss) for the year'), {re: b.pat}, true);
   add('div', 'Dividend paid', {re: -b.div}, !!b.div);
   add('lrT', 'Transfer to legal reserve', {lr: b.lrTransfer, re: -b.lrTransfer}, !!b.lrTransfer);
   (en.soceItems || []).filter(x => x.yr === yr).forEach(x => add('i:' + x.id, x.label || 'Other movement', {cap: R(x.cap), lr: R(x.lr), re: R(x.re), ca: R(x.ca), oth: R(x.oth)}, o.report ? cols.some(c => R(x[c])) : true, {item: x}));

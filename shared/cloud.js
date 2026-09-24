@@ -208,30 +208,41 @@
     }
     return out.j;
   };
+  // A cloud call that never settles must not keep the user signed in. Everything the sign-out
+  // does before it clears the session is raced against a timeout; on a timeout we carry on and,
+  // where data is involved, we keep the local copy rather than risk losing it.
+  var TIMED_OUT = {};
+  var withTimeout = function (p, ms) {
+    return Promise.race([Promise.resolve(p), new Promise(function (res) { setTimeout(function () { res(TIMED_OUT); }, ms); })]);
+  };
   FT.pendingSave = function () { return Object.keys(state).some(function (k) { return state[k].pending; }); };
   FT.signOut = async function () {
-    await FT.init();
-    try { await FT.flushAll(); } catch (e) {}
+    try { await withTimeout(FT.init(), 4000); } catch (e) {}
+    try { await withTimeout(FT.flushAll(), 6000); } catch (e) {}
     // a change that could not reach the cloud would be lost with the local copy – ask first
     if (FT.pendingSave() && !confirm('Some changes could not be saved to the cloud yet. Sign out anyway and lose them?')) return false;
     FT.leaving = true;
     // remove local copies so the next person on this computer cannot see the data –
     // but only when the cloud already holds a complete copy (never lose data that was not uploaded yet)
+    var tidy = async function () {
     for (var a in FT.APPS) {
       var key = FT.APPS[a].key, st = state[key];
       try {
         if (st && st.pending) continue;
         var local = localStorage.getItem(key);
         if (local !== null) {
-          var meta = await storeRef(a, key).get();
+          var meta = await withTimeout(storeRef(a, key).get(), 4000);
+          if (meta === TIMED_OUT) continue; // could not confirm the cloud copy - keep the local one
           var inCloud = meta.exists && (meta.data().size === local.length || (st && st.lastSent === local));
           if (!inCloud) continue;
         }
         localStorage.removeItem(key); localStorage.removeItem(key + '-ui');
       } catch (e) { /* no access to that app → leave its local copy alone */ }
     }
+    };
+    try { await withTimeout(tidy(), 5000); } catch (e) {}
     try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
-    await FT.auth.signOut();
+    try { await withTimeout(FT.auth.signOut(), 4000); } catch (e) {}
     return true;
   };
 
@@ -380,7 +391,12 @@
       if (r.conflict) { FT.conflict(key, r); return; }
       if (st.pending === text) st.pending = null;
       FT.badge('Saved to cloud', 'ok');
-    } catch (e) { FT.badge('Not saved to cloud – ' + FT.friendlyError(e), 'bad'); st.timer = setTimeout(function () { FT.flush(key); }, 15000); }
+    } catch (e) {
+      FT.badge('Not saved to cloud – ' + FT.friendlyError(e), 'bad');
+      // a refusal will not fix itself in fifteen seconds - look again in five minutes instead of every quarter minute
+      var again = /permission-denied|unauthenticated/.test((e && e.code) || '') ? 300000 : 15000;
+      st.timer = setTimeout(function () { FT.flush(key); }, again);
+    }
   };
   FT.flushAll = async function () { for (var k in state) { clearTimeout(state[k].timer); await FT.flush(k); } };
   FT.conflict = function (key, r) {
