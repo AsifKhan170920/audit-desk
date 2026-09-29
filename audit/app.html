@@ -1806,6 +1806,25 @@ function pdfFs(item, opt){
   return tableNode({table: {widths, body, dontBreakRows: true}, layout: fsLayout(v), margin: [0, 0, 0, 6 * v], fontSize: vFont(v, 10.5), lineHeight: vLine(v)}, opt);
 }
 function tableNode(node, opt){ return opt && opt.keepTables ? {stack: [node], unbreakable: true} : node; }
+/* a long amount table in the notes may run on to the next page instead of leaving a large gap:
+   the year heading and first rows stay together, and so do the last rows and the total */
+const FS_SPLIT_ROWS = 10;
+function pdfFsParts(item, opt){
+  const node = pdfFs(item, Object.assign({}, opt, {keepTables: false})), t = node.table;
+  const head = item.noHead ? 0 : 2, first = 4, lastN = 3 + (item.rows[item.rows.length - 1].style === 'grand' ? 1 : 0);
+  const rows = t.body.slice(head);
+  if (item.rows.length < FS_SPLIT_ROWS || rows.length < first + lastN + 1) return [tableNode(node, opt)];
+  const part = (body, last) => Object.assign({}, node, {table: Object.assign({}, t, {body, widths: t.widths.slice()}), margin: last ? node.margin : [0, 0, 0, 0]});
+  const out = [{stack: [part(t.body.slice(0, head + first))], unbreakable: true}];
+  const mid = rows.slice(first, rows.length - lastN);
+  for (let i = 0; i < mid.length; i++){
+    // a group label never ends a page on its own
+    const style = (item.rows[first + i] || {}).style, n = (style === 'grp' || style === 'gap') && i + 1 < mid.length ? 2 : 1;
+    out.push({stack: [part(mid.slice(i, i + n))], unbreakable: true}); i += n - 1;
+  }
+  out.push({stack: [part(rows.slice(-lastN), true)], unbreakable: true});
+  return out;
+}
 function fsLayout(v){ const pad = Math.max(0, 1.1 * ((v || 1) - 0.4) / 0.6); return {defaultBorder: false, hLineWidth: () => 0.6, vLineWidth: () => 0, paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => pad, paddingBottom: () => pad}; }
 function pdfGrid(item, opt){
   const v = vs(opt);
@@ -1957,10 +1976,12 @@ function notesFlow(items, tokens, opt){
     if (it.k === 'noteHead') return [pdfItem(it, tokens, opt)];
     if (it.k === 'blocks') return pdfBlocks(it, tokens, opt).map(ind);
     if (it.k === 'marker') return [pdfItem(it, tokens, opt)];
+    if (it.k === 'fs'){ const parts = pdfFsParts(it, opt).map(ind); if (it._tid) parts[0].id = it._tid; return parts; }
     if (it.k === 'group'){
       const inner = keepWithNext([].concat(...it.items.map(one)));
-      // small notes stay together on one page; longer ones flow (tables themselves never split, headings never stranded)
-      if (it.keep && estHeight(it.items) < 260){
+      // small notes stay together on one page; longer ones flow (short tables never split, long ones only between
+      // their first and last rows, headings never stranded)
+      if (it.keep && estHeight(it.items) < 260 && !it.items.some(x => x.k === 'fs' && x.rows.length >= FS_SPLIT_ROWS)){
         // the gap above the heading and below the last line is spacing between notes, not part of the note –
         // it is left outside the block that must fit, so a note that only just fits is not pushed to the next page
         const gap = trimOuterGap(inner), sp = h => ({text: ' ', fontSize: 1, lineHeight: 1, margin: [0, 0, 0, Math.max(0, h - 1)]});
