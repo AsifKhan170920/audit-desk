@@ -1658,6 +1658,10 @@ function buildReport(client, eng, prevEng){
       if (nz(cy.ctAdj, py.ctAdj)) rr.push(row('Add / (less): tax adjustments', '', cy.ctAdj, py.ctAdj));
       rr.push(row('Less: threshold subject to 0%', '', -375000, -375000), total('Taxable income subject to 9%', Math.max(0, cy.pbt + cy.ctAdj - 375000), Math.max(0, py.pbt + py.ctAdj - 375000)),
         row('Corporate tax for the year', '', cy.ct, py.ct, 'grand'));
+      // tax losses available to carry forward, by tax period (engagement settings)
+      const tl = (eng.settings.taxLosses || []).filter(x => nz(R(x.cy), R(x.py)));
+      if (tl.length) rr.push(GAP, G('Tax losses carried forward'), ...tl.map(x => row(x.label || '', '', R(x.cy), R(x.py))),
+        total('Total tax losses carried forward', tl.reduce((a, x) => a + R(x.cy), 0), tl.reduce((a, x) => a + R(x.py), 0)));
       grp.push(head(key, 'CORPORATE TAX'), T(rr), {k: 'small', text: 'The provision for corporate tax is included in accounts and other payables.' + (eng.settings.ctMode === 'manual' ? ' The current year tax charge has been determined by management.' : '')});
     } else if (key === 'fi'){
       const recFin = subLines(eng, 'rec').filter(x => !/prepa|advance/i.test(x.caption));
