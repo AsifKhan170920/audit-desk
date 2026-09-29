@@ -93,7 +93,7 @@ table.ui td input:hover,table.ui td select:hover{border-color:var(--line)}
 table.ui td input:focus,table.ui td select:focus{border-color:var(--primary);background:#fff;outline:none}
 .numi{text-align:right;min-width:92px;font-variant-numeric:tabular-nums}.numi.s{min-width:48px}
 .w-cmt{min-width:130px}
-.w-ledger{min-width:190px}.w-fs{min-width:170px}.w-cap{min-width:150px}.w-ppe{min-width:150px}
+.w-ledger{min-width:190px}.w-fs{min-width:170px}.w-cap{min-width:150px}.w-grp{display:block;width:100%;margin-top:3px;font-size:12px;padding:3px 6px;color:var(--muted)}.w-ppe{min-width:150px}
 table.ui.tb td,table.ui.ppe td{padding:5px 5px}table.ui.tb td input,table.ui.tb td select,table.ui.ppe td input{font-size:13.5px;padding:4px 5px}
 table.ui.tb th,table.ui.ppe th{padding:7px 6px}
 tr.unmapped td{background:var(--warn-soft)}
@@ -969,7 +969,7 @@ function rollForward(client, eng){
   n.tb = eng.tb.map(l => {
     let py = natural(l, eng);
     if (l.fs === 're') py = r.cy.reClose; if (l.fs === 'lr') py = r.cy.lrClose;
-    return {id: uid(), ledger: l.ledger, fs: l.fs, caption: l.caption, amt: 0, py, docs: []};
+    return Object.assign({id: uid(), ledger: l.ledger, fs: l.fs, caption: l.caption, amt: 0, py, docs: []}, l.grp ? {grp: l.grp} : {});
   });
   n.pyInfo.caOpen = r.cy.caOpen; n.pyInfo.lrTransfer = r.cy.lrTransfer; n.pyInfo.ctMode = 'manual'; n.pyInfo.ctAmount = r.cy.ct; n.pyInfo.ctPay = r.cy.ctInPay ? 'ledger' : (eng.settings.ctPay || 'auto');
   n.pyInfo.cf = {};
@@ -3430,7 +3430,8 @@ function lineRow(en, l, withSchedule){
   return `<tr class="${SM(en)[l.fs] ? '' : 'unmapped'}">
     <td><input class="w-ledger" id="l-led-${l.id}" data-line="${l.id}" data-field="ledger" value="${e_(l.ledger)}" placeholder="Ledger name" aria-label="Ledger"></td>
     ${withSchedule ? `<td><select class="w-fs" id="l-fs-${l.id}" data-line="${l.id}" data-field="fs" aria-label="Schedule">${schedOptions(en, l.fs)}</select></td>` : ''}
-    <td><input class="w-cap" id="l-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes"></td>
+    <td><input class="w-cap" id="l-cap-${l.id}" data-line="${l.id}" data-field="caption" value="${e_(l.caption)}" placeholder="${e_(l.ledger || 'same as ledger')}" aria-label="Wording in notes">
+      <input class="w-grp" id="l-grp-${l.id}" data-line="${l.id}" data-field="grp" value="${e_(l.grp || '')}" placeholder="Group in the note (optional)" title="Lines with the same group print under that heading with a subtotal, e.g. one establishment of combined statements" aria-label="Group in the note"></td>
     <td><input class="numi${R(l.amt) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':amt')}" id="l-amt-${l.id}" data-line="${l.id}" data-field="amt"${fxAttrs(en, 'L:' + l.id + ':amt', `{${en.year}:L:${l.id}:amt}`)} value="${fmtSigned(l.amt)}" inputmode="decimal" aria-label="Amount"></td>
     <td><input class="numi${R(l.py) < 0 ? ' neg' : ''}${fxCls(en, 'L:' + l.id + ':py')}" id="l-py-${l.id}" data-line="${l.id}" data-field="py"${fxAttrs(en, 'L:' + l.id + ':py', `{${en.year}:L:${l.id}:py}`)} value="${fmtSigned(l.py)}" inputmode="decimal" aria-label="Prior year"></td>
     <td><input class="w-cmt" id="l-cmt-${l.id}" data-remark="line:${l.id}" value="${e_(l.remark || '')}" placeholder="Comment" aria-label="Comment"></td>
