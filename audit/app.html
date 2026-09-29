@@ -1984,7 +1984,7 @@ function notesFlow(items, tokens, opt){
       if (it.keep && estHeight(it.items) < 260 && !it.items.some(x => x.k === 'fs' && x.rows.length >= FS_SPLIT_ROWS)){
         // the gap above the heading and below the last line is spacing between notes, not part of the note –
         // it is left outside the block that must fit, so a note that only just fits is not pushed to the next page
-        const gap = trimOuterGap(inner), sp = h => ({text: ' ', fontSize: 1, lineHeight: 1, margin: [0, 0, 0, Math.max(0, h - 1)]});
+        const gap = trimOuterGap(inner), sp = h => ({text: ' ', fontSize: 1, lineHeight: 1, margin: [0, 0, 0, Math.max(0, h - 1)], _sp: true});
         return [].concat(gap.top ? [sp(gap.top)] : [], [{stack: inner, unbreakable: true}], gap.bottom ? [sp(gap.bottom)] : []);
       }
       return inner;
@@ -1992,8 +1992,45 @@ function notesFlow(items, tokens, opt){
     const node = ind(pdfItem(it, tokens, opt)); if (it._tid) node.id = it._tid;
     return [node];
   };
-  items.forEach(it => out.push(...one(it)));
-  return keepWithNext(out);
+  // notes are marked where they start and every block where it ends, so the layout pass can see the space left at
+  // the foot of each page; opt.pads then spreads that space over the gaps above the notes that start on the page
+  items.forEach((it, i) => {
+    const nodes = one(it), fi = nodes.findIndex(n => !n._sp);
+    if (it.k !== 'group' || fi < 0){ out.push(...nodes); return; }
+    const pad = opt.pads ? opt.pads[i] || 0 : 0;
+    // a tiny marker after the note's first block and inside it: a block moved to the next page reports where it
+    // began, not where it landed; a lone heading takes the marker and the extra space with it when it moves on
+    let first = nodes[fi]; const head = first.headlineLevel === 1;
+    if (head) first = Object.assign({}, first, {headlineLevel: undefined});
+    nodes[fi] = Object.assign({stack: (pad ? [{text: ' ', fontSize: 0.1, lineHeight: 1, margin: [0, pad, 0, 0]}] : []).concat([first, {text: ' ', fontSize: 0.1, lineHeight: 1, id: 'ns' + i}]),
+      unbreakable: head || isUnbreakable(first) || undefined, _ns: true}, head ? {headlineLevel: 1} : {});
+    out.push(...nodes);
+  });
+  // after each block: 'w' = the block moves to the next page whole, 'b' = it can break part-way
+  const whole = n => n._sp || n._ns || isUnbreakable(n) || n.headlineLevel === 1;
+  const list = keepWithNext(out), res = [];
+  list.forEach((n, j) => res.push(n, {text: ' ', fontSize: 0.1, lineHeight: 1, id: 'nb' + (whole(n) ? 'w' : 'b') + j}));
+  return res;
+}
+/* space left at the foot of a notes page – because the next block did not fit and moved over whole – is shared out
+   over the gaps above the notes starting on that page, including the gap under the year heading */
+const NOTE_PAD_MAX = 48;
+function notesPads(pos, total, bottom){
+  const ends = [];
+  Object.keys(pos).forEach(id => { const m = /^nb([wb])(\d+)$/.exec(id); if (m) ends[+m[2]] = {page: pos[id].pageNumber, top: pos[id].top, whole: m[1] === 'w'}; });
+  const nsPage = {}; Object.keys(pos).forEach(id => { const m = /^ns(\d+)$/.exec(id); if (m) nsPage[+m[1]] = pos[id].pageNumber; });
+  const pads = {};
+  for (let p = 1; p < total; p++){
+    let last = -1;
+    ends.forEach((e, j) => { if (e && e.page === p) last = j; });
+    const next = ends[last + 1];
+    if (last < 0 || !next || next.page !== p + 1 || !next.whole) continue;
+    const gaps = Object.keys(nsPage).map(Number).filter(i => nsPage[i] === p);
+    const left = bottom - ends[last].top - 6;
+    const each = gaps.length ? Math.floor(Math.min(NOTE_PAD_MAX, left / gaps.length)) : 0;
+    if (each >= 2) gaps.forEach(i => { pads[i] = each; });
+  }
+  return pads;
 }
 function pdfPartDef(M, part, ctx){
   const G = pageGeometry(M), P = G.P, L = M.layout, num = ctx.num || null, s = part.s;
@@ -2033,7 +2070,7 @@ function pdfPartDef(M, part, ctx){
     const tag = n => { if (Array.isArray(n)) return n.forEach(tag); if (n && typeof n === 'object'){ if ('text' in n) n.style = 'hf'; Object.values(n).forEach(v => { if (v && typeof v === 'object') tag(v); }); } };
     runHead = cur => { const h = pdfHead(s.head, years && !notesYearsOff(L, part, cur) ? years : null, G.W); tag(h); return h; };
     top = G.top + (years ? ctx.headH.y : ctx.headH.n) + 6;
-    content = notesFlow(part.chunk.map(tagT).map(withHead), s.tokens, {W: G.W, keepTables: true, flow: true});
+    content = notesFlow(part.chunk.map(tagT).map(withHead), s.tokens, {W: G.W, keepTables: true, flow: true, pads: part.pads || null});
   }
   if (part.kind === 'statement') content = content.concat([mark('end')]);
   const numbered = part.kind !== 'cover' && part.kind !== 'index';
@@ -2121,7 +2158,7 @@ async function passPart(M, part, F, headH){
   let v = 1, info;
   if (part.kind === 'notes'){
     const sig = pos => Object.keys(pos).filter(k => /^t\d+$/.test(k)).sort().map(k => k + '@' + pos[k].pageNumber).join(',');
-    part.tpos = null; part.tblPages = null;
+    part.tpos = null; part.tblPages = null; part.pads = null;
     info = await run(v);
     for (let round = 0; round < 3; round++){
       const before = sig(part.tpos || {}), now = sig(info.pos);
@@ -2132,6 +2169,14 @@ async function passPart(M, part, F, headH){
       info = await run(v);
     }
     part.tblPages = [...new Set(Object.keys(part.tpos || {}).filter(k => /^t\d+$/.test(k)).map(k => part.tpos[k].pageNumber))];
+    // fill the space at the foot of pages; kept only when every note still starts on the same page
+    const pads = notesPads(info.pos, info.total, G.ph - G.bottom);
+    if (Object.keys(pads).length){
+      const where = pos => Object.keys(pos).filter(k => /^n(s|b[wb])\d+$/.test(k)).sort().map(k => k + '@' + pos[k].pageNumber).join(',');
+      part.pads = pads;
+      const check = await run(v);
+      if (check.total !== info.total || where(check.pos) !== where(info.pos)) part.pads = null;
+    }
     part.pages = info.total; part.v = v;
     return;
   }
