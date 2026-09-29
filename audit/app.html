@@ -1890,7 +1890,8 @@ function pdfItem(it, tokens, opt){
 }
 function pdfHead(h, years, W, v){
   v = v || 1;
-  const st = [{text: h.name, bold: true, fontSize: 12}].concat(h.sub ? [{text: h.sub, fontSize: 9.5}] : [], [{text: h.city}]).concat([{text: ' ', fontSize: Math.max(1, 6 * v), lineHeight: 1}, {text: h.title, bold: true, fontSize: 11.5},
+  // the line under the name shares the address line, so the heading takes no more rows than a single company's
+  const st = [{text: h.name, bold: true, fontSize: 12}].concat([{text: h.sub ? [h.city, {text: '  ' + h.sub, fontSize: 9.5}] : h.city}]).concat([{text: ' ', fontSize: Math.max(1, 6 * v), lineHeight: 1}, {text: h.title, bold: true, fontSize: 11.5},
     {text: h.period, bold: true}, {text: '(In Arab Emirates Dirhams)', fontSize: 9.5},
     {canvas: [{type: 'line', x1: 0, y1: 3, x2: W || 470, y2: 3, lineWidth: 0.8}], margin: [0, 0, 0, years ? 4 : 10 * v]}]);
   if (years) st.push({table: {widths: ['*'].concat(years.map(() => 78)), body: [
@@ -2307,7 +2308,7 @@ function htmlItem(it, tokens, o){
   }
 }
 function htmlYears(y){ return `<table class="rfs yrs"><tbody><tr><td></td>${y.map(x => `<td class="r yr"><b>${x}</b></td>`).join('')}</tr><tr><td></td>${y.map(() => '<td class="r aed">AED</td>').join('')}</tr></tbody></table>`; }
-function htmlHead(h){ return `<div class="shead"><b>${esc(h.name).replace(/\n/g, '<br>')}</b><br>${h.sub ? `<span class="unit">${esc(h.sub)}</span><br>` : ''}${esc(h.city)}<br><br><b>${esc(h.title)}</b><br><b>${esc(h.period)}</b><br><span class="unit">(In Arab Emirates Dirhams)</span></div>`; }
+function htmlHead(h){ return `<div class="shead"><b>${esc(h.name).replace(/\n/g, '<br>')}</b><br>${esc(h.city)}${h.sub ? ` <span class="unit">${esc(h.sub)}</span>` : ''}<br><br><b>${esc(h.title)}</b><br><b>${esc(h.period)}</b><br><span class="unit">(In Arab Emirates Dirhams)</span></div>`; }
 function reportHtml(M, o){
   o = o || {};
   return M.sections.filter(s => !o.only || o.only.includes(s.id)).map(s => {
@@ -3118,7 +3119,7 @@ function vProfile(){
     ${field('pf-city', 'Address line on statements', p.cityLine, {bind: b('cityLine'), ph: 'Sharjah, U.A.E.'})}
     ${field('pf-pres', 'Financial statements of', p.presentation || '', {bind: b('presentation'), select: [['', 'One entity'], ['combined', 'Entities under common control – combined financial statements']], hint: 'Combined: every heading reads “Combined …” and the notes “Notes to the combined financial statements”'})}
     ${field('pf-hname', 'Name on statement headings (optional – one line per row)', p.headName, {bind: b('headName'), wide: true, area: true, ph: 'Leave empty to use the company name'})}
-    ${field('pf-hsub', 'Line under the name (optional)', p.headSub, {bind: b('headSub'), wide: true, ph: '(Sole establishments under the common ownership of …)'})}
+    ${field('pf-hsub', 'Line after the address on statement headings (optional)', p.headSub, {bind: b('headSub'), wide: true, ph: '(Sole establishments under the common ownership of …)'})}
     ${field('pf-legal', 'Legal form', p.legalForm, {bind: b('legalForm'), wide: true, ph: 'Limited Liability Company – Sole Proprietorship (One Person Company)'})}
     ${field('pf-lic', 'Licence no.', p.licenceNo, {bind: b('licenceNo')})}
     ${field('pf-lici', 'Licence issue date', p.licenceIssue, {bind: b('licenceIssue'), ph: '24 January 2025'})}
