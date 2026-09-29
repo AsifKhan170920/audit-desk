@@ -1567,7 +1567,7 @@ function buildReport(client, eng, prevEng){
       const its = all.filter(x => (x.grp || '') === g);
       if (g) s.push(G(g));
       its.forEach(x => s.push(row(x.caption, lineRef(key, x), x.cy, x.py)));
-      if (g && groups.length > 1) s.push(Object.assign(row('', '', its.reduce((a, x) => a + x.cy, 0), its.reduce((a, x) => a + x.py, 0), 'tot'), {sub: true}));
+      if (g && groups.length > 1 && its.length > 1) s.push(Object.assign(row('', '', its.reduce((a, x) => a + x.cy, 0), its.reduce((a, x) => a + x.py, 0), 'tot'), {sub: true}));
       if (gi < groups.length - 1) s.push(GAP);
     });
     const out = openNoteRow(key).concat(s, extra || []);
@@ -1651,7 +1651,8 @@ function buildReport(client, eng, prevEng){
         {k: 'small', text: 'The current account is unsecured, interest-free and has no fixed repayment terms.'});
     } else if (key === 'pay'){
       const extra = ctNoteRow('pay');
-      grp.push(head(key, NT('pay')), T(subRows('pay', extra).concat([total('', cy.payTot, py.payTot)])));
+      const grouped = eng.tb.some(l => l.fs === 'pay' && String(l.grp || '').trim());
+      grp.push(head(key, NT('pay')), T(subRows('pay', extra).concat(grouped ? [GAP] : [], [total(grouped ? 'Total' : '', cy.payTot, py.payTot)])));
     } else if (key === 'ct'){
       const rr = [row('Profit before tax', '', cy.pbt, py.pbt)];
       if (nz(cy.ctAdj, py.ctAdj)) rr.push(row('Add / (less): tax adjustments', '', cy.ctAdj, py.ctAdj));
