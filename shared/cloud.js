@@ -328,7 +328,9 @@
   };
 
   /* ---------- shared data: an app's whole saved data, split into parts ---------- */
-  var state = {};   // key -> {app, v, timer, pending, lastSent}
+  var state = {};   // key -> {app, v, timer, pending, lastSent, inFlight}
+  // this window's own id, so a save made by the same user in another window is still noticed
+  var SID = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   function storeRef(app, key) { return FT.db.collection('apps').doc(app).collection('store').doc(key.replace(/[^\w-]/g, '_')); }
   var nativeSet = Storage.prototype.setItem;
   FT.pull = async function (app, key) {
@@ -354,7 +356,7 @@
       for (var i = 0; i < n; i++) tx.set(ref.collection('parts').doc(String(i)), {t: text.slice(i * PART, (i + 1) * PART)});
       for (var j = n; j < (cur.parts || 0); j++) tx.delete(ref.collection('parts').doc(String(j)));
       var v = (cur.v || 0) + 1;
-      tx.set(ref, {v: v, parts: n, size: text.length, by: (FT.me && FT.me.name) || '', byUid: (FT.me && FT.me.uid) || '', at: firebase.firestore.FieldValue.serverTimestamp()});
+      tx.set(ref, {v: v, parts: n, size: text.length, by: (FT.me && FT.me.name) || '', byUid: (FT.me && FT.me.uid) || '', sid: SID, at: firebase.firestore.FieldValue.serverTimestamp()});
       return {v: v};
     });
     if (result.conflict) return result;
@@ -373,7 +375,8 @@
     FT.db && storeRef(app, key).onSnapshot(function (s) {
       if (!s.exists) return;
       var m = s.data();
-      if (m.v > st.v && m.byUid !== (FT.me && FT.me.uid)) FT.badge('Updated by ' + (m.by || 'another user') + ' – reload to see the latest', 'reload');
+      // the same user in another window (the Windows app and a browser tab) counts too: this copy is out of date either way
+      if (m.v > st.v && (m.byUid !== (FT.me && FT.me.uid) || (m.sid && m.sid !== SID))) FT.badge((m.byUid === (FT.me && FT.me.uid) ? 'Updated in another window' : 'Updated by ' + (m.by || 'another user')) + ' – reload to see the latest', 'reload');
     }, function () {});
   };
   FT.queue = function (key, text) {
@@ -385,9 +388,15 @@
   };
   FT.flush = async function (key, force) {
     var st = state[key]; if (!st || st.pending === undefined || st.pending === null) return;
+    // one save at a time: a second one started while the first is still out would only collide with it
+    if (st.inFlight) return;
     var text = st.pending;
     try {
-      var r = await FT.push(st.app, key, text, force);
+      // a save the cloud never answers must not leave the app waiting for ever (sign-out, refresh and
+      // closing all wait for it) - give up on this attempt and try again shortly
+      st.inFlight = true;
+      var r = await withTimeout(FT.push(st.app, key, text, force), 30000);
+      if (r === TIMED_OUT) throw {code: 'deadline-exceeded', message: 'no answer from the cloud'};
       if (r.conflict) { FT.conflict(key, r); return; }
       if (st.pending === text) st.pending = null;
       FT.badge('Saved to cloud', 'ok');
@@ -396,7 +405,7 @@
       // a refusal will not fix itself in fifteen seconds - look again in five minutes instead of every quarter minute
       var again = /permission-denied|unauthenticated/.test((e && e.code) || '') ? 300000 : 15000;
       st.timer = setTimeout(function () { FT.flush(key); }, again);
-    }
+    } finally { st.inFlight = false; }
   };
   FT.flushAll = async function () { for (var k in state) { clearTimeout(state[k].timer); await FT.flush(k); } };
   FT.conflict = function (key, r) {
@@ -484,7 +493,7 @@
     if (!desktopQuit()) return;
     if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
     FT.badge('Saving, then closing…');
-    try { await FT.flushAll(); } catch (e) {}
+    try { await withTimeout(FT.flushAll(), 8000); } catch (e) {}
     if (FT.pendingSave() && !confirm('Some changes could not be saved to the cloud yet. Quit anyway and lose them?')) { if (btn) { btn.disabled = false; btn.style.opacity = ''; } FT.badge(''); return; }
     FT.leaving = true;
     try { await window.ftDesktop.quit(); } catch (e) { if (btn) { btn.disabled = false; btn.style.opacity = ''; } FT.badge('Could not close the app – use the tray icon near the clock', 'bad'); }
@@ -492,7 +501,7 @@
   FT.refresh = async function (btn) {
     if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
     FT.badge('Saving, then refreshing…');
-    try { await FT.flushAll(); } catch (e) {}
+    try { await withTimeout(FT.flushAll(), 8000); } catch (e) {}
     if (FT.pendingSave() && !confirm('Some changes could not be saved to the cloud yet. Refresh anyway and lose them?')) { if (btn) { btn.disabled = false; btn.style.opacity = ''; } FT.badge(''); return; }
     FT.leaving = true;
     var u = new URL(location.href); u.searchParams.set('r', String(Date.now())); location.replace(u.toString());

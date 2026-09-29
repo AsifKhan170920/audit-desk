@@ -1677,7 +1677,10 @@ function buildReport(client, eng, prevEng){
       grp.push(head(key, 'APPROVAL OF FINANCIAL STATEMENTS'), {k: 'p', text: `The financial statements were approved by management and authorised for issue on ${p.reportDate || '…'}.`},
         {k: 'signBlock', lines: [`For ${client.name}`, cityLine], label: p.signatory || 'Authorised Signatory'});
     } else {
-      grp.push(head(key, NT(key)), T(subRows(key, ctNoteRow(key)).concat([total('', cy[key], py[key])])));
+      grp.push(head(key, NT(key)));
+      // the ledger-line table can be left out when the note's own sub-tables already carry the figures
+      const own = SMAP[key];
+      if (!(own && own.hideTable && (own.subs || []).length)) grp.push(T(subRows(key, ctNoteRow(key)).concat([total('', cy[key], py[key])])));
     }
     // free text the user adds above / below a schedule's table in its note
     const sch = SMAP[key === 'dep' || key === 'imp' ? 'ppe' : key];
@@ -5396,6 +5399,7 @@ function schedModal(key){
       <div class="field wide"><label for="sc-remark">Remarks / observations (kept with the file, not printed)</label><textarea id="sc-remark" rows="2" placeholder="e.g. Opening reserve agreed to the signed FY2024 report">${e_(x ? x.remark || '' : '')}</textarea></div>
       <div class="field wide"><label for="sc-above">Text in the note – above the table (optional)</label><textarea id="sc-above" rows="2">${e_(x ? x.textAbove || '' : '')}</textarea></div>
       <div class="field wide"><label for="sc-below">Text in the note – below the table (optional)</label><textarea id="sc-below" rows="3">${e_(x ? x.textBelow || '' : '')}</textarea></div>
+      ${x && (x.subs || []).length ? `<div class="field wide"><label class="check-lbl"><input type="checkbox" id="sc-hidetable"${x.hideTable ? ' checked' : ''}> Leave out the table of ledger lines in the note – the extra tables below already show the figures</label></div>` : ''}
     </div>
     <p class="note">Opening balances are used in the statement of changes in equity (share capital, legal reserve, retained earnings, current account and other equity schedules). Leave them blank to let the software work the opening back from the ledger.${x ? ` <button class="btn small" data-docs="sched:${x.key}">${IC.clip}Documents (${((x.docs || []).length)})</button>` : ''}</p>
     ${x && x.hint ? `<p class="note">${e_(x.hint)}</p>` : ''}
@@ -5420,6 +5424,7 @@ function saveSched(key){
   x.showNote = document.getElementById('sc-shownote').value === '1'; x.folder = document.getElementById('sc-folder').value;
   x.textAbove = document.getElementById('sc-above').value; x.textBelow = document.getElementById('sc-below').value;
   x.remark = document.getElementById('sc-remark').value;
+  const htBox = document.getElementById('sc-hidetable'); if (htBox) x.hideTable = htBox.checked;
   const oCy = document.getElementById('sc-open-cy').value.trim(), oPy = document.getElementById('sc-open-py').value.trim();
   x.open = {}; if (oCy !== '') x.open.cy = num(oCy); if (oPy !== '') x.open.py = num(oPy);
   if (x.open.cy === undefined && x.open.py === undefined) delete x.open;

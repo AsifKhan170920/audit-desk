@@ -108,6 +108,17 @@ function createWindow() {
     else if (input.control && k === '-') { e.preventDefault(); wc.setZoomLevel(Math.max(-3, wc.getZoomLevel() - 0.5)); }
     else if (input.control && k === '0') { e.preventDefault(); wc.setZoomLevel(0); }
   });
+  // A page holding a change the cloud has not taken yet refuses to unload. Electron would then
+  // silently ignore the close / quit / sign-out, so ask instead of doing nothing.
+  wc.on('will-prevent-unload', (e) => {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Fair Tax', message: 'Some changes are not saved to the cloud yet.',
+      detail: 'Wait a moment and try again, or leave now and lose those changes.',
+      buttons: ['Stay', 'Leave anyway'], defaultId: 0, cancelId: 0, noLink: true
+    });
+    if (choice === 1) e.preventDefault();   // preventDefault here means: ignore the page's refusal and leave
+    else quitting = false;
+  });
   win.on('session-end', () => { quitting = true; });
   // the X: quit, or keep running in the tray for the reminders – asked the first time, remembered if wanted
   win.on('close', (e) => {
