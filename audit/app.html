@@ -2036,6 +2036,8 @@ function notesFlow(items, tokens, opt){
   const whole = n => n._sp || n._ns || isUnbreakable(n) || n.headlineLevel === 1;
   const list = keepWithNext(out), res = [];
   list.forEach((n, j) => res.push(n, {text: ' ', fontSize: 0.1, lineHeight: 1, id: 'nb' + (whole(n) ? 'w' : 'b') + j}));
+  // nothing without ink ends the part: a spacer or marker after text that fills the last page would open an empty page
+  while (res.length && (res[res.length - 1]._sp || /^nb/.test(res[res.length - 1].id || ''))) res.pop();
   return res;
 }
 /* space left at the foot of a notes page – because the next block did not fit and moved over whole – is shared out
