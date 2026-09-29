@@ -1567,12 +1567,12 @@ function buildReport(client, eng, prevEng){
       const its = all.filter(x => (x.grp || '') === g);
       if (g) s.push(G(g));
       its.forEach(x => s.push(row(x.caption, lineRef(key, x), x.cy, x.py)));
-      if (g && groups.length > 1) s.push(row('', '', its.reduce((a, x) => a + x.cy, 0), its.reduce((a, x) => a + x.py, 0), 'tot'));
+      if (g && groups.length > 1) s.push(Object.assign(row('', '', its.reduce((a, x) => a + x.cy, 0), its.reduce((a, x) => a + x.py, 0), 'tot'), {sub: true}));
       if (gi < groups.length - 1) s.push(GAP);
     });
     const out = openNoteRow(key).concat(s, extra || []);
     /* a figure typed over this line in the statements: the note carries the difference so it still adds up */
-    const dc = R(cy[FS_FIELD[key] || key]) - out.reduce((a, x) => a + R(x.cy), 0), dp = R(py[FS_FIELD[key] || key]) - out.reduce((a, x) => a + R(x.py), 0);
+    const lines = out.filter(x => !x.sub), dc = R(cy[FS_FIELD[key] || key]) - lines.reduce((a, x) => a + R(x.cy), 0), dp = R(py[FS_FIELD[key] || key]) - lines.reduce((a, x) => a + R(x.py), 0);
     if (nz(dc, dp) && out.length) out.push(row('Others', '', dc, dp));
     return out; };
   const total = (label, a, b) => row(label || '', '', a, b, 'tot');
