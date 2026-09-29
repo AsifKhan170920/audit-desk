@@ -669,8 +669,10 @@ function subLines(eng, key){
   const m = SM(eng);
   eng.tb.filter(l => l.fs === key).forEach(l => {
     const cap = (l.caption || l.ledger || '').trim() || (m[key] ? m[key].label : key);
-    if (idx[cap] === undefined){ idx[cap] = out.length; out.push({caption: cap, cy: 0, py: 0, lines: []}); }
-    const o = out[idx[cap]]; o.cy += natural(l, eng); o.py += R(l.py); o.lines.push(l);
+    // a line can belong to a group (e.g. one of the establishments in combined statements): same wording in two groups stays two rows
+    const grp = String(l.grp || '').trim(), k = grp + '\u0001' + cap;
+    if (idx[k] === undefined){ idx[k] = out.length; out.push({caption: cap, grp, cy: 0, py: 0, lines: []}); }
+    const o = out[idx[k]]; o.cy += natural(l, eng); o.py += R(l.py); o.lines.push(l);
   });
   return out;
 }
@@ -1557,7 +1559,17 @@ function buildReport(client, eng, prevEng){
   const openNoteRow = key => { const a = openVal(key, 'cy'), b = openVal(key, 'py'); return nz(a, b) ? [row(key === 'cor' ? 'Opening inventory' : 'Balance at the beginning of the year', key === 'cor' ? 'inv' : '', a, b)] : []; };
   /* the note a ledger line refers to: set on the line (ref = schedule key), or the inventory note for the closing inventory in cost of revenue */
   const lineRef = (key, x) => { const l = (x.lines || []).find(l0 => l0.ref && SMAP[l0.ref]); if (l) return l.ref; return key === 'cor' && /closing (inventory|stock)/i.test(x.caption) ? 'inv' : ''; };
-  const subRows = (key, extra) => { const s = subLines(eng, key).filter(x => Math.round(x.cy || 0) || Math.round(x.py || 0)).map(x => row(x.caption, lineRef(key, x), x.cy, x.py));
+  /* lines in groups print under the group's heading with a subtotal per group, in the order the groups first appear */
+  const subRows = (key, extra) => { const all = subLines(eng, key).filter(x => Math.round(x.cy || 0) || Math.round(x.py || 0));
+    const groups = [...new Set(all.map(x => x.grp || ''))], s = [];
+    if (!groups.some(g => g)) all.forEach(x => s.push(row(x.caption, lineRef(key, x), x.cy, x.py)));
+    else groups.forEach((g, gi) => {
+      const its = all.filter(x => (x.grp || '') === g);
+      if (g) s.push(G(g));
+      its.forEach(x => s.push(row(x.caption, lineRef(key, x), x.cy, x.py)));
+      if (g && groups.length > 1) s.push(row('', '', its.reduce((a, x) => a + x.cy, 0), its.reduce((a, x) => a + x.py, 0), 'tot'));
+      if (gi < groups.length - 1) s.push(GAP);
+    });
     const out = openNoteRow(key).concat(s, extra || []);
     /* a figure typed over this line in the statements: the note carries the difference so it still adds up */
     const dc = R(cy[FS_FIELD[key] || key]) - out.reduce((a, x) => a + R(x.cy), 0), dp = R(py[FS_FIELD[key] || key]) - out.reduce((a, x) => a + R(x.py), 0);
@@ -1686,7 +1698,8 @@ function buildReport(client, eng, prevEng){
       grp.push(head(key, NT(key)));
       // the ledger-line table can be left out when the note's own sub-tables already carry the figures
       const own = SMAP[key];
-      if (!(own && own.hideTable && (own.subs || []).length)) grp.push(T(subRows(key, ctNoteRow(key)).concat([total('', cy[key], py[key])])));
+      const grouped = eng.tb.some(l => l.fs === key && String(l.grp || '').trim());
+      if (!(own && own.hideTable && (own.subs || []).length)) grp.push(T(subRows(key, ctNoteRow(key)).concat(grouped ? [GAP] : [], [total(grouped ? 'Total' : '', cy[key], py[key])])));
     }
     // free text the user adds above / below a schedule's table in its note
     const sch = SMAP[key === 'dep' || key === 'imp' ? 'ppe' : key];
