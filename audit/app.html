@@ -1400,14 +1400,19 @@ function buildReport(client, eng, prevEng){
 
   const row = (label, key, a, b, style) => ({label, note: key && noteNo[key] ? String(noteNo[key]) : '', cy: a, py: b, style: style || '', fs: key && SMAP[key] ? key : ''});
   const G = (label) => ({label, style: 'grp'}), GAP = {style: 'gap'};
-  const statementHead = (title, sub) => ({name: client.name, city: cityLine, title, period: sub});
+  /* combined financial statements of entities under common control say so in every heading; a sole establishment
+     (or a combination) has an owner, not shareholders. The heading name can be set line by line with a line under it. */
+  const comb = p.presentation === 'combined', FSW = comb ? 'COMBINED ' : '', fsw = comb ? 'combined ' : '';
+  const ownerEq = comb || /sole\s+establishment/i.test(p.legalForm || '');
+  const headName = String(p.headName || '').trim() || client.name, headSub = String(p.headSub || '').trim();
+  const statementHead = (title, sub) => ({name: headName, sub: headSub, city: cityLine, title, period: sub});
   const sections = [];
 
   /* ---------- cover & index ---------- */
-  sections.push({id: 'cover', kind: 'cover', name: client.name, emirate: (p.emirate || '').toUpperCase() + ', UNITED ARAB EMIRATES',
-    title: isAudit ? 'AUDITOR’S REPORT &\nFINANCIAL STATEMENTS' : 'FINANCIAL STATEMENTS', period});
-  sections.push({id: 'index', kind: 'index', name: client.name, city: cityLine,
-    title: (isAudit ? 'FINANCIAL STATEMENTS AND\nINDEPENDENT AUDITOR’S REPORT\n' : 'FINANCIAL STATEMENTS\n') + period, rows: []});
+  sections.push({id: 'cover', kind: 'cover', name: headName, sub: headSub, emirate: (p.emirate || '').toUpperCase() + ', UNITED ARAB EMIRATES',
+    title: isAudit ? `AUDITOR’S REPORT &\n${FSW}FINANCIAL STATEMENTS` : `${FSW}FINANCIAL STATEMENTS`, period});
+  sections.push({id: 'index', kind: 'index', name: headName, city: cityLine,
+    title: (isAudit ? `${FSW}FINANCIAL STATEMENTS AND\nINDEPENDENT AUDITOR’S REPORT\n` : `${FSW}FINANCIAL STATEMENTS\n`) + period, rows: []});
 
   /* ---------- auditor report / company info / management report ---------- */
   const blocks = (text) => ({k: 'blocks', blocks: parseMarkup(fillVars(single ? String(text || '').replace(/\s*\(\{prevYear\}:[^()]*\)/g, '') : text, v))});
@@ -1422,8 +1427,8 @@ function buildReport(client, eng, prevEng){
       {k: 'title', text: 'INDEPENDENT AUDITOR’S REPORT'}, blocks(eng.texts.auditorReport)
     ], tokens: {AUDITOR_SIGNATURE: {k: 'lines', lines: [`For ${p.auditor || ''}`, '', '', '', p.partner || '', p.partnerTitle || 'Managing Partner', `Registration No. ${p.auditorReg || ''}`, p.reportDate || '', `${p.auditorCity || ''}, United Arab Emirates`]}}});
   }
-  sections.push({id: 'ci', kind: 'plain', items: [{k: 'coHead', name: client.name, title: 'COMPANY INFORMATION'}, blocks(dropAuditors(eng.texts.companyInfo))]});
-  sections.push({id: 'mr', kind: 'plain', items: [{k: 'coHead', name: client.name, title: 'MANAGEMENT REPORT'}, blocks(dropAuditors(eng.texts.managementReport))],
+  sections.push({id: 'ci', kind: 'plain', items: [{k: 'coHead', name: headName, title: comb ? 'GENERAL INFORMATION' : 'COMPANY INFORMATION'}, blocks(dropAuditors(eng.texts.companyInfo))]});
+  sections.push({id: 'mr', kind: 'plain', items: [{k: 'coHead', name: headName, title: 'MANAGEMENT REPORT'}, blocks(dropAuditors(eng.texts.managementReport))],
     tokens: {MANAGEMENT_SIGNATURE: {k: 'signBlock', lines: [`For ${client.name}`, cityLine], label: p.signatory || 'Authorised Signatory'}}});
 
   /* ---------- statements ---------- */
@@ -1456,9 +1461,9 @@ function buildReport(client, eng, prevEng){
   sofp.push(row('Total non-current assets', '', cy.nca, py.nca, 'tot'), GAP, G('Current assets'));
   fsRows(sofp, 'ca', ['inv', 'rec', 'rprec', 'cash', '*']);
   sofp.push(row('Total current assets', '', cy.caTot, py.caTot, 'tot'), GAP, row('TOTAL ASSETS', '', cy.ta, py.ta, 'grand'), GAP,
-    G('EQUITY AND LIABILITIES'), G('Shareholders’ equity'));
+    G('EQUITY AND LIABILITIES'), G(ownerEq ? 'Owner’s equity' : 'Shareholders’ equity'));
   fsRows(sofp, 'eq', ['cap', 'lr', 're', 'ca', '*']);
-  sofp.push(row('Total shareholders’ equity', '', cy.eq, py.eq, 'tot'), GAP);
+  sofp.push(row(ownerEq ? 'Total owner’s equity' : 'Total shareholders’ equity', '', cy.eq, py.eq, 'tot'), GAP);
   if (nz(cy.ncl, py.ncl)){
     sofp.push(G('Non-current liabilities'));
     fsRows(sofp, 'ncl', ['ltl', 'eosb', '*']);
@@ -1469,9 +1474,10 @@ function buildReport(client, eng, prevEng){
   sofp.push(row('Total current liabilities', '', cy.cl, py.cl, 'tot'), GAP, row('TOTAL LIABILITIES', '', cy.tl, py.tl, 'tot'), GAP,
     row('TOTAL EQUITY AND LIABILITIES', '', cy.tel, py.tel, 'grand'));
   const signLabel = p.statementSignatory || '(Managing Director)';
-  sections.push({id: 'sofp', kind: 'statement', head: statementHead('STATEMENT OF FINANCIAL POSITION', asAt), items: [
+  const integral = `The accompanying notes form an integral part of these ${fsw}financial statements.`;
+  sections.push({id: 'sofp', kind: 'statement', head: statementHead(`${FSW}STATEMENT OF FINANCIAL POSITION`, asAt), items: [
     {k: 'fs', rows: sofp, noteCol: true, years: YRS},
-    {k: 'small', text: `The financial statements were approved by management on ${p.reportDate || '…'}. The accompanying notes form an integral part of these financial statements.${isAudit && !LAY.hide.ar ? ' The report of the auditor is set out on pages {{AR_PAGES}}.' : ''}`},
+    {k: 'small', text: `The ${fsw}financial statements were approved by management on ${p.reportDate || '…'}. ${integral}${isAudit && !LAY.hide.ar ? ' The report of the auditor is set out on pages {{AR_PAGES}}.' : ''}`},
     {k: 'sign', label: signLabel}]});
 
   const soci = [];
@@ -1483,12 +1489,12 @@ function buildReport(client, eng, prevEng){
   soci.push(GAP, row(plc(cy.pbt, py.pbt, 'Profit before tax', 'Loss before tax', 'Profit / (loss) before tax'), '', cy.pbt, py.pbt, 'tot'), Object.assign(row('Corporate tax', 'ct', -cy.ct, -py.ct), {drill: 'ct'}), GAP,
     row(plc(cy.pat, py.pat, 'Profit after tax', 'Loss after tax', 'Profit / (loss) after tax'), '', cy.pat, py.pat, 'tot'), row('Other comprehensive income', '', 0, 0), GAP,
     row(plc(cy.pat, py.pat, 'Total comprehensive income for the year', 'Total comprehensive loss for the year', 'Total comprehensive income / (loss) for the year'), '', cy.pat, py.pat, 'grand'));
-  sections.push({id: 'soci', kind: 'statement', head: statementHead('STATEMENT OF PROFIT OR LOSS AND OTHER COMPREHENSIVE INCOME', period), items: [
-    {k: 'fs', rows: soci, noteCol: true, years: YRS}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
+  sections.push({id: 'soci', kind: 'statement', head: statementHead(`${FSW}STATEMENT OF PROFIT OR LOSS AND OTHER COMPREHENSIVE INCOME`, period), items: [
+    {k: 'fs', rows: soci, noteCol: true, years: YRS}, {k: 'small', text: integral}, {k: 'sign', label: signLabel}]});
 
   const eqItems = eng.soceItems || [], anyIt = col => eqItems.some(x => R(x[col]));
   const hasCA = nz(cy.caClose, py.caClose) || nz(py.caOpen, 0) || anyIt('ca'), hasLR = nz(cy.lrClose, py.lrClose) || nz(py.lrOpen, 0) || anyIt('lr') || nz(cy.lrOpenDiff, 0), hasOR = nz(cy.xeq, py.xeq) || anyIt('oth');
-  const eqCols = ['Share\ncapital'].concat(hasLR ? ['Legal\nreserve'] : [], ['Retained\nearnings'], hasCA ? ['Current\naccount'] : [], hasOR ? ['Other\nreserves'] : [], ['Total']);
+  const eqCols = [ownerEq ? 'Owner’s\ncapital' : 'Share\ncapital'].concat(hasLR ? ['Legal\nreserve'] : [], ['Retained\nearnings'], hasCA ? ['Current\naccount'] : [], hasOR ? ['Other\nreserves'] : [], ['Total']);
   const eqRow = (label, cap, lr, re, ca, style, oth) => { const vals = [cap].concat(hasLR ? [lr] : [], [re], hasCA ? [ca] : [], hasOR ? [oth || 0] : []); return {cells: [label].concat(vals, [vals.reduce((a, b) => a + b, 0)]), style: style || ''}; };
   const moveRows = yr => soceMoves(eng, r, yr, {report: true, hasCA, hasOR}).map(m => eqRow(m.label, m.vals.cap || 0, m.vals.lr || 0, m.vals.re || 0, m.vals.ca || 0, '', m.vals.oth || 0));
   const EQM = cy.eqModes || {}, estInPy = EQM.firstPy && EQM.estYear === PY && p.estDate;
@@ -1498,9 +1504,9 @@ function buildReport(client, eng, prevEng){
     : [eqRow(estInPy ? `At ${p.estDate} (date of establishment)` : `At ${openText}`, py.capOpen, py.lrOpen, py.reOpen, py.caOpen, 'bold', py.othOpen), ...moveRows('py')];
   if (!single) soceRows.push(eqRow(`At ${yeText}, ${PY}`, py.cap, py.lrClose, py.reClose, py.caClose, 'tot', py.xeq), {cells: [], style: 'gap'}, ...moveRows('cy'));
   soceRows.push(eqRow(`At ${yeText}, ${Y}`, cy.cap, cy.lrClose, cy.reClose, cy.caClose, 'grand', cy.xeq));
-  sections.push({id: 'soce', kind: 'statement', head: statementHead('STATEMENT OF CHANGES IN SHAREHOLDERS’ EQUITY', period), items: [
+  sections.push({id: 'soce', kind: 'statement', head: statementHead(`${FSW}STATEMENT OF CHANGES IN ${ownerEq ? 'OWNER’S' : 'SHAREHOLDERS’'} EQUITY`, period), items: [
     {k: 'grid', drill: 'soce', plain: true, header: [''].concat(eqCols), sub: [''].concat(eqCols.map(() => 'AED')), rows: soceRows, firstWidth: '*', numWidth: eqCols.length >= 6 ? 52 : 57, small: true},
-    {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
+    {k: 'small', text: integral}, {k: 'sign', label: signLabel}]});
 
   const cf = r.cf, cfp = r.cfp, cfRowsL = cfLines(eng).filter(x => !x.hidden);
   const cfVal = (bk, x) => x.kind === 'std' ? bk[x.key] : (bk.custom || {})[x.key] || 0;
@@ -1519,8 +1525,8 @@ function buildReport(client, eng, prevEng){
   socf.push(GAP, row('Net increase / (decrease) in cash and cash equivalents (A+B+C)', '', cf.net, cfp.net),
     Object.assign(row('Cash and cash equivalents at the beginning of the year', '', cf.open, cfp.open), {cf: 'open'}),
     row('Cash and cash equivalents at the end of the year', 'cash', cf.close, cfp.close, 'grand'));
-  sections.push({id: 'socf', kind: 'statement', head: statementHead('STATEMENT OF CASH FLOWS', period), items: [
-    {k: 'fs', rows: socf, noteCol: true, years: YRS}, {k: 'small', text: 'The accompanying notes form an integral part of these financial statements.'}, {k: 'sign', label: signLabel}]});
+  sections.push({id: 'socf', kind: 'statement', head: statementHead(`${FSW}STATEMENT OF CASH FLOWS`, period), items: [
+    {k: 'fs', rows: socf, noteCol: true, years: YRS}, {k: 'small', text: integral}, {k: 'sign', label: signLabel}]});
 
   /* ---------- policies (notes 1-4) ---------- */
   const sh = (p.shareholders || []).filter(s => s.name);
@@ -1540,7 +1546,7 @@ function buildReport(client, eng, prevEng){
     polItems.push(blocks(`## 3.${pn++} ${pol.title}\n${pol.text}`));
   });
   polItems.push({k: 'noteHead', num: '4.', title: 'CRITICAL ACCOUNTING JUDGMENTS AND KEY SOURCES OF ESTIMATION UNCERTAINTY'}, blocks(eng.texts.note4));
-  sections.push({id: 'pol', kind: 'notes', head: statementHead('NOTES TO THE FINANCIAL STATEMENTS', period), items: polItems,
+  sections.push({id: 'pol', kind: 'notes', head: statementHead(`NOTES TO THE ${FSW}FINANCIAL STATEMENTS`, period), items: polItems,
     tokens: {SHARE_TABLE: shareTable, USEFUL_LIVES: lives}});
 
   /* ---------- numeric notes ---------- */
@@ -1674,7 +1680,7 @@ function buildReport(client, eng, prevEng){
     else if (key === 'commitments'){ grp.push(head(key, 'COMMITMENTS'), blocks(eng.texts.commitmentsText)); }
     else if (key.startsWith('cn:')){ const c = eng.customNotes.find(x => 'cn:' + x.id === key); grp.push(head(key, (c.title || '').toUpperCase()), blocks(c.text)); }
     else if (key === 'approval'){
-      grp.push(head(key, 'APPROVAL OF FINANCIAL STATEMENTS'), {k: 'p', text: `The financial statements were approved by management and authorised for issue on ${p.reportDate || '…'}.`},
+      grp.push(head(key, `APPROVAL OF ${FSW}FINANCIAL STATEMENTS`), {k: 'p', text: `The ${fsw}financial statements were approved by management and authorised for issue on ${p.reportDate || '…'}.`},
         {k: 'signBlock', lines: [`For ${client.name}`, cityLine], label: p.signatory || 'Authorised Signatory'});
     } else {
       grp.push(head(key, NT(key)));
@@ -1699,7 +1705,7 @@ function buildReport(client, eng, prevEng){
     { const fk = key === 'dep' || key === 'imp' ? 'ppe' : key; grp.forEach(g => { if (g.k === 'fs' && !g.fs && !g.drill){ if (key === 'ct') g.drill = 'ct'; else if (SMAP[fk]) g.fs = fk; } if (g.k === 'grid' && key === 'ppe' && !g.drill) g.drill = 'ppe'; }); }
     items.push({k: 'group', items: grp, keep: !['risk', 'fi', 'ppe'].includes(key)});
   });
-  sections.push({id: 'notes', kind: 'notes', head: statementHead('NOTES TO THE FINANCIAL STATEMENTS', period), items, years: YRS});
+  sections.push({id: 'notes', kind: 'notes', head: statementHead(`NOTES TO THE ${FSW}FINANCIAL STATEMENTS`, period), items, years: YRS});
   { // ratio analysis – management information after the notes
     const rrows = [], rl = ratioList(r);
     RATIO_GROUPS.forEach(([g, gl]) => { const list = rl.filter(x => x.d.g === g); if (!list.length) return; if (rrows.length) rrows.push({cells: [], style: 'gap'}); rrows.push({cells: [gl], style: 'grp'});
@@ -1711,7 +1717,12 @@ function buildReport(client, eng, prevEng){
   // ---------- apply the report layout: order, sections left out, index entries ----------
   const byId = Object.fromEntries(sections.map(s => [s.id, s]));
   const body = LAY.order.map(id => byId[id]).filter(s => s && !LAY.hide[s.id]);
-  byId.index.rows = body.filter(s => !LAY.noIndex[s.id]).map(s => ({id: s.id, title: (SECTION_DEFS.find(d => d.id === s.id) || {}).title || s.id}));
+  const idxTitle = id => {
+    const t = (SECTION_DEFS.find(d => d.id === id) || {}).title || id;
+    const t2 = ownerEq && id === 'soce' ? 'Statement of changes in owner’s equity' : comb && id === 'ci' ? 'General information' : t;
+    return comb && ['sofp', 'soci', 'soce', 'socf'].includes(id) ? 'Combined ' + t2.charAt(0).toLowerCase() + t2.slice(1) : comb && id === 'notes' ? 'Notes to the combined financial statements' : t2;
+  };
+  byId.index.rows = body.filter(s => !LAY.noIndex[s.id]).map(s => ({id: s.id, title: idxTitle(s.id)}));
   const ordered = [].concat(LAY.hide.cover ? [] : [byId.cover], LAY.hide.index ? [] : [byId.index], body);
   const noteList = numericNotes.map(k => { const g = items.find(it => it.k === 'group' && it.items[0] && it.items[0].k === 'noteHead' && it.items[0].num === noteNo[k] + '.'); return {key: k, num: noteNo[k], title: g ? g.items[0].title : k}; });
   return {sections: ordered, allSections: sections, r, v, noteNo, noteList, fsLines: fsList, allNoteKeys: allNoteOrder, layout: LAY, draft: !!eng.settings.draft, client, eng};
@@ -1879,9 +1890,9 @@ function pdfItem(it, tokens, opt){
 }
 function pdfHead(h, years, W, v){
   v = v || 1;
-  const st = [{text: h.name, bold: true, fontSize: 12}, {text: h.city}, {text: ' ', fontSize: Math.max(1, 6 * v), lineHeight: 1}, {text: h.title, bold: true, fontSize: 11.5},
+  const st = [{text: h.name, bold: true, fontSize: 12}].concat(h.sub ? [{text: h.sub, fontSize: 9.5}] : [], [{text: h.city}]).concat([{text: ' ', fontSize: Math.max(1, 6 * v), lineHeight: 1}, {text: h.title, bold: true, fontSize: 11.5},
     {text: h.period, bold: true}, {text: '(In Arab Emirates Dirhams)', fontSize: 9.5},
-    {canvas: [{type: 'line', x1: 0, y1: 3, x2: W || 470, y2: 3, lineWidth: 0.8}], margin: [0, 0, 0, years ? 4 : 10 * v]}];
+    {canvas: [{type: 'line', x1: 0, y1: 3, x2: W || 470, y2: 3, lineWidth: 0.8}], margin: [0, 0, 0, years ? 4 : 10 * v]}]);
   if (years) st.push({table: {widths: ['*'].concat(years.map(() => 78)), body: [
       [{text: ''}].concat(years.map(y => ({text: String(y), bold: true, alignment: 'right', border: [false, false, false, true]}))),
       [{text: ''}].concat(years.map(() => ({text: 'AED', alignment: 'right', fontSize: 9.5})))]},
@@ -2038,14 +2049,17 @@ function pdfPartDef(M, part, ctx){
   const mark = id => ({text: ' ', fontSize: 1, lineHeight: 1, id});
   let content = [], top = G.top, runHead = null;
   if (part.kind === 'cover'){
-    const room = Math.max(40, G.H - 250);
+    // a name on several lines, and a line under it, take their room from the space above and below
+    const extra = (String(s.name || '').split('\n').length - 1) * 27 + (s.sub ? 18 : 0);
+    const room = Math.max(40, G.H - 250 - extra);
     content = [
-      {text: s.name, bold: true, fontSize: 22, alignment: 'center', margin: [0, Math.round(room * 0.42), 0, 6]},
+      {text: s.name, bold: true, fontSize: 22, alignment: 'center', lineHeight: 1.1, margin: [0, Math.round(room * 0.42), 0, 6]}]
+      .concat(s.sub ? [{text: s.sub, fontSize: 11, alignment: 'center', margin: [0, 0, 0, 4]}] : [], [
       {text: s.emirate, fontSize: 12, alignment: 'center'},
       {canvas: [{type: 'line', x1: G.W / 2 - 85, y1: 0, x2: G.W / 2 + 85, y2: 0, lineWidth: 1.2}], margin: [0, 30, 0, 30]},
       {text: s.title, bold: true, fontSize: 16, alignment: 'center', lineHeight: 1.2},
       {text: s.period, bold: true, fontSize: 12, alignment: 'center', margin: [0, 14, 0, 0]},
-      {text: 'Private & Confidential', italics: true, fontSize: 10, alignment: 'center', margin: [0, Math.round(room * 0.46), 0, 0]}];
+      {text: 'Private & Confidential', italics: true, fontSize: 10, alignment: 'center', margin: [0, Math.round(room * 0.46), 0, 0]}]);
   } else if (part.kind === 'index'){
     const body = [[{text: 'Particulars', bold: true, border: [false, false, false, true]}, {text: 'Page', bold: true, alignment: 'right', border: [false, false, false, true]}]]
       .concat(s.rows.map(r => [{text: r.title, margin: [0, 5, 0, 5], border: [false, false, false, true]}, {text: num ? num.range(r.id) : '', alignment: 'right', margin: [0, 5, 0, 5], border: [false, false, false, true]}]));
@@ -2278,7 +2292,7 @@ function htmlItem(it, tokens, o){
   switch (it.k){
     case 'blocks': return htmlBlocks(it, tokens, o);
     case 'title': return `<h2 class="c">${esc(it.text)}</h2>`;
-    case 'coHead': return `<div class="cohead"><b>${esc(it.name)}</b></div><h3>${esc(it.title)}</h3>`;
+    case 'coHead': return `<div class="cohead"><b>${esc(it.name).replace(/\n/g, '<br>')}</b></div><h3>${esc(it.title)}</h3>`;
     case 'fs': return htmlFs(it, o);
     case 'grid': return htmlGrid(it, o);
     case 'small': return `<p class="small">${esc(fillPageTokens(it.text, o.num))}</p>`;
@@ -2293,11 +2307,11 @@ function htmlItem(it, tokens, o){
   }
 }
 function htmlYears(y){ return `<table class="rfs yrs"><tbody><tr><td></td>${y.map(x => `<td class="r yr"><b>${x}</b></td>`).join('')}</tr><tr><td></td>${y.map(() => '<td class="r aed">AED</td>').join('')}</tr></tbody></table>`; }
-function htmlHead(h){ return `<div class="shead"><b>${esc(h.name)}</b><br>${esc(h.city)}<br><br><b>${esc(h.title)}</b><br><b>${esc(h.period)}</b><br><span class="unit">(In Arab Emirates Dirhams)</span></div>`; }
+function htmlHead(h){ return `<div class="shead"><b>${esc(h.name).replace(/\n/g, '<br>')}</b><br>${h.sub ? `<span class="unit">${esc(h.sub)}</span><br>` : ''}${esc(h.city)}<br><br><b>${esc(h.title)}</b><br><b>${esc(h.period)}</b><br><span class="unit">(In Arab Emirates Dirhams)</span></div>`; }
 function reportHtml(M, o){
   o = o || {};
   return M.sections.filter(s => !o.only || o.only.includes(s.id)).map(s => {
-    if (s.kind === 'cover') return `<section class="rp cover"><div class="cv1">${esc(s.name)}</div><div>${esc(s.emirate)}</div><hr><div class="cv2">${esc(s.title).replace(/\n/g, '<br>')}</div><div class="cv3">${esc(s.period)}</div><div class="cv4">Private &amp; Confidential</div></section>`;
+    if (s.kind === 'cover') return `<section class="rp cover"><div class="cv1">${esc(s.name).replace(/\n/g, '<br>')}</div>${s.sub ? `<div>${esc(s.sub)}</div>` : ''}<div>${esc(s.emirate)}</div><hr><div class="cv2">${esc(s.title).replace(/\n/g, '<br>')}</div><div class="cv3">${esc(s.period)}</div><div class="cv4">Private &amp; Confidential</div></section>`;
     if (s.kind === 'index') return `<section class="rp"><b>${esc(s.name)}</b><br>${esc(s.city)}<h3 style="margin-top:28px">${esc(s.title).replace(/\n/g, '<br>')}</h3><table class="ridx"><tr><th>Particulars</th><th class="r">Page</th></tr>${s.rows.map(r => `<tr><td>${esc(r.title)}</td><td class="r">${o.num ? o.num.range(r.id) : ''}</td></tr>`).join('')}</table></section>`;
     const yrs = s.kind === 'notes' && s.years ? s.years : null;
     const oo = Object.assign({}, o, {_years: yrs});
@@ -3102,6 +3116,9 @@ function vProfile(){
     <div class="field wide"><label for="pf-name">Company name (exactly as per licence)</label><input id="pf-name" data-bind="client.name" value="${e_(c.name)}"></div>
     ${field('pf-emirate', 'Emirate', p.emirate, {bind: b('emirate'), ph: 'Sharjah'})}
     ${field('pf-city', 'Address line on statements', p.cityLine, {bind: b('cityLine'), ph: 'Sharjah, U.A.E.'})}
+    ${field('pf-pres', 'Financial statements of', p.presentation || '', {bind: b('presentation'), select: [['', 'One entity'], ['combined', 'Entities under common control – combined financial statements']], hint: 'Combined: every heading reads “Combined …” and the notes “Notes to the combined financial statements”'})}
+    ${field('pf-hname', 'Name on statement headings (optional – one line per row)', p.headName, {bind: b('headName'), wide: true, area: true, ph: 'Leave empty to use the company name'})}
+    ${field('pf-hsub', 'Line under the name (optional)', p.headSub, {bind: b('headSub'), wide: true, ph: '(Sole establishments under the common ownership of …)'})}
     ${field('pf-legal', 'Legal form', p.legalForm, {bind: b('legalForm'), wide: true, ph: 'Limited Liability Company – Sole Proprietorship (One Person Company)'})}
     ${field('pf-lic', 'Licence no.', p.licenceNo, {bind: b('licenceNo')})}
     ${field('pf-lici', 'Licence issue date', p.licenceIssue, {bind: b('licenceIssue'), ph: '24 January 2025'})}
