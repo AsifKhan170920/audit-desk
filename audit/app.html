@@ -1747,7 +1747,7 @@ function buildReport(client, eng, prevEng){
       const rws = (sb.rows || []).filter(rw => String(rw.label || '').trim() || nz(subVal(rw, 'cy'), subVal(rw, 'py')));
       if (!rws.length) return;
       const t = subTotals(sb);
-      const body = rws.map(rw => row(rw.label || '', '', subVal(rw, 'cy'), subVal(rw, 'py')));
+      const body = rws.map(rw => rw.style === 'grp' ? G(rw.label || '') : row(rw.label || '', '', subVal(rw, 'cy'), subVal(rw, 'py'), rw.style === 'tot' ? 'tot' : ''));
       if (sb.showTotal !== false) body.push(total('', t.cy, t.py));
       if (String(sb.title || '').trim()) grp.push(blocks('## ' + sb.title));
       grp.push(T(body));
@@ -3639,7 +3639,9 @@ function noteTextBtn(x, short){ return noteTextOpen(x) ? '' : `<button class="li
    figures or formulas, and can be asked to agree with the schedule total.
    ============================================================ */
 const subVal = (rw, col) => { const v = rw[col]; return v === undefined || v === null || String(v).trim() === '' ? 0 : R(v); };
-const subTotals = sb => ({cy: (sb.rows || []).reduce((a, rw) => a + subVal(rw, 'cy'), 0), py: (sb.rows || []).reduce((a, rw) => a + subVal(rw, 'py'), 0)});
+/* heading rows and total rows (a closing balance, a net book value) print in their own style and are left out of the table's total */
+const subLine = rw => !rw.style;
+const subTotals = sb => ({cy: (sb.rows || []).filter(subLine).reduce((a, rw) => a + subVal(rw, 'cy'), 0), py: (sb.rows || []).filter(subLine).reduce((a, rw) => a + subVal(rw, 'py'), 0)});
 function subRowFind(en, rowId){
   for (const x of ensureSchedules(en)) for (const sb of (x.subs || [])){ const rw = (sb.rows || []).find(y => y.id === rowId); if (rw) return rw; }
   return null;
@@ -3688,16 +3690,17 @@ function subTblBox(en, x, r){
       <td><input class="w-cap" id="sb-l-${rw.id}" data-sbrow="${rw.id}" data-f="label" value="${e_(rw.label || '')}" placeholder="e.g. Within the United Arab Emirates" aria-label="Line name"></td>
       ${['cy', 'py'].map(col => { const key = `SB:${rw.id}:${col}`;
         return `<td><input class="numi${R(rw[col]) < 0 ? ' neg' : ''}${fxCls(en, key)}" id="sb-${col}-${rw.id}" data-sbrow="${rw.id}" data-f="${col}"${fxAttrs(en, key, '')} value="${rw[col] === undefined || rw[col] === '' ? '' : fmtIn(rw[col])}" placeholder="—" inputmode="decimal" aria-label="${col === 'cy' ? en.year : en.year - 1}"></td>`; }).join('')}
+      <td><select id="sb-s-${rw.id}" data-sbrow="${rw.id}" data-f="style" aria-label="Line style">${[['', 'Line'], ['grp', 'Heading'], ['tot', 'Total – bold, line above']].map(([v, t]) => `<option value="${v}"${(rw.style || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select></td>
       <td class="acts"><button class="icon-btn" data-act="sub-row-del" data-key="${e_(x.key)}" data-sb="${sb.id}" data-id="${rw.id}" title="Delete line">${IC.trash}</button></td></tr>`).join('');
     return `<div class="note-text sub-box">
       <div class="note-text-head"><input class="sb-title" id="sb-t-${sb.id}" data-sub="${sb.id}" data-key="${e_(x.key)}" data-f="title" value="${e_(sb.title || '')}" placeholder="Table title, e.g. Revenue by geography" aria-label="Table title">
         <label class="check-lbl" title="Show a difference line while the table does not add up to the schedule"><input type="checkbox" data-sub="${sb.id}" data-key="${e_(x.key)}" data-f="tie"${tie ? ' checked' : ''}> Agrees with the schedule total</label>
         <button class="linkish danger-t" data-act="sub-del" data-key="${e_(x.key)}" data-sb="${sb.id}">Remove table</button></div>
-      <div class="table-wrap"><table class="ui tb"><colgroup><col><col style="width:150px"><col style="width:150px"><col style="width:44px"></colgroup>
-        <thead><tr><th>Line</th><th class="r">FY${en.year}</th><th class="r">FY${en.year - 1}</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="4" class="empty">No lines yet – add the first one below.</td></tr>'}</tbody>
-        <tfoot><tr><td>Total</td><td class="r">${fmtN(t.cy)}</td><td class="r">${fmtN(t.py)}</td><td></td></tr>
-          ${tie ? `<tr><td class="muted small">Difference from ${e_(x.label)}</td><td class="r ${dc ? 'bad-t' : 'ok-t'}">${dc ? fmtN(dc) : '✓'}</td><td class="r ${dp ? 'bad-t' : 'ok-t'}">${dp ? fmtN(dp) : '✓'}</td><td></td></tr>` : ''}</tfoot></table></div>
+      <div class="table-wrap"><table class="ui tb"><colgroup><col><col style="width:150px"><col style="width:150px"><col style="width:120px"><col style="width:44px"></colgroup>
+        <thead><tr><th>Line</th><th class="r">FY${en.year}</th><th class="r">FY${en.year - 1}</th><th>Style</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" class="empty">No lines yet – add the first one below.</td></tr>'}</tbody>
+        <tfoot><tr><td>Total</td><td class="r">${fmtN(t.cy)}</td><td class="r">${fmtN(t.py)}</td><td></td><td></td></tr>
+          ${tie ? `<tr><td class="muted small">Difference from ${e_(x.label)}</td><td class="r ${dc ? 'bad-t' : 'ok-t'}">${dc ? fmtN(dc) : '✓'}</td><td class="r ${dp ? 'bad-t' : 'ok-t'}">${dp ? fmtN(dp) : '✓'}</td><td></td><td></td></tr>` : ''}</tfoot></table></div>
       <div class="row between"><button class="btn small" data-act="sub-row-add" data-key="${e_(x.key)}" data-sb="${sb.id}">${IC.plus}Add line</button>
         <span class="muted small">Prints inside the note under this schedule's own table. Type a figure or a formula starting with =.</span></div>
     </div>`;
@@ -7454,6 +7457,7 @@ document.addEventListener('change', async ev => {
   if (el.id === 'bulk-files' && el.files.length){ UI.bulkFiles = [...el.files]; UI.bulkTarget = {}; UI.bulkFiles.forEach((f, i) => { const g = bulkGuess(en, f.name); if (g) UI.bulkTarget[i] = g; }); bulkModal(); return; }
   if (el.dataset.sbrow !== undefined){ const rw = subRowFind(en, el.dataset.sbrow); if (!rw) return; const f = el.dataset.f;
     if (f === 'label'){ rw.label = el.value; save(); scheduleRender(); return; }
+    if (f === 'style'){ if (el.value) rw.style = el.value; else delete rw.style; save(); render(); return; }
     const fk = `SB:${rw.id}:${f}`;
     if (el.value.trim() === ''){ rw[f] = ''; if (en.fx) delete en.fx[fk]; }
     else { try { fxInput(c, en, fk, el.value, v => { rw[f] = v; }); } catch (err) { toast('Formula: ' + err.message, true); return; } }
