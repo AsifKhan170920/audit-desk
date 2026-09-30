@@ -1418,7 +1418,7 @@ function printInvoice(v){
     <div class="words">Amount in words: ${numToWords(gross)}</div>
     ${(v.bank||b.bank)?`<div class="pay"><div class="h">PAYMENT DETAILS</div>${esc(v.bank||b.bank).replace(/\n/g,"<br>")}</div>`:''}
     ${v.notes?`<div class="notes">${esc(v.notes)}</div>`:''}
-    <div class="foot">This is a computer-generated tax invoice issued by ${esc(b.name)}.</div>
+    <div class="foot">This is a computer-generated ${esc((v.title||'Tax Invoice').toLowerCase())} issued by ${esc(b.name)}.</div>
   </div></body></html>`;
   const w=window.open('','_blank');w.document.write(html);w.document.close();
 }
