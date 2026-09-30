@@ -1450,13 +1450,13 @@ function buildReport(client, eng, prevEng){
     return mergeOrder(FSO[sec], all).filter(k => all.includes(k)); };
   const fsList = {};
   /* one line of a statement: its own figure when the user added it or typed over the schedule */
-  const fsRows = (arr, sec, keys, sign) => fsKeys(sec, keys).forEach(k => {
+  const fsRows = (arr, sec, keys, sign, always, only) => fsKeys(sec, keys).filter(k => !only || only(k)).forEach(k => {
     const u = fsUserLine(eng, k), f = FS_FIELD[k] || k, sg = sign || 1;
     const typed = u || (!fsFigureFixed(eng, k) && fsTypedOf(eng, k, 'cy') !== null) || (!fsFigureFixed(eng, k) && fsTypedOf(eng, k, 'py') !== null);
     const a = sg * (u ? R(fsTypedOf(eng, k, 'cy') || 0) : cy[f]), b = sg * (u ? R(fsTypedOf(eng, k, 'py') || 0) : py[f]);
     const label = FSL.labels[k] || (u ? (u.label || 'New line') : L(k));
     const hidden = !!FSL.hidden[k];
-    const shown = !hidden && (nz(a, b) || !!FS_ALWAYS[k] || !!u);
+    const shown = !hidden && (nz(a, b) || !!FS_ALWAYS[k] || !!u || !!(always && always.includes(k)));
     (fsList[sec] = fsList[sec] || []).push({key: k, label, shown, hidden, user: !!u, typed: !!typed, fixed: fsFigureFixed(eng, k), cy: a, py: b});
     if (!shown) return;
     const rw = row(label, u ? '' : k, a, b);
@@ -1490,16 +1490,36 @@ function buildReport(client, eng, prevEng){
   fsRows(soci, 'inc', ['rev']);
   fsRows(soci, 'dc', ['cor', '*'], -1);
   soci.push(row(plc(cy.gp, py.gp, 'Gross profit', 'Gross loss', 'Gross profit / (loss)'), '', cy.gp, py.gp, 'tot'), GAP);
-  fsRows(soci, 'exp', ['ga', 'sell', '*', 'dep', 'imp', 'fin'], -1);
-  fsRows(soci, 'inc', ['gain', 'oi', '*']);
+  /* management-accounts format: operating expenses under a heading with an operating profit line, finance cost and other income
+     below it (shown even when nil), the tax split into current and deferred, ending at the profit for the year */
+  const plMgmt = LAY.plFormat === 'mgmt';
+  if (plMgmt){
+    soci.push(G('Operating expenses'));
+    const opx = [];
+    fsRows(opx, 'exp', ['ga', 'sell', '*', 'dep', 'imp', 'fin'], -1, null, k => k !== 'fin');
+    soci.push(...opx);
+    const oc = cy.gp + opx.reduce((t, x) => t + R(x.cy), 0), op = py.gp + opx.reduce((t, x) => t + R(x.py), 0);
+    soci.push(row(plc(oc, op, 'Operating profit', 'Operating loss', 'Operating profit / (loss)'), '', oc, op, 'tot'), GAP);
+    fsRows(soci, 'exp', ['ga', 'sell', '*', 'dep', 'imp', 'fin'], -1, ['fin'], k => k === 'fin');
+  } else fsRows(soci, 'exp', ['ga', 'sell', '*', 'dep', 'imp', 'fin'], -1);
+  fsRows(soci, 'inc', ['gain', 'oi', '*'], 1, plMgmt ? ['oi'] : null);
   /* the tax line takes the name of the "Corporate tax (in the ledger)" schedule once it is renamed (e.g. "Deferred tax income"), or a name typed for it */
   const ctxLbl = SMAP.ctx && SMAP.ctx.label !== 'Corporate tax (in the ledger)' && (cy.ctLedger || py.ctLedger) ? SMAP.ctx.label : '';
   const ctRow = Object.assign(row(FSL.labels.ct || ctxLbl || 'Corporate tax', 'ct', -cy.ct, -py.ct), {drill: 'ct'});
   if (String(FSL.notes.ct || '').trim()) ctRow.note = String(FSL.notes.ct).trim();
-  soci.push(GAP, row(plc(cy.pbt, py.pbt, 'Profit before tax', 'Loss before tax', 'Profit / (loss) before tax'), '', cy.pbt, py.pbt, 'tot'), ctRow, GAP,
+  if (plMgmt){
+    // deferred tax = ledger lines of the "Corporate tax (in the ledger)" schedule that say deferred; the rest is current tax
+    const dtx = col => eng.tb.filter(l => l.fs === 'ctx' && /deferred/i.test(`${l.ledger} ${l.caption || ''}`)).reduce((a, l) => a + R(l[col]), 0);
+    const dc = dtx('amt'), dp = dtx('py');
+    const dRow = row(plc(-dc, -dp, 'Deferred tax income', 'Deferred tax expense', 'Deferred tax income / (expense)'), 'ct', -dc, -dp);
+    if (String(FSL.notes.ct || '').trim()) dRow.note = String(FSL.notes.ct).trim();
+    soci.push(GAP, row(plc(cy.pbt, py.pbt, 'Profit before tax', 'Loss before tax', 'Profit / (loss) before tax'), '', cy.pbt, py.pbt, 'tot'),
+      Object.assign(row('Current tax expense (based on taxable income)', '', -(cy.ct - dc), -(py.ct - dp)), {drill: 'ct'}), dRow, GAP,
+      row(plc(cy.pat, py.pat, 'Profit for the year', 'Loss for the year', 'Profit / (loss) for the year'), '', cy.pat, py.pat, 'grand'));
+  } else soci.push(GAP, row(plc(cy.pbt, py.pbt, 'Profit before tax', 'Loss before tax', 'Profit / (loss) before tax'), '', cy.pbt, py.pbt, 'tot'), ctRow, GAP,
     row(plc(cy.pat, py.pat, 'Profit after tax', 'Loss after tax', 'Profit / (loss) after tax'), '', cy.pat, py.pat, 'tot'), row('Other comprehensive income', '', 0, 0), GAP,
     row(plc(cy.pat, py.pat, 'Total comprehensive income for the year', 'Total comprehensive loss for the year', 'Total comprehensive income / (loss) for the year'), '', cy.pat, py.pat, 'grand'));
-  sections.push({id: 'soci', kind: 'statement', head: statementHead(`${FSW}STATEMENT OF PROFIT OR LOSS AND OTHER COMPREHENSIVE INCOME`, period), items: [
+  sections.push({id: 'soci', kind: 'statement', head: statementHead(plMgmt ? `${FSW}STATEMENT OF COMPREHENSIVE INCOME` : `${FSW}STATEMENT OF PROFIT OR LOSS AND OTHER COMPREHENSIVE INCOME`, period), items: [
     {k: 'fs', rows: soci, noteCol: true, years: YRS}, {k: 'small', text: integral}, {k: 'sign', label: signLabel}]});
 
   const eqItems = eng.soceItems || [], anyIt = col => eqItems.some(x => R(x[col]));
@@ -3936,7 +3956,9 @@ function vLayout(){
       ${L.notesYears === 'custom' ? `<p class="small muted">${Object.keys(L.yearsOff || {}).length} page(s) without year columns. If notes move to other pages after changes, check the preview again.</p>` : ''}</div></section>
 
   <section class="panel"><h2>Lines of the statements</h2><p class="sub">The lines of the statement of financial position and the statement of profit or loss – their names, note numbers, figures and order – are set on <b>Financial statements</b>, under the <b>Financial position</b> and <b>Profit or loss</b> tabs.</p>
-    <div class="row"><button class="btn small" data-act="fs-lines-go" data-tab="sofp">Financial position lines</button><button class="btn small" data-act="fs-lines-go" data-tab="soci">Profit or loss lines</button></div></section>
+    <div class="row"><button class="btn small" data-act="fs-lines-go" data-tab="sofp">Financial position lines</button><button class="btn small" data-act="fs-lines-go" data-tab="soci">Profit or loss lines</button></div>
+    <div class="box"><h3 class="h3">Profit or loss format</h3>${[['std', 'Standard', 'profit before tax, corporate tax, profit after tax, other comprehensive income and total comprehensive income'], ['mgmt', 'Management accounts', 'operating expenses under a heading, operating profit, finance cost and other income always shown, current tax and deferred tax on separate lines, ending at the profit for the year']]
+      .map(([v, t, d]) => `<label class="radio-row"><input type="radio" name="pl-format" value="${v}" ${(L.plFormat === 'mgmt' ? 'mgmt' : 'std') === v ? 'checked' : ''}><span><b>${t}</b> – ${d}</span></label>`).join('')}</div></section>
 
   <section class="panel"><h2>Print</h2><p class="sub">Choose what to print. Page numbers stay the same as in the full report.</p>
     <div class="chips print-chips">${printList}</div>
@@ -7394,6 +7416,7 @@ document.addEventListener('change', async ev => {
     el.closest('.pv-yr').classList.toggle('off', !el.checked);
     const b = document.getElementById('pv-refresh'); if (b) b.hidden = false; save(); scheduleRender(); return; }
   if (el.name === 'notes-years'){ const L = layoutOf(en); L.notesYears = el.value; save(); render(); return; }
+  if (el.name === 'pl-format'){ const L = layoutOf(en); if (el.value === 'mgmt') L.plFormat = 'mgmt'; else delete L.plFormat; save(); render(); return; }
   if (el.name === 'pol-notes'){ const L = layoutOf(en); if (el.value === '2') L.polNotes = '2'; else delete L.polNotes; save(); render(); return; }
   if (el.dataset.cflabel){ const k = el.dataset.cflabel, L = cfLayoutOf(en), x = cfLines(en).find(y => y.key === k), v = el.value.trim();
     if (!v || (x && v === x.def)) delete L.labels[k]; else L.labels[k] = v; save(); scheduleRender(); return; }
