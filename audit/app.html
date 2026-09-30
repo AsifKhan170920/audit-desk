@@ -1392,12 +1392,16 @@ function buildReport(client, eng, prevEng){
   wantS('rev'); wantS('cor'); custom('dc').forEach(x => wantS(x.key));
   ['ga','sell','fin'].forEach(wantS); custom('exp').forEach(x => wantS(x.key));
   ['gain','oi'].forEach(wantS); custom('inc').forEach(x => wantS(x.key));
-  want('ct', true); want('fi', true); want('risk', true); want('capital', true); want('contingent', true); want('commitments', true);
+  // the standard text notes are always in unless switched off on the Report layout screen
+  const fixedOn = k => want(k, !(LAY.noteOff || {})[k]);
+  ['ct','fi','risk','capital','contingent','commitments'].forEach(fixedOn);
   (eng.customNotes || []).forEach(c => want('cn:' + c.id, !!(c.title || c.text)));
-  want('approval', true);
+  fixedOn('approval');
   const allNoteOrder = mergeOrder(LAY.noteOrder, allNotes);
   const numericNotes = allNoteOrder.filter(k => wanted[k]);
-  numericNotes.forEach((k, i) => { noteNo[k] = i + 5; });
+  /* policies as four notes (1 legal status, 2 basis, 3 policies, 4 judgments) or as two (1 legal status, 2 basis and policies) */
+  const pol2 = LAY.polNotes === '2', firstNo = pol2 ? 3 : 5;
+  numericNotes.forEach((k, i) => { noteNo[k] = i + firstNo; });
   if (noteNo.ppe){ noteNo.dep = noteNo.ppe; noteNo.imp = noteNo.ppe; }
 
   const row = (label, key, a, b, style) => ({label, note: key && noteNo[key] ? String(noteNo[key]) : '', cy: a, py: b, style: style || '', fs: key && SMAP[key] ? key : ''});
@@ -1539,15 +1543,20 @@ function buildReport(client, eng, prevEng){
   const lives = {k: 'grid', boxed: true, header: ['Category', 'Useful life (years)'], rows: r.ppe.map(x => ({cells: [x.name, x.life ? String(x.life) : '']})), widths: [180, 90]};
   const polItems = [];
   polItems.push({k: 'noteHead', num: '1.', title: 'LEGAL STATUS, ACTIVITIES AND MANAGEMENT'}, blocks(eng.texts.note1));
-  polItems.push({k: 'noteHead', num: '2.', title: 'BASIS OF PREPARATION'}, blocks(eng.texts.note2));
-  polItems.push({k: 'noteHead', num: '3.', title: 'MATERIAL ACCOUNTING POLICIES'});
-  let pn = 1;
-  (eng.texts.policies || []).forEach(pol => {
-    const on = pol.mode === 'on' || (pol.mode === 'auto' && (pol.auto ? nz(cy[pol.auto], py[pol.auto]) : true));
-    if (!on) return;
-    polItems.push(blocks(`## 3.${pn++} ${pol.title}\n${pol.text}`));
-  });
-  polItems.push({k: 'noteHead', num: '4.', title: 'CRITICAL ACCOUNTING JUDGMENTS AND KEY SOURCES OF ESTIMATION UNCERTAINTY'}, blocks(eng.texts.note4));
+  const polOn = (eng.texts.policies || []).filter(pol => pol.mode === 'on' || (pol.mode === 'auto' && (pol.auto ? nz(cy[pol.auto], py[pol.auto]) : true)));
+  if (pol2){
+    // two-note style: the basis of preparation text, then each policy and the judgments as 2.1, 2.2 …
+    polItems.push({k: 'noteHead', num: '2.', title: 'BASIS OF PREPARATION AND MATERIAL ACCOUNTING POLICIES'}, blocks(eng.texts.note2));
+    let pn = 1;
+    polOn.forEach(pol => polItems.push(blocks(`## 2.${pn++} ${pol.title}\n${pol.text}`)));
+    if (String(eng.texts.note4 || '').trim()) polItems.push(blocks(`## 2.${pn++} Critical accounting judgments and key sources of estimation uncertainty\n${eng.texts.note4}`));
+  } else {
+    polItems.push({k: 'noteHead', num: '2.', title: 'BASIS OF PREPARATION'}, blocks(eng.texts.note2));
+    polItems.push({k: 'noteHead', num: '3.', title: 'MATERIAL ACCOUNTING POLICIES'});
+    let pn = 1;
+    polOn.forEach(pol => polItems.push(blocks(`## 3.${pn++} ${pol.title}\n${pol.text}`)));
+    polItems.push({k: 'noteHead', num: '4.', title: 'CRITICAL ACCOUNTING JUDGMENTS AND KEY SOURCES OF ESTIMATION UNCERTAINTY'}, blocks(eng.texts.note4));
+  }
   sections.push({id: 'pol', kind: 'notes', head: statementHead(`NOTES TO THE ${FSW}FINANCIAL STATEMENTS`, period), items: polItems,
     tokens: {SHARE_TABLE: shareTable, USEFUL_LIVES: lives}});
 
@@ -3892,8 +3901,12 @@ function vLayout(){
       ${tgl('show', id, !L.hide[id], 'In report')}${tgl('index', id, !L.noIndex[id] && !L.hide[id], 'In index')}${tgl('num', id, !L.noNum[id], 'Page no.')}
       ${updown('sec', id, i, order.length)}</li>`).join('');
   const notes = M.noteList;
+  // standard text notes can be left out of the report; switched-off ones are listed below the others to switch back on
+  const FIXED_NOTES = {ct: 'Corporate tax', fi: 'Financial instruments', risk: 'Financial risk management', capital: 'Capital risk management', contingent: 'Contingent liabilities', commitments: 'Commitments', approval: 'Approval of the financial statements'};
+  const noteOff = L.noteOff || {};
   const noteRows = notes.map((n, i) => `<li class="lay-row" draggable="true" data-drag="note" data-id="${e_(n.key)}">
-      <span class="grip" title="Drag up or down">${IC.handle}</span><button class="lay-num nn-btn" data-act="note-num" data-key="${e_(n.key)}" title="Change or swap this note number">${n.num}.</button><span class="lay-title">${e_(n.title)}</span>${updown('note', n.key, i, notes.length)}</li>`).join('');
+      <span class="grip" title="Drag up or down">${IC.handle}</span><button class="lay-num nn-btn" data-act="note-num" data-key="${e_(n.key)}" title="Change or swap this note number">${n.num}.</button><span class="lay-title">${e_(n.title)}</span>${FIXED_NOTES[n.key] ? tgl('note', n.key, true, 'In report') : ''}${updown('note', n.key, i, notes.length)}</li>`).join('')
+    + Object.keys(FIXED_NOTES).filter(k => noteOff[k]).map(k => `<li class="lay-row fixed off"><span class="grip"></span><span class="lay-num">–</span><span class="lay-title">${e_(FIXED_NOTES[k])}</span>${tgl('note', k, false, 'In report')}</li>`).join('');
   const printList = M.sections.map(s => `<label class="check-lbl"><input type="checkbox" class="print-sec" value="${s.id}" checked> ${e_(s.kind === 'cover' ? 'Cover page' : s.kind === 'index' ? 'Index' : (defs[s.id] || {}).title || s.id)}</label>`).join('');
   return `<section class="panel"><div class="head"><div><h1>Report layout &amp; print</h1><p class="sub">Page margins, page numbers, the order of sections and notes, and what appears in the index. Settings are kept for this client and carried to next year.</p></div>
     <div class="row"><button class="btn" data-act="pdf-preview">${IC.eye}Preview PDF</button><button class="btn primary" data-act="print-pdf">${IC.print}Print report</button></div></div></section>
@@ -3907,7 +3920,9 @@ function vLayout(){
     </ul>
     <ul class="lay-list" data-list="sec">${secRows}</ul></section>
 
-  <section class="panel"><div class="head"><div><h2>Order of notes</h2><p class="sub">Notes 1–4 (legal status, basis of preparation, policies, judgments) stay first. Drag the others; note numbers in the statements follow automatically.</p></div><button class="linkish" data-act="lay-reset-notes">Standard order</button></div>
+  <section class="panel"><div class="head"><div><h2>Order of notes</h2><p class="sub">The policy notes stay first. Drag the others; note numbers in the statements follow automatically. Untick <b>In report</b> to leave a standard text note out.</p></div><button class="linkish" data-act="lay-reset-notes">Standard order</button></div>
+    <div class="box">${[['4', 'Four policy notes', '1 legal status, 2 basis of preparation, 3 material accounting policies, 4 judgments – other notes start at 5'], ['2', 'Two policy notes', '1 legal status, 2 basis of preparation and material accounting policies (policies and judgments as 2.1, 2.2 …) – other notes start at 3']]
+      .map(([v, t, d]) => `<label class="radio-row"><input type="radio" name="pol-notes" value="${v}" ${(L.polNotes === '2' ? '2' : '4') === v ? 'checked' : ''}><span><b>${t}</b> – ${d}</span></label>`).join('')}</div>
     <div class="row"><button class="btn small" data-act="lay-notes-fs">Renumber the notes to follow the statements</button></div>
     <ul class="lay-list" data-list="note">${noteRows}</ul>
     <div class="box ny-box"><h3 class="h3">Year columns (${singleYearOf(en) ? `${en.year} only – single-year statements` : `${en.year} · ${en.year - 1}`}) at the top of notes pages</h3>
@@ -6150,9 +6165,10 @@ function pyCfTable(en, r){
 function setNoteNumber(c, en, key, newNum, mode){
   const M = buildReport(c, en, prevOf(c, en));
   const list = M.noteList.map(n => n.key);
-  const k = key === 'dep' ? 'ppe' : key, from = list.indexOf(k), to = newNum - 5;
+  const first = M.noteList.length ? M.noteList[0].num : 5;
+  const k = key === 'dep' ? 'ppe' : key, from = list.indexOf(k), to = newNum - first;
   if (from < 0) throw new Error('This schedule has no note in the report yet (no figures, or its note is switched off).');
-  if (!(to >= 0 && to < list.length)) throw new Error(`Choose a note number from 5 to ${list.length + 4}`);
+  if (!(to >= 0 && to < list.length)) throw new Error(`Choose a note number from ${first} to ${list.length + first - 1}`);
   if (to === from) return false;
   const full = (M.allNoteKeys || list).slice();
   if (mode === 'swap'){ const other = list[to], a = full.indexOf(k), b = full.indexOf(other); full[a] = other; full[b] = k; }
@@ -6165,7 +6181,7 @@ function noteNumModal(key){
   const n = M.noteList.find(x => x.key === (key === 'dep' ? 'ppe' : key));
   if (!n){ toast('This schedule has no note yet – add figures or switch its note on in schedule settings', true); return; }
   const opts = M.noteList.map(x => `<option value="${x.num}"${x.num === n.num ? ' selected' : ''}>${x.num}. ${e_(x.title)}</option>`).join('');
-  modal(`<h2>Note number</h2><p class="sub">${e_(n.title)} is <b>Note ${n.num}</b>. Notes 1–4 stay fixed.</p>
+  modal(`<h2>Note number</h2><p class="sub">${e_(n.title)} is <b>Note ${n.num}</b>. The policy notes stay fixed.</p>
     <div class="form-grid"><div class="field wide"><label for="nn-to">Change to note number</label><select id="nn-to">${opts}</select></div></div>
     <div class="box"><label class="radio-row"><input type="radio" name="nn-mode" value="swap" checked><span><b>Swap</b> the two notes – only these two numbers change</span></label>
       <label class="radio-row"><input type="radio" name="nn-mode" value="move"><span><b>Move</b> – notes in between shift up or down by one</span></label></div>
@@ -7354,6 +7370,7 @@ document.addEventListener('change', async ev => {
     if (el.dataset.lay === 'show'){ if (on) delete L.hide[id]; else L.hide[id] = true; }
     if (el.dataset.lay === 'index'){ if (on){ delete L.noIndex[id]; delete L.hide[id]; } else L.noIndex[id] = true; }
     if (el.dataset.lay === 'num'){ if (on) delete L.noNum[id]; else L.noNum[id] = true; }
+    if (el.dataset.lay === 'note'){ L.noteOff = L.noteOff || {}; if (on) delete L.noteOff[id]; else L.noteOff[id] = true; }
     save(); render(); return; }
   if (el.id === 'rt-file' && el.files[0]){
     try { UI.retrieveList = await readSavedFile(el.files[0]); UI.retrieveFileName = el.files[0].name;
@@ -7373,6 +7390,7 @@ document.addEventListener('change', async ev => {
     el.closest('.pv-yr').classList.toggle('off', !el.checked);
     const b = document.getElementById('pv-refresh'); if (b) b.hidden = false; save(); scheduleRender(); return; }
   if (el.name === 'notes-years'){ const L = layoutOf(en); L.notesYears = el.value; save(); render(); return; }
+  if (el.name === 'pol-notes'){ const L = layoutOf(en); if (el.value === '2') L.polNotes = '2'; else delete L.polNotes; save(); render(); return; }
   if (el.dataset.cflabel){ const k = el.dataset.cflabel, L = cfLayoutOf(en), x = cfLines(en).find(y => y.key === k), v = el.value.trim();
     if (!v || (x && v === x.def)) delete L.labels[k]; else L.labels[k] = v; save(); scheduleRender(); return; }
   if (el.dataset.tplName){ const tp = tplList().find(x => x.id === el.dataset.tplName); if (tp){ tp.name = el.value.trim() || tp.name; save(); } return; }
