@@ -1331,6 +1331,9 @@ function parseMarkup(text){
     if (!line.trim()){ flush(); return; }
     let m;
     if ((m = line.match(/^\[\[(\w+)\]\]$/))){ flush(); blocks.push({t:'token', name: m[1]}); return; }
+    // a table: lines written as | cell | cell | – the first line is the header, a |---| line is skipped
+    if (/^\|.*\|$/.test(line.trim())){ flush(); const cells = line.trim().slice(1, -1).split('|').map(x => x.trim()); if (cells.every(x => /^:?-+:?$/.test(x))) return;
+      const last = blocks[blocks.length - 1]; if (last && last.t === 'table') last.rows.push(cells); else blocks.push({t: 'table', rows: [cells]}); return; }
     if ((m = line.match(/^##\s+(.*)$/))){ flush(); blocks.push({t:'h', text: m[1]}); return; }
     if ((m = line.match(/^-\s+(.*)$/))){ if (para){ blocks.push({t:'p', text: para.join('\n')}); para = null; } if (!list || list.t !== 'ul'){ if (list) blocks.push(list); list = {t:'ul', items:[]}; } list.items.push(m[1]); return; }
     if ((m = line.match(/^\d+[.)]\s+(.*)$/))){ if (para){ blocks.push({t:'p', text: para.join('\n')}); para = null; } if (!list || list.t !== 'ol'){ if (list) blocks.push(list); list = {t:'ol', items:[]}; } list.items.push(m[1]); return; }
@@ -1813,6 +1816,14 @@ function keepWithNext(list){
   }
   return out;
 }
+/* a table typed in note text → the grid used for other note tables; figures such as 1,234 or (1,234) become numbers,
+   and a row whose first cell is **bold** prints as a total */
+function textTableGrid(b){
+  const num = x => { const t = String(x).replace(/\*\*/g, '').trim(); if (/^[-–]$/.test(t)) return 0; const m = t.match(/^(\()?-?[\d,]+(\.\d+)?\)?$/); return m ? (m[1] || t.startsWith('-') ? -1 : 1) * Math.abs(parseFloat(t.replace(/[(),]/g, ''))) : t; };
+  const [head, ...body] = b.rows;
+  return {k: 'grid', plain: true, header: head.map(x => x.replace(/\*\*/g, '')), firstWidth: '*', numWidth: 80,
+    rows: body.map(r => ({cells: r.map((x, i) => i ? num(x) : x.replace(/\*\*/g, '')), style: /^\*\*/.test(r[0] || '') ? 'tot' : ''}))};
+}
 function pdfBlocks(item, tokens, opt){
   const out = [];
   const toks = Object.assign({}, tokens || {}, item.tokens || {});
@@ -1821,6 +1832,7 @@ function pdfBlocks(item, tokens, opt){
     else if (b.t === 'p') out.push({text: pdfRuns(b.text), alignment: 'justify', margin: [0, 0, 0, 5]});
     else if (b.t === 'ul') out.push({ul: b.items.map(i => ({text: pdfRuns(i), alignment: 'justify', margin: [0, 0, 0, 3]})), margin: [0, 0, 0, 5]});
     else if (b.t === 'ol') out.push({ol: b.items.map(i => ({text: pdfRuns(i), alignment: 'justify', margin: [0, 0, 0, 3]})), margin: [0, 0, 0, 5]});
+    else if (b.t === 'table' && b.rows.length) out.push(pdfItem(textTableGrid(b), toks, opt));
     else if (b.t === 'token' && toks[b.name]){
       const node = pdfItem(toks[b.name], toks, opt);
       // a signature block always stays on the same page as the paragraph before it
@@ -2016,7 +2028,7 @@ function estHeight(items){
   items.forEach(x => {
     if (x.k === 'fs') h += (x.rows.length + (x.noHead ? 0 : 2)) * 14;
     else if (x.k === 'grid') h += (x.rows.length + 2) * 14;
-    else if (x.k === 'blocks') x.blocks.forEach(b2 => { h += b2.t === 'p' ? Math.ceil((b2.text || '').length / 95) * 13 + 6 : b2.t === 'ul' || b2.t === 'ol' ? b2.items.reduce((a, i) => a + Math.ceil(i.length / 90) * 13 + 3, 0) : b2.t === 'token' ? 120 : 20; });
+    else if (x.k === 'blocks') x.blocks.forEach(b2 => { h += b2.t === 'p' ? Math.ceil((b2.text || '').length / 95) * 13 + 6 : b2.t === 'ul' || b2.t === 'ol' ? b2.items.reduce((a, i) => a + Math.ceil(i.length / 90) * 13 + 3, 0) : b2.t === 'token' ? 120 : b2.t === 'table' ? b2.rows.length * 18 + 10 : 20; });
     else if (x.k === 'group') h += estHeight(x.items);
     else h += 16;
   });
@@ -2312,6 +2324,7 @@ function htmlBlocks(item, tokens, o){
     if (b.t === 'p') return `<p>${htmlRuns(b.text)}</p>`;
     if (b.t === 'ul') return `<ul>${b.items.map(i => `<li>${htmlRuns(i)}</li>`).join('')}</ul>`;
     if (b.t === 'ol') return `<ol>${b.items.map(i => `<li>${htmlRuns(i)}</li>`).join('')}</ol>`;
+    if (b.t === 'table' && b.rows.length) return htmlItem(textTableGrid(b), toks, o);
     if (b.t === 'token' && toks[b.name]) return htmlItem(toks[b.name], toks, o);
     return '';
   }).join('');
