@@ -1759,6 +1759,8 @@ function buildReport(client, eng, prevEng){
     { const fk = key === 'dep' || key === 'imp' ? 'ppe' : key; grp.forEach(g => { if (g.k === 'fs' && !g.fs && !g.drill){ if (key === 'ct') g.drill = 'ct'; else if (SMAP[fk]) g.fs = fk; } if (g.k === 'grid' && key === 'ppe' && !g.drill) g.drill = 'ppe'; }); }
     items.push({k: 'group', items: grp, keep: !['risk', 'fi', 'ppe'].includes(key)});
   });
+  // the signature line of the statements, after the last note (kept on the same page as that note)
+  if (LAY.notesSign && items.length) items[items.length - 1].items.push({k: 'sign', label: signLabel});
   sections.push({id: 'notes', kind: 'notes', head: statementHead(`NOTES TO THE ${FSW}FINANCIAL STATEMENTS`, period), items, years: YRS});
   { // ratio analysis – management information after the notes
     const rrows = [], rl = ratioList(r);
@@ -3963,7 +3965,8 @@ function vLayout(){
   <section class="panel"><div class="head"><div><h2>Order of notes</h2><p class="sub">The policy notes stay first. Drag the others; note numbers in the statements follow automatically. Untick <b>In report</b> to leave a standard text note out.</p></div><button class="linkish" data-act="lay-reset-notes">Standard order</button></div>
     <div class="box">${[['4', 'Four policy notes', '1 legal status, 2 basis of preparation, 3 material accounting policies, 4 judgments – other notes start at 5'], ['2', 'Two policy notes', '1 legal status, 2 basis of preparation and material accounting policies (policies and judgments as 2.1, 2.2 …) – other notes start at 3']]
       .map(([v, t, d]) => `<label class="radio-row"><input type="radio" name="pol-notes" value="${v}" ${(L.polNotes === '2' ? '2' : '4') === v ? 'checked' : ''}><span><b>${t}</b> – ${d}</span></label>`).join('')}</div>
-    <div class="row"><button class="btn small" data-act="lay-notes-fs">Renumber the notes to follow the statements</button></div>
+    <div class="row"><button class="btn small" data-act="lay-notes-fs">Renumber the notes to follow the statements</button>
+      <label class="check-lbl"><input type="checkbox" name="notes-sign"${L.notesSign ? ' checked' : ''}> Signature line after the last note</label></div>
     <ul class="lay-list" data-list="note">${noteRows}</ul>
     <div class="box ny-box"><h3 class="h3">Year columns (${singleYearOf(en) ? `${en.year} only – single-year statements` : `${en.year} · ${en.year - 1}`}) at the top of notes pages</h3>
       <p class="small muted">${singleYearOf(en) ? `Single-year statements are on: no FY${en.year - 1} column is printed anywhere.` : `First financial statements? Print FY${en.year} only – `}<button class="linkish" data-act="go-adjust">Tax, reserve &amp; prior year → Comparative column</button></p>
@@ -7432,6 +7435,7 @@ document.addEventListener('change', async ev => {
     el.closest('.pv-yr').classList.toggle('off', !el.checked);
     const b = document.getElementById('pv-refresh'); if (b) b.hidden = false; save(); scheduleRender(); return; }
   if (el.name === 'notes-years'){ const L = layoutOf(en); L.notesYears = el.value; save(); render(); return; }
+  if (el.name === 'notes-sign'){ const L = layoutOf(en); if (el.checked) L.notesSign = true; else delete L.notesSign; save(); render(); return; }
   if (el.name === 'pl-format'){ const L = layoutOf(en); if (el.value === 'mgmt') L.plFormat = 'mgmt'; else delete L.plFormat; save(); render(); return; }
   if (el.name === 'pol-notes'){ const L = layoutOf(en); if (el.value === '2') L.polNotes = '2'; else delete L.polNotes; save(); render(); return; }
   if (el.dataset.cflabel){ const k = el.dataset.cflabel, L = cfLayoutOf(en), x = cfLines(en).find(y => y.key === k), v = el.value.trim();
