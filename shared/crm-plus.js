@@ -546,7 +546,7 @@
   }
 
   /* ----- quick edit of a client (fix a wrong VAT period, year end, services …) ----- */
-  var SERVICE_LIST = ['VAT Filing', 'VAT Registration', 'VAT Refund', 'CT Registration', 'CT Filing', 'Bookkeeping', 'Financial Statements', 'Audit', 'AML', 'FTA Inquiry', 'Software'];
+  var SERVICE_LIST = ['VAT Filing', 'VAT Registration', 'VAT Refund', 'CT Registration', 'CT Filing', 'Bookkeeping', 'Financial Statements', 'Audit', 'AML', 'FTA Inquiry', 'Software', 'Other services'];
   var VAT_CYCLES = [['Monthly', 'Monthly – every month'], ['Stagger 1', 'Stagger 1 – quarters end Jan, Apr, Jul, Oct'], ['Stagger 2', 'Stagger 2 – quarters end Feb, May, Aug, Nov'], ['Stagger 3', 'Stagger 3 – quarters end Mar, Jun, Sep, Dec']];
   var REPLAN_KEYS = {vatCycle: ['vat'], services: ['vat', 'corporate_tax', 'financial_statements', 'audit', 'bookkeeping'], taxYearEnd: ['corporate_tax', 'financial_statements', 'audit'], bookkeepingStart: ['bookkeeping']};
   var CODE_PREFIX = {vat: 'VAT|', corporate_tax: 'CT|', financial_statements: 'FS|', audit: 'AUD|', bookkeeping: 'BK|'};

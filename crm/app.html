@@ -921,7 +921,7 @@ function deskCell(c,kind){
   const a=auditInfo(c.name);
   return `${a&&a.year?`<span class="desk-yr">FY${a.year}</span>`:''}<a class="btn btn-sm" href="../audit/?client=${encodeURIComponent(c.name)}">${a?'Open':'Start'}</a>`;
 }
-const CL_SERVICES=['VAT Filing','VAT Registration','VAT Refund','CT Registration','CT Filing','Bookkeeping','Financial Statements','Audit','AML','FTA Inquiry','Software'];
+const CL_SERVICES=['VAT Filing','VAT Registration','VAT Refund','CT Registration','CT Filing','Bookkeeping','Financial Statements','Audit','AML','FTA Inquiry','Software','Other services'];
 /* the services a client has bought, add and remove them here */
 function svcCell(c){
   const has=(c.services||[]);
@@ -987,8 +987,8 @@ function clientCard(c,p){return `<div class="kcard" draggable="true" data-drag="
 /* ============================================================= CLIENT & LEAD PAGE
    Numbered sections down the page (details · services · ledger · reminders · PDC · documents),
    with comments and history alongside. Fields save as soon as they change. */
-const SVC_LIST=['VAT Filing','VAT Registration','VAT Refund','CT Registration','CT Filing','Bookkeeping','Financial Statements','Audit','AML','FTA Inquiry','Software'];
-const SVC_ALIAS={'vat':'VAT Filing','vat return filing':'VAT Filing','vat returns':'VAT Filing','corporate tax':'CT Filing','ct':'CT Filing','corporate tax return filing':'CT Filing','book keeping':'Bookkeeping','accounting':'Bookkeeping','preparation of financial statements':'Financial Statements','fs':'Financial Statements','financial audit':'Audit'};
+const SVC_LIST=['VAT Filing','VAT Registration','VAT Refund','CT Registration','CT Filing','Bookkeeping','Financial Statements','Audit','AML','FTA Inquiry','Software','Other services'];
+const SVC_ALIAS={'other':'Other services','others':'Other services','other service':'Other services','vat':'VAT Filing','vat return filing':'VAT Filing','vat returns':'VAT Filing','corporate tax':'CT Filing','ct':'CT Filing','corporate tax return filing':'CT Filing','book keeping':'Bookkeeping','accounting':'Bookkeeping','preparation of financial statements':'Financial Statements','fs':'Financial Statements','financial audit':'Audit'};
 function svcNorm(s){const k=String(s||'').trim(),a=SVC_ALIAS[k.toLowerCase()];if(a)return a;return SVC_LIST.find(x=>x.toLowerCase()===k.toLowerCase())||k;}
 function svcList(o){const out=[];(o.services||[]).forEach(s=>{const n=svcNorm(s);if(n&&!out.includes(n))out.push(n);});return out;}
 const VAT_CYCLES=[['','— choose the tax periods —'],['Stagger 3','Jan–Mar · Apr–Jun · Jul–Sep · Oct–Dec'],['Stagger 1','Feb–Apr · May–Jul · Aug–Oct · Nov–Jan'],['Stagger 2','Mar–May · Jun–Aug · Sep–Nov · Dec–Feb'],['Monthly','Monthly']];
@@ -1220,7 +1220,8 @@ const SVC_TRACK={
   'Audit':{icon:'🔎',st:['Not started','Planning','Fieldwork','Queries with client','Report issued'],fy:'audit'},
   'AML':{icon:'🛡',st:['Not started','Risk assessment in progress','goAML registered','Policies & KYC in place','Annual review done'],ref:'goAML ID',next:'Next review'},
   'FTA Inquiry':{icon:'✉',st:['Open','Submitted to FTA','FTA replied','Closed'],ref:'Case / reference no.',per:'Subject'},
-  'Software':{icon:'💻',st:['Not started','Setting up','Training','Live'],ref:'Software',next:'Renewal date'}
+  'Software':{icon:'💻',st:['Not started','Setting up','Training','Live'],ref:'Software',next:'Renewal date'},
+  'Other services':{icon:'🧩',st:['Not started','In progress','Waiting for client','Completed'],desc:'Description of the service',amt:'Fee (AED)'}
 };
 function trackPanel(name,o,db,kind){
   const cfg=SVC_TRACK[name],s=(o.svc||{})[name]||{},st=s.status||cfg.st[0];
@@ -1231,7 +1232,7 @@ function trackPanel(name,o,db,kind){
   if(cfg.fy&&kind==='client'){const r=remindersOn(db),d=r?r.R.deadlines(o,todayD(),400,r.P).find(x=>x.kind===cfg.fy&&x.due>=ymd(new Date(Date.now()-60*864e5))):null;
     extra=`<div class="cd-hint">${o.taxYearEnd?`Year end ${fmtDate(o.taxYearEnd)}`:'Set the financial year end under Corporate Tax / Client details'}${d?` · due <b>${fmtDate(d.due)}</b>`:''} · <a class="link" href="../audit/?client=${encodeURIComponent(o.name)}">Open in Audit Desk</a></div>`;}
   return svBox(cfg.icon,name,`<select class="hd-in pdc-sel ${tone}" title="Status" ${at('status')}>${cfg.st.map(x=>`<option${x===st?' selected':''}>${esc(x)}</option>`).join('')}</select>`,`<div class="cd-form c2">
-    ${cfg.ref?f('ref',cfg.ref):''}${f('date',cfg.fy?'Started':'Date submitted / started','date')}
+    ${cfg.desc?`<div class="cd-f span3"><label>${cfg.desc}</label><textarea rows="2" ${at('desc')} placeholder="e.g. ESR notification, UBO filing, trade licence renewal support, bank account opening">${esc(s.desc||'')}</textarea></div>`:''}${cfg.ref?f('ref',cfg.ref):''}${f('date',cfg.fy?'Started':'Date submitted / started','date')}
     ${cfg.per?f('period',cfg.per):''}${cfg.amt?f('amount',cfg.amt,'number'):''}${f('next',cfg.next||'Next follow-up','date')}
     <div class="cd-f span3"><label>Notes</label><textarea rows="1" ${at('note')}>${esc(s.note||'')}</textarea></div></div>${extra}`,'half');
 }
