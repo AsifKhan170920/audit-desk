@@ -261,7 +261,7 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
 .cd-h .no{width:19px;height:19px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:10.5px;display:grid;place-items:center;flex:0 0 auto}
 .cd-h h2{font-size:13.5px;margin:0;font-weight:700}
 .cd-h .act,.sv-h .act{margin-left:auto;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-.cd-h .hd-in{height:26px;padding:2px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fbfcfd;color:var(--ink);outline:none;min-width:0}.cd-h .hd-in:focus{border-color:var(--brand);background:#fff}.cd-h .hd-sep{width:1px;height:18px;background:var(--line);margin:0 2px}
+.sv-h .hd-in,.cd-h .hd-in{height:26px;padding:2px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fbfcfd;color:var(--ink);outline:none;min-width:0}.sv-h .hd-in:focus,.cd-h .hd-in:focus{border-color:var(--brand);background:#fff}.sv-h .hd-sep,.cd-h .hd-sep{width:1px;height:18px;background:var(--line);margin:0 2px}
 .cd-h .btn,.sv-h .btn,.cd-b .btn-sm{padding:3px 9px;font-size:12px;border-radius:7px}
 .cd-b{padding:10px 12px}
 .cd-grp{font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px}
@@ -283,7 +283,7 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
 .sv{border:1px solid var(--line);border-radius:9px;margin-bottom:8px}
 .sv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px}.sv-grid .sv{margin:0;grid-column:1/-1}.sv-grid .sv.half{grid-column:auto}
 .cd-form.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.sv-h{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:#fafbfc;border-radius:9px 9px 0 0}
+.sv-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:#fafbfc;border-radius:9px 9px 0 0}
 .sv-h b{font-size:13px}
 .sv-b{padding:9px 10px}
 .sv-b .cd-form:last-child{margin-bottom:0}
@@ -981,18 +981,17 @@ function vatPanel(c,db,F){
   const ring=P.filter(p=>p.e.getFullYear()===yr);
   const rows=P.filter(p=>p.st!=='open'&&p.st!=='before').slice(-8).reverse(),cur=P.find(p=>p.st==='open');
   const due=P.filter(p=>p.st==='pending'||p.st==='overdue');
-  const head=(due.length?`<span class="pill ${due.some(p=>p.st==='overdue')?'high':'pending'}">${due.length} to file</span>`+(due.length>1?`<span class="link" style="font-size:12px" data-act="vat-file-all" data-id="${c.id}" title="Catching up: mark every pending / overdue period as filed">mark all filed</span>`:''):'<span class="pill completed">Up to date</span>')+`<button class="btn btn-sm" disabled title="VAT working and reports – coming in the VAT desk">VAT desk · soon</button>`;
+  const head=(due.length?`<span class="pill ${due.some(p=>p.st==='overdue')?'high':'pending'}">${due.length} to file</span>`+(due.length>1?`<span class="link" style="font-size:12px" data-act="vat-file-all" data-id="${c.id}" title="Catching up: mark every pending / overdue period as filed">mark all filed</span>`:''):'<span class="pill completed">Up to date</span>')+`<select class="hd-in" data-cf="vatCycle" data-kind="client" data-id="${c.id}" title="VAT tax periods (stagger)">${VAT_CYCLES.map(([v,t])=>`<option value="${esc(v)}"${(c.vatCycle||'')===v?' selected':''}>${esc(t)}</option>`).join('')}</select><button class="btn btn-sm" disabled title="VAT working and reports – coming in the VAT desk">VAT desk · soon</button>`;
   const row=p=>{const[pc,pt]=ST_PILL[p.st];return `<tr><td><b>${esc(p.label)}</b></td><td>${fmtDate(ymd(p.due))}</td><td><span class="pill ${pc}">${pt}</span></td>
     <td class="sub2">${p.rec&&p.rec.status==='Filed'?fmtDate(p.rec.date)+(p.rec.ref?' · '+esc(p.rec.ref):'')+(p.rec.amount?' · AED '+money(p.rec.amount):''):p.st==='filed'?'Task completed':'—'}</td>
     <td class="r">${p.st==='filed'?(p.rec?`<span class="link" data-act="vat-unfile" data-id="${c.id}" data-key="${p.key}">Undo</span>`:''):p.st==='open'?'<span class="sub2">opens '+fmtDate(ymd(new Date(p.e.getTime()+864e5)))+'</span>':`<button class="btn btn-sm btn-primary" data-act="vat-file" data-id="${c.id}" data-key="${p.key}" data-label="${esc(p.label)}">Mark filed</button>`}</td></tr>`;};
   return svBox('🧾','VAT Filing',head,`
-    <div class="cd-form">${F.sel('vatCycle','VAT tax periods (stagger)',VAT_CYCLES,'span2')}${F.inp('trn','VAT TRN')}</div>
     ${c.vatCycle?`<div class="qring">${ring.map((p,i)=>`<div class="q ${p.st}${monthly?' m':''}" title="${esc(p.label)} · due ${fmtDate(ymd(p.due))} · ${ST_PILL[p.st][1]}"><i>${monthly?MON3[p.e.getMonth()]:'Q'+(i+1)}</i><span>${monthly?'':esc(MON3[p.s.getMonth()]+'–'+MON3[p.e.getMonth()])}</span></div>`).join('')}
       <div class="q-key"><span class="filed">Filed</span><span class="pending">Pending</span><span class="overdue">Overdue</span><span class="open">In progress</span></div></div>
     <table class="tbl sm"><thead><tr><th>Tax period</th><th>Due</th><th>Status</th><th>Filed</th><th></th></tr></thead><tbody>
       ${cur?row(cur):''}${rows.map(row).join('')||'<tr><td colspan="5" class="empty" style="padding:16px">No ended periods since the contract started.</td></tr>'}</tbody></table>
     <div class="cd-hint">A period opens as <b>Pending</b> the day after it ends; the return is due on the 28th of the next month (Saturday / Sunday → Monday).</div>`
-    :'<div class="cd-hint">Choose the VAT tax periods to see the filing calendar.</div>'}`,'wide');
+    :'<div class="cd-hint">Choose the VAT tax periods in the panel header to see the filing calendar.</div>'}`,'wide');
 }
 function ctYears(c,db){
   const ye=pDate(c.taxYearEnd);if(!ye)return[];const today=todayD(),out=[];
@@ -1023,8 +1022,10 @@ function bkPanel(c,db,F){
   let lag=null;if(c.bkUpto){const[y,m]=c.bkUpto.split('-').map(Number);lag=(today.getFullYear()*12+today.getMonth())-(y*12+m);}   // 1 = last month is done
   const lagTxt=lag==null?'<span class="sub2">not set</span>':`${MON3[+c.bkUpto.slice(5,7)-1]} ${c.bkUpto.slice(0,4)} <span class="pill ${lag<=1?'completed':lag===2?'pending':'high'}">${lag<=1?'current':(lag-1)+' month'+(lag>2?'s':'')+' behind'}</span>`;
   const ago=c.lastContact?Math.round((today-pDate(c.lastContact))/864e5):null;
-  const head=`<span class="pill blue">${esc(plan.bookkeeping)} review</span><button class="btn btn-sm" disabled title="Bookkeeping working – coming in the bookkeeping desk">Bookkeeping desk · soon</button>`;
   const opt=(a,v)=>a.map(x=>`<option${x===v?' selected':''}>${x}</option>`).join('');
+  const head=`<span class="pill blue">${esc(plan.bookkeeping)} review</span><input class="hd-in" type="date" id="bk_date" value="${tStr}" title="Review date"><input class="hd-in" type="month" id="bk_upto" value="${esc(c.bkUpto||ymd(new Date(today.getFullYear(),today.getMonth(),0)).slice(0,7))}" title="Books updated up to">
+    <select class="hd-in" id="bk_contact" title="Contact with the client">${opt(['Called – responsive','Called – no answer','WhatsApp sent','Email sent','Meeting','Documents received','No contact needed'],'Called – responsive')}</select>
+    <select class="hd-in" id="bk_status" title="Status">${opt(['On track','Waiting for client documents','Behind schedule'],'On track')}</select><input class="hd-in" id="bk_note" placeholder="Note" style="width:150px"><button class="btn btn-primary btn-sm" data-act="bk-log" data-id="${c.id}">Log review</button><span class="hd-sep"></span><button class="btn btn-sm" disabled title="Bookkeeping working – coming in the bookkeeping desk">Desk · soon</button>`;
   return svBox('📚','Bookkeeping',head,`
     <div class="kpis"><div class="kpi"><div class="l">Books updated to</div><div class="v">${lagTxt}</div></div>
       <div class="kpi"><div class="l">Last review</div><div class="v">${last?fmtDate(last.date)+` <span class="pill ${/Behind/.test(last.status)?'high':/Waiting/.test(last.status)?'pending':'completed'}">${esc(last.status)}</span>`:'<span class="sub2">none yet</span>'}</div></div>
@@ -1032,12 +1033,7 @@ function bkPanel(c,db,F){
       <div class="kpi"><div class="l">Client contact</div><div class="v">${c.lastContact?fmtDate(c.lastContact)+` <span class="sub2">(${ago===0?'today':ago+'d ago'})</span>`:'<span class="sub2">not logged</span>'}</div></div></div>
     <div class="cd-form">${F.sel('plan.bookkeeping','Review every',[['auto','Automatic ('+plan.bookkeeping+')'],['Weekly','Weekly'],['Fortnightly','Every 2 weeks'],['Monthly','Monthly']])}
       ${F.sel('bkSoftware','Accounting software',['','Manager.io','Zoho Books','QuickBooks','Tally','Xero','Excel','Other'])}${F.inp('bookkeepingStart','Bookkeeping started','date')}</div>
-    <div class="bk-log"><b>Log this week’s review</b>
-      <div class="bk-row"><input type="date" id="bk_date" value="${tStr}" title="Review date"><input type="month" id="bk_upto" value="${esc(c.bkUpto||ymd(new Date(today.getFullYear(),today.getMonth(),0)).slice(0,7))}" title="Books updated up to">
-        <select id="bk_contact" title="Contact with the client">${opt(['Called – responsive','Called – no answer','WhatsApp sent','Email sent','Meeting','Documents received','No contact needed'],'Called – responsive')}</select>
-        <select id="bk_status" title="Status">${opt(['On track','Waiting for client documents','Behind schedule'],'On track')}</select></div>
-      <div class="bk-row"><input id="bk_note" placeholder="Note – e.g. bank statements for Aug still pending"><button class="btn btn-primary btn-sm" data-act="bk-log" data-id="${c.id}">Log review</button></div></div>
-    ${rv.length?`<table class="tbl sm" style="margin-top:10px"><thead><tr><th>Review</th><th>Books to</th><th>Client contact</th><th>Status</th><th>Note</th><th>By</th></tr></thead><tbody>
+    ${rv.length?`<table class="tbl sm"><thead><tr><th>Review</th><th>Books to</th><th>Client contact</th><th>Status</th><th>Note</th><th>By</th></tr></thead><tbody>
       ${rv.slice(0,8).map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${x.upto?MON3[+x.upto.slice(5,7)-1]+' '+x.upto.slice(0,4):'—'}</td><td>${esc(x.contact)}</td><td><span class="pill ${/Behind/.test(x.status)?'high':/Waiting/.test(x.status)?'pending':'completed'}">${esc(x.status)}</span></td><td class="sub2">${esc(x.note||'')}</td><td class="sub2">${esc(x.by||'')}</td></tr>`).join('')}</tbody></table>`:''}`,'wide');
 }
 const SVC_TRACK={
@@ -1058,8 +1054,7 @@ function trackPanel(name,o,db,kind){
   let extra='';
   if(cfg.fy&&kind==='client'){const r=remindersOn(db),d=r?r.R.deadlines(o,todayD(),400,r.P).find(x=>x.kind===cfg.fy&&x.due>=ymd(new Date(Date.now()-60*864e5))):null;
     extra=`<div class="cd-hint">${o.taxYearEnd?`Year end ${fmtDate(o.taxYearEnd)}`:'Set the financial year end under Corporate Tax / Client details'}${d?` · due <b>${fmtDate(d.due)}</b>`:''} · <a class="link" href="../audit/?client=${encodeURIComponent(o.name)}">Open in Audit Desk</a></div>`;}
-  return svBox(cfg.icon,name,`<span class="pill ${tone}">${esc(st)}</span>`,`<div class="cd-form c2">
-    <div class="cd-f"><label>Status</label><select ${at('status')}>${cfg.st.map(x=>`<option${x===st?' selected':''}>${esc(x)}</option>`).join('')}</select></div>
+  return svBox(cfg.icon,name,`<select class="hd-in pdc-sel ${tone}" title="Status" ${at('status')}>${cfg.st.map(x=>`<option${x===st?' selected':''}>${esc(x)}</option>`).join('')}</select>`,`<div class="cd-form c2">
     ${cfg.ref?f('ref',cfg.ref):''}${f('date',cfg.fy?'Started':'Date submitted / started','date')}
     ${cfg.per?f('period',cfg.per):''}${cfg.amt?f('amount',cfg.amt,'number'):''}${f('next',cfg.next||'Next follow-up','date')}
     <div class="cd-f span3"><label>Notes</label><textarea rows="1" ${at('note')}>${esc(s.note||'')}</textarea></div></div>${extra}`,'half');
@@ -1112,7 +1107,7 @@ function pdcSection(c,db){
   const tStr=ymd(new Date()),inHand=rows.filter(r=>['In hand','Deposited'].includes(pdcStatus(r))),nxt=inHand.filter(r=>pdcStatus(r)==='In hand')[0];
   const sched=db.agreements.filter(a=>(a.clientId===c.id||a.clientName===c.name)&&(a.cheques||[]).length);
   const tone={'In hand':'pending','Deposited':'blue','Cleared':'completed','Bounced':'high','Returned to client':'low'};
-  return cdSec(5,'cd-s5','PDC management','',`
+  return cdSec(5,'cd-s5','PDC management',`<select class="hd-in" id="pd_type"><option>PDC</option><option>CDC</option></select><input class="hd-in" id="pd_no" placeholder="Cheque no." style="width:90px"><input class="hd-in" id="pd_bank" placeholder="Bank" style="width:90px"><input class="hd-in" type="date" id="pd_date" title="Cheque date"><input class="hd-in" type="number" step="any" id="pd_amt" placeholder="Amount" style="width:90px"><button class="btn btn-sm btn-primary" data-act="pdc-add" data-id="${c.id}">＋ Add cheque</button>`,`
     <div class="kpis"><div class="kpi"><div class="l">Cheques in hand</div><div class="v">${inHand.length} · AED ${money(inHand.reduce((s,r)=>s+(+r.amount||0),0))}</div></div>
       <div class="kpi"><div class="l">Next to deposit</div><div class="v">${nxt?fmtDate(nxt.chequeDate)+(nxt.chequeDate<=tStr?' <span class="pill high">due</span>':''):'—'}</div></div>
       <div class="kpi"><div class="l">Cleared</div><div class="v">${rows.filter(r=>pdcStatus(r)==='Cleared').length}</div></div>
@@ -1120,7 +1115,6 @@ function pdcSection(c,db){
     <div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th>Cheque date</th><th>Cheque no.</th><th>Bank</th><th>Type</th><th class="r">Amount</th><th>Receipt</th><th>Status</th></tr></thead><tbody>
     ${rows.map(r=>{const st=pdcStatus(r),late=st==='In hand'&&r.chequeDate&&r.chequeDate<=tStr;return `<tr${late?' class="late"':''}><td>${r.chequeDate?fmtDate(r.chequeDate):'—'}${late?' <span class="pill high">deposit</span>':''}</td><td>${esc(r.chequeNo||'—')}</td><td>${esc(r.bank||'—')}</td><td>${esc(r.method)}</td><td class="r mono">${money(r.amount)}</td>
       <td><span class="link" data-goto="#/receipt/${r.id}">${esc(r.receiptNo)}</span></td><td><select data-pdc="${r.id}" class="pdc-sel ${tone[st]}">${PDC_ST.map(x=>`<option${x===st?' selected':''}>${x}</option>`).join('')}</select></td></tr>`;}).join('')||'<tr><td colspan="7" class="empty" style="padding:16px">No cheques recorded.</td></tr>'}</tbody></table></div>
-    <div class="bk-row" style="margin-top:12px"><select id="pd_type"><option>PDC</option><option>CDC</option></select><input id="pd_no" placeholder="Cheque no."><input id="pd_bank" placeholder="Bank"><input type="date" id="pd_date" title="Cheque date"><input type="number" step="any" id="pd_amt" placeholder="Amount (AED)"><button class="btn btn-sm btn-primary" data-act="pdc-add" data-id="${c.id}">＋ Add cheque</button></div>
     ${sched.length?`<div class="cd-grp" style="margin-top:16px">Cheque schedules in agreements</div>${sched.map(a=>`<div class="sub2" style="margin-bottom:6px"><span class="link" data-goto="#/agreement/${a.id}">${esc(a.title)}</span> — ${a.cheques.map(q=>`${esc(q.type||'PDC')} ${q.date?fmtDate(q.date):'—'} · AED ${money(q.amount||0)}`).join(' &nbsp;|&nbsp; ')}</div>`).join('')}`:''}
     <div class="cd-hint">A PDC creates a high-priority reminder on its date. Marking it <b>Cleared</b> credits the ledger and closes the reminder.</div>`);
 }
@@ -1159,18 +1153,10 @@ function asideHtml(kind,o,db){
 function renderClientDetail(id){
   const db=load();const c=db.clients.find(x=>x.id===id);if(!c){app.innerHTML='<div class="empty">Client not found</div>';return;}
   const p=db.partners.find(x=>x.id===c.partnerId),R=window.FTReminders,gaps=R?R.missing(c):[];
-  const rows=ledgerRows(c,db),dr=rows.reduce((s,r)=>s+r.debit,0),cr=rows.reduce((s,r)=>s+r.credit,0),out=dr-cr;
-  const chq=db.receipts.filter(r=>r.clientId===c.id&&(r.method==='PDC'||r.method==='CDC')&&['In hand','Deposited'].includes(pdcStatus(r)));
   app.innerHTML=`
   <div class="page-head cd-head"><div style="display:flex;gap:10px;align-items:center"><a class="back" href="#/clients">←</a>
     <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="color:var(--muted);font-size:12.5px"><span class="pill active">${c.status}</span>${privateChip(c)} &nbsp;👤 ${esc((c.staff||[]).join(', ')||(p?p.name:'Unassigned'))}${!blankV(c.trn)?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><a class="btn" href="../audit/?client=${encodeURIComponent(c.name)}" title="Open this client in the Audit Desk – financial statements and the audit report" style="text-decoration:none">📊 Audit Desk</a><a class="btn" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive" style="text-decoration:none">📁 Cloud folder</a><button class="btn" data-act="edit-client" data-id="${c.id}" title="Status, partner and privacy">✎ Edit</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
-  <div class="stats cd-stats">
-    <div class="stat"><div class="lbl">Invoiced</div><div class="num">AED ${money(dr)}</div></div>
-    <div class="stat"><div class="lbl">Received</div><div class="num" style="color:var(--brand)">AED ${money(cr)}</div></div>
-    <div class="stat"><div class="lbl">Outstanding</div><div class="num" style="color:${out>0?'var(--red)':'var(--ink)'}">AED ${money(out)}</div></div>
-    <div class="stat"><div class="lbl">Contract price</div><div class="num">${+c.contractPrice?'AED '+money(c.contractPrice):'—'}</div></div>
-    <div class="stat"><div class="lbl">Cheques in hand</div><div class="num">${chq.length?'AED '+money(chq.reduce((s,r)=>s+(+r.amount||0),0)):'—'}</div></div></div>
   ${cdNav([['cd-s1','1 · Details'],['cd-s2','2 · Services'],['cd-s3','3 · Ledger'],['cd-s4','4 · Reminders'],['cd-s5','5 · PDC'],['cd-s6','6 · Documents']])}
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('client',c,db,gaps)}
@@ -1178,7 +1164,7 @@ function renderClientDetail(id){
     ${ledgerSection(c,db)}
     ${remindersSection(c,db)}
     ${pdcSection(c,db)}
-    ${cdSec(6,'cd-s6','Documents','',clientDocsSection(c,db).replace('margin-top:20px','margin-top:0'))}
+    ${cdSec(6,'cd-s6','Documents',`<button class="btn btn-sm" data-act="new-invoice-for" data-id="${c.id}">＋ Invoice</button><button class="btn btn-sm" data-act="new-receipt-for" data-id="${c.id}">＋ Receipt</button><button class="btn btn-sm" data-act="agr-for-client" data-id="${c.id}">＋ Agreement</button><button class="btn btn-sm" data-act="quo-for-client" data-id="${c.id}">＋ Quotation</button>`,clientDocsSection(c,db).replace('margin-top:20px','margin-top:0').replace(/<button class="btn btn-sm" data-act="[^"]+" data-id="[^"]+">＋ New<\/button>/g,''))}
   </div>${asideHtml('client',c,db)}</div>`;
 }
 function renderLeadDetail(id){
@@ -1196,7 +1182,7 @@ function renderLeadDetail(id){
     ${detailsSection('lead',l,db,[])}
     ${servicesSection('lead',l,db)}
     ${cdSec(3,'cd-s4','Follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-lead="${l.id}">＋ Task</button>`,'<div id="cp-slot"></div>')}
-    ${cdSec(4,'cd-s6','Quotations &amp; agreements','',(qts.map(q=>docRow('📝','#/quotation/'+q.id,q.title,fmtDate(q.date)+' · AED '+money(q.amount),q.status)).join('')+ags.map(a=>docRow('📄','#/agreement/'+a.id,a.title,fmtDate(a.date)+' · AED '+money(a.amount),a.status)).join(''))||'<div class="empty" style="padding:18px">None yet.</div>')}
+    ${cdSec(4,'cd-s6','Quotations &amp; agreements',`<button class="btn btn-sm" data-act="new-quote-for" data-type="lead" data-id="${l.id}">＋ Quotation</button><button class="btn btn-sm" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">＋ Agreement</button>`,(qts.map(q=>docRow('📝','#/quotation/'+q.id,q.title,fmtDate(q.date)+' · AED '+money(q.amount),q.status)).join('')+ags.map(a=>docRow('📄','#/agreement/'+a.id,a.title,fmtDate(a.date)+' · AED '+money(a.amount),a.status)).join(''))||'<div class="empty" style="padding:18px">None yet.</div>')}
   </div>${asideHtml('lead',l,db)}</div>`;
 }
 
