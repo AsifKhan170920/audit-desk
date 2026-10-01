@@ -262,7 +262,7 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
 .cd-sec.locked .cd-f label{margin-bottom:0}
 .cd-sec.locked .cd-f input,.cd-sec.locked .cd-f select{height:24px}
 .cd-sec.locked .cd-h .act>:not(.ed-tg):not(.pill),.cd-sec.locked .sv-h .act>button,.cd-sec.locked .sv-h .act>.link,.cd-sec.locked .sv-h .act>.hd-sep,.cd-sec.locked .sv-h .hd-in:not([data-cf]),
-.cd-sec.locked .cd-b button:not([data-act="pw-eye"]),.cd-sec.locked .cd-b .link[data-act]{display:none!important}
+.cd-sec.locked .cd-b button:not([data-act="pw-eye"]),.cd-sec.locked .cd-b .link[data-act]:not([data-act="cd-jump"]),.cd-sec.locked [data-cp]{display:none!important}
 .cd-sec.locked .svc-chk label:not(.on){display:none}
 .cd-sec.locked .svc-chk input{display:none}
 .cd-sec.locked .svc-chk label{cursor:default}
@@ -358,6 +358,32 @@ tr.late td{background:#fff7f7}
 .pdc-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 10px}
 .pdc-tabs button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 11px;font-weight:600;font-size:12px;color:var(--muted)}
 .pdc-tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+/* reminders & follow-up: plain blocks a beginner can read top to bottom */
+.rm{display:flex;flex-direction:column;gap:8px}
+.rm-blk{border:1px solid var(--line);border-radius:9px;padding:8px 12px}
+.rm-t{font-size:13px;color:var(--ink);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.rm-status{border-radius:8px;padding:7px 10px;border-left:4px solid}
+.rm-status.due{background:var(--red-soft);border-color:var(--red)}.rm-status.due .rm-big{color:var(--red)}
+.rm-status.ok{background:var(--green-soft);border-color:#34a368}.rm-status.ok .rm-big{color:var(--green)}
+.rm-big{font-size:14px}.rm-small{font-size:12px;color:var(--muted);margin-top:1px}
+.rm-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.rm-hint{font-size:12px;color:var(--muted)}
+.rm-list{display:flex;flex-direction:column}
+.rm-li{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:10px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:12.5px}
+.rm-li:first-child{border-top:0}
+.rm-li.rm-4{grid-template-columns:96px minmax(0,1fr) auto auto}
+.rm-li.rm-2{grid-template-columns:minmax(0,1fr) auto}
+.rm-d{color:var(--muted)}.rm-d.late{color:var(--red)}
+.rm-when{color:var(--muted);font-size:12px;white-space:nowrap}.rm-when.soon{color:var(--amber)}
+.rm-chip{display:inline-flex;gap:6px;align-items:center;background:var(--brand-soft);color:var(--brand-d);border-radius:20px;padding:2px 10px;font-size:12.5px}
+.rm-x{cursor:pointer;opacity:.7}.rm-x:hover{opacity:1;color:var(--red)}
+.rm-sel{border:1px solid var(--line);border-radius:7px;padding:3px 6px;font-size:12px;background:#fff;height:26px}
+.rm-warn{background:var(--amber-soft);color:#7a4a06;border-radius:9px;padding:7px 12px;font-size:12.5px;border-left:4px solid #f59e0b}
+.rm-set summary{cursor:pointer;color:var(--brand-d);font-size:13px;list-style:none;display:flex;gap:8px;align-items:center}
+.rm-set summary::-webkit-details-marker{display:none}
+.rm-set[open] summary{margin-bottom:6px}
+.rm .card{box-shadow:none;border-radius:9px}.rm .card-p{padding:8px 12px}
+@media(max-width:600px){.rm-li,.rm-li.rm-4{grid-template-columns:1fr auto}.rm-li .sub2{display:none}}
 /* only the section titles are bold on the client / lead page */
 .cd-head .btn,.cd-nav button,.cd-wrap,.cd-wrap *{font-weight:400!important}
 .cd-wrap .cd-h h2,.cd-wrap .sv-h b,.cd-wrap .sec-title{font-weight:700!important}
@@ -1127,13 +1153,65 @@ function ledgerSection(c,db){
     <div class="cd-hint">Invoices are debits and receipts credits; a cheque counts once it is marked <b>Cleared</b> under PDC management.</div>`);
 }
 
-/* ----- section 4: reminders & follow-up (the Contact & schedule card is placed in #cp-slot) ----- */
+/* ----- section 4: reminders & follow-up – simple blocks, one under the other ----- */
 function remindersSection(c,db){
-  const rel=db.tasks.filter(t=>t.clientId===c.id&&t.status!=='Completed').sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
-  return cdSec(4,'cd-s4','Reminders &amp; follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-client="${c.id}">＋ Task</button><button class="btn btn-sm" data-act="gen-client-tasks" data-id="${c.id}">⟳ Deadlines</button>`,`
-    <div class="cd-two"><div id="cp-slot"></div>
-    <div><div class="cd-grp">Open tasks</div>${rel.length?rel.slice(0,10).map(t=>`<div class="rel-task" data-goto="#/task/${t.id}" style="cursor:pointer;margin-top:8px"><div class="ic">🔔</div><div style="flex:1"><b style="font-size:13px">${esc(t.title)}</b><div style="color:var(--faint);font-size:11px">${esc(t.type)} · ${fmtDate(t.dueDate)} · ${esc((t.assignees||[]).join(', '))}</div></div><span class="pill ${statusPill(t.status)}">${esc(t.status)}</span></div>`).join(''):'<div class="empty" style="padding:18px">No open tasks.</div>'}</div></div>
-    ${clientServicesSection(c,db).replace('<div style="margin-top:20px">','<div style="margin-top:16px">')}`);
+  const r=remindersOn(db),today=todayD(),tStr=ymd(today),day=864e5;
+  const plan=r?r.R.planOf(c,r.P):{healthDays:7,bookkeeping:'Monthly',fsMonths:3,auditMonths:4,missingDays:7},own=c.plan||{},P=r?r.P:{};
+  const when=n=>n===0?'today':n===1?'tomorrow':n>0?`in ${n} days`:n===-1?'yesterday':`${-n} days ago`;
+  const diff=d=>Math.round((pDate(d)-today)/day);
+  // check-in
+  let next=c.lastContact?ymd(new Date(pDate(c.lastContact).getTime()+plan.healthDays*day)):tStr;
+  if(c.nextContact&&c.nextContact>tStr)next=c.nextContact;
+  const nd=diff(next),due=nd<=0,last=(c.contacts||[])[0];
+  const big=due?(nd<0?`Check-in is ${-nd} day${nd<-1?'s':''} late`:'Check-in is due today'):`Next check-in ${when(nd)} · ${fmtDate(next)}`;
+  const recent=(c.contacts||[]).slice(0,3);
+  // people, gaps, deadlines, tasks
+  const gaps=r?r.R.missing(c):[],team=window.FT_TEAM||[];
+  const sug=r&&r.R.suggestAssignee?r.R.suggestAssignee(c,db,team):null;
+  const showSug=sug&&!(c.staff||[]).some(n=>r.R.nameMatch(n,{name:sug.name}));
+  const dls=r?r.R.deadlines(c,today,120,r.P).filter(d=>d.due>=tStr).slice(0,6):[];
+  const dStatus=d=>{const t=db.tasks.find(x=>x.code===d.code||(x.clientId===c.id&&x.title===d.title));return t?t.status:'Scheduled';};
+  const tasks=db.tasks.filter(t=>t.clientId===c.id&&t.status!=='Completed').sort((a,b)=>(a.dueDate||'9').localeCompare(b.dueDate||'9'));
+  const tone={'Not Started':'low','In Progress':'blue','Pending to Client':'pending','Completed':'completed','Scheduled':'low'};
+  const sel=(key,opts,val)=>`<select class="rm-sel" data-plan="${key}" data-id="${c.id}">${opts.map(([v,t])=>`<option value="${v}"${String(val)===String(v)?' selected':''}>${t}</option>`).join('')}</select>`;
+  const has=k=>svcList(c).some(s=>k.test(s));
+  return cdSec(4,'cd-s4','Reminders &amp; follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-client="${c.id}">＋ Task</button><button class="btn btn-sm" data-act="gen-client-tasks" data-id="${c.id}" title="Create the tasks for the coming deadlines now">⟳ Deadlines</button>`,`<div class="rm">
+
+  <div class="rm-blk"><div class="rm-t">🤝 Stay in touch</div>
+    <div class="rm-status ${due?'due':'ok'}"><div class="rm-big">${big}</div>
+      <div class="rm-small">${c.lastContact?`Last contact ${when(-Math.round((today-pDate(c.lastContact))/day))}${last?' – '+(CD_CONTACT[last.type]||esc(last.type)).replace(/^\S+\s/,'').toLowerCase()+(last.by?' by '+esc(last.by):''):''}`:'No contact logged yet'} · we check in every ${plan.healthDays} days</div></div>
+    <div class="rm-btns">${[['call','📞 Call'],['message','💬 Message'],['feedback','⭐ Feedback'],['meeting','🤝 Meeting']].map(([k,t])=>`<button class="btn btn-sm" data-cp="contact" data-type="${k}" data-id="${c.id}">${t}</button>`).join('')}
+      <span class="rm-hint">Talked to the client? Log it here and the check-in clock restarts.</span></div>
+    ${recent.length?`<div class="rm-list">${recent.map(x=>`<div class="rm-li"><span class="rm-d">${fmtDate(x.date)}</span><span>${CD_CONTACT[x.type]||esc(x.type)}${x.note?' – '+esc(x.note):''}</span><span class="sub2">${esc(x.by||'')}</span></div>`).join('')}</div>`:''}
+  </div>
+
+  <div class="rm-blk"><div class="rm-t">👥 Looked after by</div>
+    <div class="rm-btns" style="margin:0">${(c.staff||[]).map(n=>`<span class="rm-chip">${esc(n)}<span class="rm-x" data-cp="unassign" data-id="${c.id}" data-name="${esc(n)}" title="Remove">✕</span></span>`).join('')||'<span style="color:var(--red)">Nobody yet – choose a staff member</span>'}
+      <select class="rm-sel" data-cp-assign="${c.id}"><option value="">＋ Add staff…</option>${(db.team||[]).filter(n=>!(c.staff||[]).includes(n)).map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
+    ${showSug?`<div class="rm-hint" style="margin-top:6px">Best match: ${esc(sug.name)} – ${esc(sug.reason)} <span class="link" data-cp="auto-assign" data-id="${c.id}">assign</span></div>`:''}
+  </div>
+
+  ${gaps.length?`<div class="rm-warn">⚠ Missing details: ${esc(gaps.join(', '))}. <span class="link" data-act="cd-jump" data-to="cd-s1">Fill them in under Client details</span> – a reminder repeats every ${plan.missingDays} days until they are complete.</div>`:''}
+
+  <div class="rm-blk"><div class="rm-t">📅 Coming up <span class="sub2">deadlines in the next 4 months</span></div>
+    ${dls.length?`<div class="rm-list">${dls.map(d=>{const n=diff(d.due),st=dStatus(d);return `<div class="rm-li rm-4"><span class="rm-d">${fmtDate(d.due)}</span><span>${esc(d.title.replace(' — '+c.name,''))}</span><span class="rm-when${n<=7?' soon':''}">${when(n)}</span><span class="pill ${tone[st]||'low'}">${esc(st)}</span></div>`;}).join('')}</div>`:'<div class="rm-hint">Nothing due – tick the services under Client details and set the VAT periods / year end.</div>'}
+  </div>
+
+  <div class="rm-blk"><div class="rm-t">✅ Open tasks <span class="sub2">${tasks.length?tasks.length+' to do':'all done'}</span></div>
+    ${tasks.length?`<div class="rm-list">${tasks.slice(0,12).map(t=>{const n=t.dueDate?diff(t.dueDate):null;return `<div class="rm-li rm-4"><span class="rm-d${n!=null&&n<0?' late':''}">${t.dueDate?fmtDate(t.dueDate):'—'}</span><span class="link" data-goto="#/task/${t.id}" style="font-weight:400">${esc(t.title.replace(' — '+c.name,''))}</span><span class="sub2">${esc((t.assignees||[]).join(', ')||'unassigned')}</span><select class="pdc-sel ${tone[t.status]||'low'}" data-cp-status="${t.id}">${TASK_STATUSES.map(s=>`<option${s===t.status?' selected':''}>${s}</option>`).join('')}</select></div>`;}).join('')}</div>`:'<div class="rm-hint">No open tasks for this client.</div>'}
+  </div>
+
+  <details class="rm-blk rm-set"><summary>⚙ Reminder settings <span class="sub2">automatic – change only if this client needs a different rhythm</span></summary>
+    <div class="rm-list">
+      <div class="rm-li rm-2"><span>Check in with the client every</span>${sel('healthDays',[['','Automatic ('+(+P.healthDays||7)+' days)'],[3,'3 days'],[7,'7 days'],[14,'14 days'],[30,'30 days']],own.healthDays||'')}</div>
+      ${has(/book/i)?`<div class="rm-li rm-2"><span>Bookkeeping review</span>${sel('bookkeeping',[['auto','Automatic ('+plan.bookkeeping+')'],['Weekly','Weekly'],['Fortnightly','Every 2 weeks'],['Monthly','Monthly']],own.bookkeeping||'auto')}</div>`:''}
+      ${has(/financial|audit|CT Filing/i)?`<div class="rm-li rm-2"><span>Financial statements due after year end</span>${sel('fsMonths',[['','Automatic ('+(+P.fsMonths||3)+' months)'],[2,'2 months'],[3,'3 months'],[4,'4 months'],[6,'6 months']],own.fsMonths||'')}</div>`:''}
+      ${has(/audit/i)?`<div class="rm-li rm-2"><span>Audit due after year end</span>${sel('auditMonths',[['','Automatic ('+(+P.auditMonths||4)+' months)'],[3,'3 months'],[4,'4 months'],[5,'5 months'],[6,'6 months']],own.auditMonths||'')}</div>`:''}
+      <div class="rm-li rm-2"><span>Remind about missing details every</span>${sel('missingDays',[['','Automatic ('+(+P.missingDays||7)+' days)'],[3,'3 days'],[7,'7 days'],[14,'14 days']],own.missingDays||'')}</div>
+    </div></details>
+
+  ${clientServicesSection(c,db).replace('<div style="margin-top:20px">','<div>')}
+  </div>`);
 }
 
 /* ----- section 5: PDC management ----- */
