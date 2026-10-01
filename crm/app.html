@@ -358,6 +358,9 @@ tr.late td{background:#fff7f7}
 .pdc-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 10px}
 .pdc-tabs button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 11px;font-weight:600;font-size:12px;color:var(--muted)}
 .pdc-tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+/* only the section titles are bold on the client / lead page */
+.cd-head .btn,.cd-nav button,.cd-wrap,.cd-wrap *{font-weight:400!important}
+.cd-wrap .cd-h h2,.cd-wrap .sv-h b,.cd-wrap .sec-title{font-weight:700!important}
 @media(max-width:1200px){.cd-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1100px){.cd-wrap{grid-template-columns:1fr}.cd-aside{position:static;max-height:none}.cd-two{grid-template-columns:1fr}}
 @media(max-width:760px){.sv-grid .sv.half{grid-column:1/-1}.cd-form,.kpis,.pdc-stats{grid-template-columns:1fr 1fr}.cd-stats{grid-template-columns:1fr 1fr}.q-key{margin-left:0}}
