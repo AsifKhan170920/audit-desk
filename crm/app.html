@@ -261,6 +261,7 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
 .cd-h .no{width:19px;height:19px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:10.5px;display:grid;place-items:center;flex:0 0 auto}
 .cd-h h2{font-size:13.5px;margin:0;font-weight:700}
 .cd-h .act,.sv-h .act{margin-left:auto;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.cd-h .hd-in{height:26px;padding:2px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fbfcfd;color:var(--ink);outline:none;min-width:0}.cd-h .hd-in:focus{border-color:var(--brand);background:#fff}.cd-h .hd-sep{width:1px;height:18px;background:var(--line);margin:0 2px}
 .cd-h .btn,.sv-h .btn,.cd-b .btn-sm{padding:3px 9px;font-size:12px;border-radius:7px}
 .cd-b{padding:10px 12px}
 .cd-grp{font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px}
@@ -1087,12 +1088,10 @@ function ledgerRows(c,db){
 }
 function ledgerSection(c,db){
   const rows=ledgerRows(c,db),dr=rows.reduce((s,r)=>s+r.debit,0),cr=rows.reduce((s,r)=>s+r.credit,0);
-  return cdSec(3,'cd-s3','Client ledger',`<button class="btn btn-sm" data-act="new-invoice-for" data-id="${c.id}">＋ Invoice</button><button class="btn btn-sm" data-act="new-receipt-for" data-id="${c.id}">＋ Receipt</button>`,`
+  return cdSec(3,'cd-s3','Client ledger',`<input class="hd-in" type="date" id="lg_date" value="${ymd(new Date())}" title="Entry date"><select class="hd-in" id="lg_type" title="Entry type"><option>Opening balance</option><option>Adjustment</option><option>Credit note</option><option>Write-off</option><option>Other</option></select><input class="hd-in" id="lg_ref" placeholder="Ref" style="width:70px"><input class="hd-in" type="number" step="any" id="lg_dr" placeholder="Debit" style="width:80px"><input class="hd-in" type="number" step="any" id="lg_cr" placeholder="Credit" style="width:80px"><button class="btn btn-sm" data-act="ledger-add" data-id="${c.id}">＋ Entry</button><span class="hd-sep"></span><button class="btn btn-sm" data-act="new-invoice-for" data-id="${c.id}">＋ Invoice</button><button class="btn btn-sm" data-act="new-receipt-for" data-id="${c.id}">＋ Receipt</button>`,`
     <div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th>Date</th><th>Type</th><th>Ref</th><th class="r">Debit</th><th class="r">Credit</th><th class="r">Balance</th><th></th></tr></thead><tbody>
     ${rows.map(r=>`<tr${r.go?` data-goto="${r.go}" style="cursor:pointer"`:''}><td>${r.date?fmtDate(r.date):'—'}</td><td>${esc(r.type)}</td><td>${esc(r.ref||'')}</td><td class="r mono">${r.debit?money(r.debit):''}</td><td class="r mono">${r.credit?money(r.credit):''}</td><td class="r mono"><b>${money(r.bal)}</b></td><td class="r">${r.lid?`<span class="link" data-act="ledger-del" data-id="${c.id}" data-key="${r.lid}" title="Delete this entry">✕</span>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="empty" style="padding:18px">No transactions yet.</td></tr>'}
     </tbody>${rows.length?`<tfoot><tr><td colspan="3"><b>Total</b></td><td class="r mono"><b>${money(dr)}</b></td><td class="r mono"><b>${money(cr)}</b></td><td class="r mono"><b style="color:${dr-cr>0?'var(--red)':'var(--green)'}">${money(dr-cr)}</b></td><td></td></tr></tfoot>`:''}</table></div>
-    <div class="bk-row" style="margin-top:12px"><input type="date" id="lg_date" value="${ymd(new Date())}"><select id="lg_type"><option>Opening balance</option><option>Adjustment</option><option>Credit note</option><option>Write-off</option><option>Other</option></select>
-      <input id="lg_ref" placeholder="Ref"><input type="number" step="any" id="lg_dr" placeholder="Debit"><input type="number" step="any" id="lg_cr" placeholder="Credit"><button class="btn btn-sm" data-act="ledger-add" data-id="${c.id}">＋ Entry</button></div>
     <div class="cd-hint">Invoices are debits and receipts credits; a cheque counts once it is marked <b>Cleared</b> under PDC management.</div>`);
 }
 
