@@ -131,6 +131,12 @@
           out.push({code: 'BK|' + name + '|' + ymd(next), kind: 'bookkeeping', title: 'Bookkeeping Review — ' + name, due: ymd(next), createOn: ymd(addDays(next, -9)), recurrence: 'Monthly', priority: 'Medium', checklist: CHECK.bookkeeping});
       }
     }
+    // trade licence renewal: reminder opens the set number of days before expiry (30 by default)
+    var lx = parse(c.licenceExpiry);
+    if (lx) { var lead = +c.licRemindDays || 30, lopen = addDays(lx, -lead);
+      if (lx >= addDays(today, -60) && lopen <= horizon)
+        out.push({code: 'LIC|' + name + '|' + ymd(lx), kind: 'licence', title: 'Trade Licence Renewal — ' + name, due: ymd(lx), createOn: ymd(lopen), recurrence: 'None', priority: 'High',
+          checklist: ['Remind the client the licence expires on ' + ymd(lx), 'Collect renewal documents (tenancy contract, passports, Emirates IDs)', 'Confirm the renewal and update the new expiry date in the CRM']}); }
     out.sort(function (a, b) { return a.due < b.due ? -1 : 1; });
     return out;
   }

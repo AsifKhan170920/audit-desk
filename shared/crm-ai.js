@@ -388,7 +388,11 @@
         body: JSON.stringify({model: km.model, max_tokens: 2500, system: systemPrompt(), tools: TOOLS, messages: messages})});
     } catch (e) { throw new Error('Could not reach Claude – check the internet connection.'); }
     var body = null; try { body = await res.json(); } catch (e) {}
-    if (!res.ok) {
+    if (!res.ok) apiError(res, body);
+    return body;
+  }
+  function apiError(res, body) {
+    {
       var msg = (body && body.error && body.error.message) || res.statusText;
       if (res.status === 401) throw new Error('The Claude API key is not valid. Open ⚙ settings to add a correct key.');
       if (res.status === 404 && /model/i.test(msg)) throw new Error('This Claude model is not available for the key. Choose another model in ⚙ settings.');
@@ -396,7 +400,25 @@
       if (/credit|billing|balance/i.test(msg)) throw new Error('The Anthropic account has no credit – add credit at console.anthropic.com.');
       throw new Error('Claude error: ' + msg);
     }
-    return body;
+  }
+  /* read a document (MOA, trade licence …) and return the fields described by the tool – used on the client page */
+  async function readDocument(file, tool, instruction) {
+    var km = await keyAndModel();
+    if (!km.key) throw new Error('No Claude API key yet – an admin can add the company key in Users & access on the portal.');
+    var b64 = await new Promise(function (ok, bad) { var r = new FileReader(); r.onload = function () { ok(String(r.result).split(',')[1] || ''); }; r.onerror = function () { bad(new Error('Could not open the file.')); }; r.readAsDataURL(file); });
+    var type = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : 'image/jpeg');
+    var block = type === 'application/pdf' ? {type: 'document', source: {type: 'base64', media_type: 'application/pdf', data: b64}} : {type: 'image', source: {type: 'base64', media_type: type, data: b64}};
+    var res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {method: 'POST',
+        headers: {'content-type': 'application/json', 'x-api-key': km.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'},
+        body: JSON.stringify({model: km.model, max_tokens: 4000, tools: [tool], tool_choice: {type: 'tool', name: tool.name}, messages: [{role: 'user', content: [block, {type: 'text', text: instruction}]}]})});
+    } catch (e) { throw new Error('Could not reach Claude – check the internet connection.'); }
+    var body = null; try { body = await res.json(); } catch (e) {}
+    if (!res.ok) apiError(res, body);
+    var use = ((body && body.content) || []).filter(function (b) { return b.type === 'tool_use'; })[0];
+    if (!use) throw new Error('Claude could not read the details – try a clearer scan.');
+    return use.input;
   }
   function trimHistory() {
     // keep the conversation small: cut at a plain user message
@@ -952,6 +974,6 @@
       toParent({type: 'ready'});
     }
   }
-  window.CRMAI = {ask: ask, tools: TOOLS, run: RUN, open: function () { UI.open(true); }, embed: EMBED, _history: function () { return history; }};
+  window.CRMAI = {readDocument: readDocument, ask: ask, tools: TOOLS, run: RUN, open: function () { UI.open(true); }, embed: EMBED, _history: function () { return history; }};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

@@ -386,6 +386,10 @@ tr.late td{background:#fff7f7}
 @media(max-width:600px){.rm-li,.rm-li.rm-4{grid-template-columns:1fr auto}.rm-li .sub2{display:none}}
 table.tbl.pf td{padding:5px 8px}
 table.tbl.pf tr.pf-tot td{border-top:2px solid var(--line);font-size:13.5px}
+.tb-in{width:100%;border:1px solid var(--line);border-radius:6px;padding:3px 6px;height:26px;font-size:12.5px;background:#fbfcfd;color:var(--ink);outline:none;min-width:60px}
+.tb-in:focus{border-color:var(--brand);background:#fff}
+.cd-sec.locked .tb-in{border-color:transparent;background:transparent;padding-left:0;-webkit-appearance:none;appearance:none}
+.cd-sec.locked input.tb-in[type=number]{text-align:right}
 /* only the section titles are bold on the client / lead page */
 .cd-head .btn,.cd-nav button,.cd-wrap,.cd-wrap *{font-weight:400!important}
 .cd-wrap .cd-h h2,.cd-wrap .sv-h b,.cd-wrap .sec-title{font-weight:700!important}
@@ -995,7 +999,10 @@ function cdF(kind,o,gaps){
 /* each section opens locked (plain text); its Edit toggle unlocks the fields and the buttons that change things */
 let CD_CUR='';const cdEditOn={};
 const cdIsEdit=sec=>!!cdEditOn[CD_CUR+'|'+sec];
-function cdSec(n,id,title,actions,body){const on=cdIsEdit(id);return `<section class="cd-sec ${on?'editing':'locked'}" id="${id}"><div class="cd-h"><span class="no">${n}</span><h2>${title}</h2><div class="act">${actions||''}<button class="ed-tg" data-act="cd-edit" data-key="${id}" title="${on?'Lock this section – changes are already saved':'Unlock this section to change it'}">${on?'✓ Done':'✎ Edit'}</button></div></div><div class="cd-b">${body}</div></section>`;}
+let CD_N=0,CD_SECS=[];
+const CD_SHORT={'Client details':'Details','Lead details':'Details','Company information (MOA)':'Company','Client ledger':'Ledger','Reminders &amp; follow-up':'Reminders','PDC management':'PDC','Profit calculator':'Profit'};
+function cdFinish(html){return html.replace('<!--CDNAV-->',cdNav(CD_SECS.map(([id,no,t])=>[id,no+' · '+(CD_SHORT[t]||t.replace(/&amp;/g,'&'))])));}
+function cdSec(n,id,title,actions,body){const on=cdIsEdit(id),no=++CD_N;CD_SECS.push([id,no,title]);return `<section class="cd-sec ${on?'editing':'locked'}" id="${id}"><div class="cd-h"><span class="no">${no}</span><h2>${title}</h2><div class="act">${actions||''}<button class="ed-tg" data-act="cd-edit" data-key="${id}" title="${on?'Lock this section – changes are already saved':'Unlock this section to change it'}">${on?'✓ Done':'✎ Edit'}</button></div></div><div class="cd-b">${body}</div></section>`;}
 function cdApplyLocks(){
   document.querySelectorAll('#app .cd-sec.locked').forEach(sec=>sec.querySelectorAll('input,select,textarea').forEach(el=>{
     el.disabled=true;el.setAttribute('tabindex','-1');
@@ -1027,6 +1034,84 @@ function detailsSection(kind,o,db,gaps){
       ${kind==='lead'?F.sel('stage','Stage',LEAD_STAGES)+F.sel('source','Source',['Website','Referral','Walk-in','Social']):''}</div>
     <div class="cd-grp">Services opted</div>
     <div class="svc-chk">${SVC_LIST.map(s=>`<label class="${has.includes(s)?'on':''}"><input type="checkbox" data-cf="services" data-kind="${kind}" data-id="${o.id}" value="${esc(s)}"${has.includes(s)?' checked':''}>${esc(s)}</label>`).join('')}</div>`);
+}
+
+/* ----- company information from the MOA / trade licence (Claude reads the document, you check and apply) ----- */
+const LIC_AUTH=['Dubai Department of Economy and Tourism (DET)','Abu Dhabi Department of Economic Development (ADDED)','Sharjah Economic Development Department (SEDD)','Ajman Department of Economic Development','RAK Department of Economic Development','Umm Al Quwain Department of Economic Development','Fujairah Department of Industry and Economy','Jebel Ali Free Zone Authority (JAFZA)','Dubai Multi Commodities Centre (DMCC)','Dubai Airport Free Zone (DAFZA)','Dubai Silicon Oasis (DSO)','IFZA','Meydan Free Zone','Sharjah Media City (SHAMS)','SAIF Zone','Hamriyah Free Zone','Ajman Free Zone','RAK Economic Zone (RAKEZ)','KEZAD','ADGM','DIFC'];
+function licState(o){const e=pDate(o.licenceExpiry);if(!e)return null;const n=Math.round((e-todayD())/864e5),w=+o.licRemindDays||30;
+  return {n,cls:n<0?'high':n<=w?'pending':'completed',txt:n<0?`Expired ${-n} day${n<-1?'s':''} ago`:n===0?'Expires today':`Expires in ${n} day${n>1?'s':''}`};}
+function companySection(kind,o,db){
+  const F=cdF(kind,o,[]),ls=licState(o),P=o.partners||[];
+  const totSh=P.reduce((s,p)=>s+(+p.shares||0),0),totAmt=P.reduce((s,p)=>s+(+p.amount||0),0);
+  const pct=p=>p.share_pct!==''&&p.share_pct!=null?+p.share_pct:(totSh?(+p.shares||0)/totSh*100:0),totPct=P.reduce((s,p)=>s+pct(p),0);
+  const at=(i,k)=>`data-cf="partners.${i}.${k}" data-kind="${kind}" data-id="${o.id}"`;
+  const pin=(i,k,num,w)=>`<input class="tb-in"${num?' type="number" step="any"':''} ${at(i,k)} value="${esc(P[i][k]==null?'':P[i][k])}"${w?` style="width:${w}"`:''}>`;
+  const fx=v=>(Math.round(v*100)/100).toString();
+  const head=`<button class="btn btn-sm btn-primary" data-act="moa-read" data-kind="${kind}" data-id="${o.id}" title="Upload the MOA, an amendment or the trade licence (PDF or photo) – Claude reads it and shows what it found before anything is saved">🤖 Read MOA / licence with AI</button><button class="btn btn-sm" data-act="partner-add" data-kind="${kind}" data-id="${o.id}">＋ Partner</button>`;
+  return cdSec(0,'cd-co','Company information (MOA)',head,`
+    ${o.moaRead?`<div class="cd-hint" style="margin:0 0 8px">Read by AI from ${esc(o.moaRead.file||'a document')} on ${fmtDate(o.moaRead.date)} – check it against the original.</div>`:''}
+    <div class="cd-grp">Licence</div>
+    <div class="cd-form"><div class="cd-f span2"><label>Licensing authority</label><input list="lic-auth" data-cf="licAuthority" data-kind="${kind}" data-id="${o.id}" value="${esc(o.licAuthority||'')}"></div>${F.inp('tradeLicence','Licence no.')}
+      ${F.inp('licenceIssue','Licence issue date','date')}${F.inp('licenceExpiry','Licence expiry date','date')}${F.sel('licRemindDays','Remind me before expiry',[['30','30 days before (default)'],['15','15 days before'],['45','45 days before'],['60','60 days before'],['90','90 days before']])}
+      ${F.show('Licence status',ls?`<span class="pill ${ls.cls}">${ls.txt}</span>`:'<span class="sub2">enter the expiry date</span>')}${F.inp('legalForm','Legal form','text','','e.g. LLC, FZCO, Sole Establishment')}${F.inp('moaDate','MOA / latest amendment date','date')}</div>
+    <datalist id="lic-auth">${LIC_AUTH.map(a=>`<option value="${esc(a)}">`).join('')}</datalist>
+    <div class="cd-grp">Capital</div>
+    <div class="cd-form">${F.inp('capital','Share capital (AED)','number')}${F.inp('shareCount','Number of shares','number')}${F.inp('shareValue','Value per share (AED)','number')}</div>
+    ${(+o.capital&&+o.shareCount&&+o.shareValue&&Math.abs(o.shareCount*o.shareValue-o.capital)>1)?`<div class="rm-warn" style="margin:-4px 0 8px">Shares × value per share (${money(o.shareCount*o.shareValue)}) does not equal the capital (${money(o.capital)}).</div>`:''}
+    <div class="cd-grp">Partners &amp; shares</div>
+    <div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th>Name</th><th>Nationality</th><th>Passport / EID</th><th>Role</th><th class="r">Shares</th><th class="r">%</th><th class="r">Amount (AED)</th><th></th></tr></thead><tbody>
+    ${P.map((p,i)=>`<tr><td style="min-width:170px">${pin(i,'name')}</td><td>${pin(i,'nationality',0,'110px')}</td><td>${pin(i,'id_no',0,'130px')}</td><td>${pin(i,'role',0,'120px')}</td><td class="r">${pin(i,'shares',1,'80px')}</td><td class="r mono">${fx(pct(p))}%</td><td class="r">${pin(i,'amount',1,'110px')}</td><td class="r"><span class="link" data-act="partner-del" data-kind="${kind}" data-id="${o.id}" data-key="${i}" title="Remove">✕</span></td></tr>`).join('')||'<tr><td colspan="8" class="empty" style="padding:14px">No partners yet – read the MOA with AI or add them with ＋ Partner.</td></tr>'}
+    </tbody>${P.length?`<tfoot><tr><td colspan="4">Total</td><td class="r mono">${totSh||''}</td><td class="r mono" style="${Math.abs(totPct-100)>0.5&&totPct?'color:var(--red)':''}">${fx(totPct)}%</td><td class="r mono">${money(totAmt)}</td><td></td></tr></tfoot>`:''}</table></div>
+    ${o.activities?`<div class="cd-hint">Activities: ${esc(o.activities)}</div>`:''}
+    <div class="cd-hint">A renewal reminder is created ${+o.licRemindDays||30} days before the licence expires and shows under Reminders &amp; follow-up.</div>`);
+}
+const MOA_TOOL={name:'company_details',description:'Company details stated in a UAE memorandum of association, MOA amendment or trade licence',input_schema:{type:'object',properties:{
+  company_name:{type:'string'},legal_form:{type:'string',description:'e.g. LLC, Single Owner LLC, Sole Establishment, FZCO, FZE, Branch'},
+  licensing_authority:{type:'string',description:'Authority that issued the licence, e.g. Dubai Department of Economy and Tourism, JAFZA, DMCC'},
+  licence_no:{type:'string'},licence_issue_date:{type:'string',description:'YYYY-MM-DD'},licence_expiry_date:{type:'string',description:'YYYY-MM-DD'},
+  moa_date:{type:'string',description:'Date of the MOA or of the latest amendment, YYYY-MM-DD'},
+  capital:{type:'number',description:'Share capital in AED'},share_count:{type:'number',description:'Total number of shares'},share_value:{type:'number',description:'Value of one share in AED'},
+  activities:{type:'string'},address:{type:'string'},
+  partners:{type:'array',description:'Every shareholder / partner and every manager',items:{type:'object',properties:{
+    name:{type:'string'},nationality:{type:'string'},id_no:{type:'string',description:'Passport or Emirates ID number'},
+    role:{type:'string',description:'Partner, Manager, or Partner & Manager'},shares:{type:'number'},share_pct:{type:'number',description:'Percentage of shares, 0–100'},amount:{type:'number',description:'Capital contributed in AED'}},required:['name']}},
+  notes:{type:'string',description:'Anything unclear, unreadable or missing'}},required:['partners']}};
+const MOA_PROMPT='Read this UAE company document (memorandum of association, MOA amendment, share transfer or trade licence) and return the company details with the tool. '+
+  'Only fill in what the document states; leave anything else out. Dates as YYYY-MM-DD, amounts as plain numbers in AED. '+
+  'List every partner / shareholder and every manager (a manager who holds no shares gets shares 0). If it is an amendment or share transfer, give the position after the change. '+
+  'Names in English as written in the document.';
+function isoD(v){if(!v)return'';const t=String(v).trim(),m=t.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];const n=t.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);return n?n[3]+'-'+n[2].padStart(2,'0')+'-'+n[1].padStart(2,'0'):'';}
+let CD_MOA=null;
+function cdMoaPick(kind,id){
+  if(!window.CRMAI||!CRMAI.readDocument){toast('The AI assistant is still loading – try again in a moment');return;}
+  const inp=document.createElement('input');inp.type='file';inp.accept='.pdf,image/png,image/jpeg,image/webp';
+  inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;if(f.size>25e6){toast('The file is too large (25 MB at most)');return;}
+    modal(`<div class="modal"><div class="modal-head"><h3>Reading ${esc(f.name)}…</h3></div><p style="color:var(--muted);margin:0">Claude is reading the document – this takes about 20 to 60 seconds. Nothing is saved until you check the result.</p></div>`);
+    try{const d=await CRMAI.readDocument(f,MOA_TOOL,MOA_PROMPT);cdMoaReview(kind,id,d||{},f.name);}
+    catch(err){closeModal();toast(err.message||'Could not read the document');}};
+  inp.click();
+}
+function cdMoaReview(kind,id,d,file){
+  CD_MOA={kind,id,d,file};
+  const row=(l,v)=>v===0||v?`<tr><td class="sub2" style="width:40%">${l}</td><td>${esc(v)}</td></tr>`:'';
+  const P=d.partners||[];
+  modal(`<div class="modal wide"><div class="modal-head"><h3>Found in ${esc(file)}</h3><button class="x" data-act="close">×</button></div>
+    <table class="tbl sm"><tbody>${row('Company',d.company_name)}${row('Legal form',d.legal_form)}${row('Licensing authority',d.licensing_authority)}${row('Licence no.',d.licence_no)}${row('Licence issue date',isoD(d.licence_issue_date)?fmtDate(isoD(d.licence_issue_date)):'')}${row('Licence expiry date',isoD(d.licence_expiry_date)?fmtDate(isoD(d.licence_expiry_date)):'')}${row('MOA date',isoD(d.moa_date)?fmtDate(isoD(d.moa_date)):'')}${row('Share capital (AED)',d.capital!=null?money(d.capital):'')}${row('Number of shares',d.share_count)}${row('Value per share (AED)',d.share_value!=null?money(d.share_value):'')}</tbody></table>
+    ${P.length?`<div class="cd-grp" style="margin-top:10px">Partners</div><div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th>Name</th><th>Nationality</th><th>Passport / EID</th><th>Role</th><th class="r">Shares</th><th class="r">%</th><th class="r">Amount</th></tr></thead><tbody>${P.map(p=>`<tr><td>${esc(p.name)}</td><td>${esc(p.nationality||'')}</td><td>${esc(p.id_no||'')}</td><td>${esc(p.role||'')}</td><td class="r">${p.shares!=null?esc(p.shares):''}</td><td class="r">${p.share_pct!=null?esc(p.share_pct)+'%':''}</td><td class="r">${p.amount!=null?money(p.amount):''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="sub2">No partners found.</p>'}
+    ${d.notes?`<div class="rm-warn" style="margin-top:8px">${esc(d.notes)}</div>`:''}
+    <p class="sub2" style="margin:10px 0">Items the document does not show are left as they are.${P.length?' The partners above replace the current partner list.':''}</p>
+    <button class="btn btn-primary" style="width:100%" data-act="moa-apply">Apply to this ${kind==='lead'?'lead':'client'}</button></div>`);
+}
+function cdMoaApply(db){
+  if(!CD_MOA)return;const {kind,id,d,file}=CD_MOA,o=(kind==='lead'?db.leads:db.clients).find(x=>x.id===id);if(!o){closeModal();return;}
+  const put=(k,v)=>{if(v!=null&&v!=='')o[k]=v;};
+  put('legalForm',d.legal_form);put('licAuthority',d.licensing_authority);put('tradeLicence',d.licence_no);
+  put('licenceIssue',isoD(d.licence_issue_date));put('licenceExpiry',isoD(d.licence_expiry_date));put('moaDate',isoD(d.moa_date));
+  put('capital',d.capital);put('shareCount',d.share_count);put('shareValue',d.share_value);put('activities',d.activities);
+  if(blankV(o.address))put('address',d.address);
+  if((d.partners||[]).length)o.partners=d.partners.map(p=>({name:p.name||'',nationality:p.nationality||'',id_no:p.id_no||'',role:p.role||'',shares:p.shares==null?'':p.shares,share_pct:p.share_pct==null?'':p.share_pct,amount:p.amount==null?'':p.amount}));
+  o.moaRead={date:ymd(new Date()),file};CD_MOA=null;
+  save();closeModal();toast('Company information updated from '+file);route();
 }
 
 /* ----- section 2: one panel per service ----- */
@@ -1297,42 +1382,44 @@ function asideHtml(kind,o,db){
 /* ----- the pages ----- */
 function renderClientDetail(id){
   const db=load();const c=db.clients.find(x=>x.id===id);if(!c){app.innerHTML='<div class="empty">Client not found</div>';return;}
-  CD_CUR=c.id;
+  CD_CUR=c.id;CD_N=0;CD_SECS=[];
   const p=db.partners.find(x=>x.id===c.partnerId),R=window.FTReminders,gaps=R?R.missing(c):[];
-  app.innerHTML=`
+  app.innerHTML=cdFinish(`
   <div class="page-head cd-head"><div style="display:flex;gap:10px;align-items:center"><a class="back" href="#/clients">←</a>
     <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="color:var(--muted);font-size:12.5px"><span class="pill active">${c.status}</span>${privateChip(c)} &nbsp;👤 ${esc((c.staff||[]).join(', ')||(p?p.name:'Unassigned'))}${!blankV(c.trn)?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><a class="btn" href="../audit/?client=${encodeURIComponent(c.name)}" title="Open this client in the Audit Desk – financial statements and the audit report" style="text-decoration:none">📊 Audit Desk</a><a class="btn" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive" style="text-decoration:none">📁 Cloud folder</a><button class="btn" data-act="edit-client" data-id="${c.id}" title="Status, partner and privacy">✎ Edit</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
-  ${cdNav([['cd-s1','1 · Details'],['cd-s2','2 · Services'],['cd-s3','3 · Ledger'],['cd-s4','4 · Reminders'],['cd-s5','5 · PDC'],['cd-sp','6 · Profit'],['cd-s6','7 · Agreements & quotations']])}
+  <!--CDNAV-->
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('client',c,db,gaps)}
+    ${companySection('client',c,db)}
     ${servicesSection('client',c,db)}
     ${ledgerSection(c,db)}
     ${remindersSection(c,db)}
     ${pdcSection(c,db)}
     ${profitSection(c,db)}
     ${cdSec(7,'cd-s6','Agreements &amp; quotations',`<button class="btn btn-sm" data-act="agr-for-client" data-id="${c.id}">＋ Agreement</button><button class="btn btn-sm" data-act="quo-for-client" data-id="${c.id}">＋ Quotation</button>`,clientDocsSection(c,db,true).replace('margin-top:20px','margin-top:0').replace(/<button class="btn btn-sm" data-act="[^"]+" data-id="[^"]+">＋ New<\/button>/g,''))}
-  </div>${asideHtml('client',c,db)}</div>`;
+  </div>${asideHtml('client',c,db)}</div>`);
   setTimeout(cdApplyLocks);   // after the Contact & schedule card is added
 }
 function renderLeadDetail(id){
   const db=load();const l=db.leads.find(x=>x.id===id);if(!l){app.innerHTML='<div class="empty">Lead not found</div>';return;}
-  CD_CUR=l.id;
+  CD_CUR=l.id;CD_N=0;CD_SECS=[];
   const qts=db.quotations.filter(q=>q.refId===l.id||q.refName===l.name),ags=db.agreements.filter(a=>a.clientName===l.name);
   const docRow=(ic,go,t,sub,st)=>`<div class="rel-task" data-goto="${go}" style="cursor:pointer"><div class="ic">${ic}</div><div style="flex:1"><b style="font-size:13px">${esc(t)}</b><div style="color:var(--faint);font-size:11px">${sub}</div></div><span class="pill ${st==='Draft'?'draft':'final'}">${esc(st)}</span></div>`;
-  app.innerHTML=`
+  app.innerHTML=cdFinish(`
   <div class="page-head cd-head"><div style="display:flex;gap:10px;align-items:center">
     <a class="back" href="#/leads">←</a>
     <div><h1 style="font-size:24px">${esc(l.name)}</h1><div style="display:flex;gap:8px;align-items:center"><span class="pill blue">${esc(l.stage)}</span><span style="color:var(--faint);font-size:13px">🔗 ${esc(l.source)} · 👤 ${esc(l.assignedTo||'Unassigned')}</span></div></div>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-act="new-quote-for" data-type="lead" data-id="${l.id}">🧾 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">📄 Agreement</button><button class="btn" data-act="edit-lead" data-id="${l.id}">✎ Edit</button><button class="btn" data-act="convert-lead" data-id="${l.id}">✔ Convert to Client</button><button class="btn btn-danger" data-act="del-lead" data-id="${l.id}">🗑 Delete</button></div></div>
-  ${cdNav([['cd-s1','1 · Details'],['cd-s2','2 · Services'],['cd-s4','3 · Follow-up'],['cd-s6','4 · Quotations & agreements']])}
+  <!--CDNAV-->
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('lead',l,db,[])}
+    ${companySection('lead',l,db)}
     ${servicesSection('lead',l,db)}
     ${cdSec(3,'cd-s4','Follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-lead="${l.id}">＋ Task</button>`,'<div id="cp-slot"></div>')}
     ${cdSec(4,'cd-s6','Quotations &amp; agreements',`<button class="btn btn-sm" data-act="new-quote-for" data-type="lead" data-id="${l.id}">＋ Quotation</button><button class="btn btn-sm" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">＋ Agreement</button>`,(qts.map(q=>docRow('📝','#/quotation/'+q.id,q.title,fmtDate(q.date)+' · AED '+money(q.amount),q.status)).join('')+ags.map(a=>docRow('📄','#/agreement/'+a.id,a.title,fmtDate(a.date)+' · AED '+money(a.amount),a.status)).join(''))||'<div class="empty" style="padding:18px">None yet.</div>')}
-  </div>${asideHtml('lead',l,db)}</div>`;
+  </div>${asideHtml('lead',l,db)}</div>`);
   setTimeout(cdApplyLocks);
 }
 
@@ -1351,7 +1438,7 @@ document.addEventListener('change',e=>{
     if(f==='contractType'&&v==='One time')o.contractExpiry='';
     if(f==='contactPerson')o.contact=v;
     if(/^svc\..+\.status$/.test(f)){o.svcLog=o.svcLog||[];o.svcLog.unshift({ts:new Date().toISOString(),name:f.split('.')[1],status:v,by:meName()});o.svcLog=o.svcLog.slice(0,60);}
-    if(['name','taxYearEnd','contractStart','contractEnd','turnoverEst','contractPrice','bookkeepingStart','agentComm'].includes(f))redraw=true;}
+    if(['name','taxYearEnd','contractStart','contractEnd','turnoverEst','contractPrice','bookkeepingStart','agentComm','licenceExpiry','capital','shareCount','shareValue'].includes(f)||/^partners\.\d+\.(shares|share_pct|amount)$/.test(f))redraw=true;}
   if(kind==='client'&&CD_REPLAN[f]&&window.CRMPLUS&&CRMPLUS.replanClient){try{const pl=CRMPLUS.replanClient(db,o,[CD_REPLAN[f]]);if(pl&&pl.next)setTimeout(()=>toast('Reminders re-planned'),900);}catch(err){}}
   if(kind==='lead')o.lastActivity=o.lastActivity||ymd(new Date());
   save();toast('Saved');
@@ -1378,7 +1465,7 @@ function cdFileModal(kind,c,key,label){
 }
 /* actions used by the sections – called from handleAct */
 function cdAct(act,el,db,id){
-  const c=db.clients.find(x=>x.id===id),key=el.getAttribute('data-key');
+  const c=db.clients.find(x=>x.id===id),key=el.getAttribute('data-key'),ko=(el.getAttribute('data-kind')==='lead'?db.leads:db.clients).find(x=>x.id===id);
   switch(act){
     case'cd-edit':{const k=CD_CUR+'|'+key;cdEditOn[k]=!cdEditOn[k];if(!cdEditOn[k])toast('Saved – section locked');const m=document.querySelector('.main'),mt=m?m.scrollTop:0,sc=document.scrollingElement,top=sc?sc.scrollTop:0;route();if(m)m.scrollTop=mt;if(sc)sc.scrollTop=top;return true;}
     case'cd-jump':{const t=document.getElementById(el.getAttribute('data-to'));if(t)t.scrollIntoView({behavior:'smooth',block:'start'});return true;}
@@ -1401,6 +1488,10 @@ function cdAct(act,el,db,id){
     case'ap-add':{if(!c)return true;const amt=+$('#ap_amt').value||0;if(!amt){toast('Enter the amount paid to the agent');return true;}
       c.agentPaid=c.agentPaid||[];c.agentPaid.push({id:uid('ap'),amount:amt,date:$('#ap_date').value||ymd(new Date()),by:meName()});save();toast('Agent payment recorded');route();return true;}
     case'ap-del':{if(!c||!confirm('Delete this agent payment?'))return true;c.agentPaid=(c.agentPaid||[]).filter(x=>x.id!==key);save();route();return true;}
+    case'moa-read':cdMoaPick(el.getAttribute('data-kind')||'client',id);return true;
+    case'moa-apply':{cdMoaApply(db);return true;}
+    case'partner-add':{if(!ko)return true;ko.partners=ko.partners||[];ko.partners.push({name:'',nationality:'',id_no:'',role:'Partner',shares:'',share_pct:'',amount:''});save();route();return true;}
+    case'partner-del':{if(!ko||!confirm('Remove this partner?'))return true;(ko.partners||[]).splice(+key,1);save();route();return true;}
     case'ledger-add':{if(!c)return true;const dr=+$('#lg_dr').value||0,cr=+$('#lg_cr').value||0;if(!dr&&!cr){toast('Enter a debit or a credit');return true;}
       c.ledger=c.ledger||[];c.ledger.push({id:uid('lg'),date:$('#lg_date').value||ymd(new Date()),type:$('#lg_type').value,ref:$('#lg_ref').value.trim(),debit:dr,credit:cr});save();toast('Entry added');route();return true;}
     case'ledger-del':{if(!c)return true;if(!confirm('Delete this ledger entry?'))return true;c.ledger=(c.ledger||[]).filter(r=>r.id!==key);save();route();return true;}
