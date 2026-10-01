@@ -390,6 +390,24 @@ table.tbl.pf tr.pf-tot td{border-top:2px solid var(--line);font-size:13.5px}
 .tb-in:focus{border-color:var(--brand);background:#fff}
 .cd-sec.locked .tb-in{border-color:transparent;background:transparent;padding-left:0;-webkit-appearance:none;appearance:none}
 .cd-sec.locked input.tb-in[type=number]{text-align:right}
+/* VAT desk */
+.vd-sum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 10px}
+.vd-sum>div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:7px 12px}
+.vd-sum span{display:block;font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em}.vd-sum b{font-size:15px;font-weight:600}
+.vd-sum .pay b{color:var(--red)}.vd-sum .ref b{color:var(--green)}.vd-sum .bad b{color:var(--red)}
+.vd-body{padding:12px 14px;font-size:13px}
+.vd-box td.bx{color:var(--muted);font-weight:600;text-align:center}
+.vd-box .tb-in{text-align:right;max-width:150px;margin-left:auto;display:block}
+.vd-box .tb-in.ov{background:#fff7e6;border-color:#f2b84b}
+.vd-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.vd-reg td{padding:3px 4px!important}.vd-reg .tb-in{height:26px}
+.vd-reg input.tb-in[type=number]{text-align:right}
+.vd-docs{display:flex;flex-direction:column;gap:4px}.vd-docs label{display:flex;gap:8px;align-items:center;cursor:pointer}
+.vd-docs label.on{color:var(--green)}
+.vi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px 12px}
+.vi-grid label{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.vi-grid select{border:1px solid var(--line);border-radius:7px;padding:5px 6px;font-size:12.5px}
+@media(max-width:760px){.vd-sum{grid-template-columns:1fr 1fr}}
 /* only the section titles are bold on the client / lead page */
 .cd-head .btn,.cd-nav button,.cd-wrap,.cd-wrap *{font-weight:400!important}
 .cd-wrap .cd-h h2,.cd-wrap .sv-h b,.cd-wrap .sec-title{font-weight:700!important}
@@ -657,7 +675,7 @@ const NIC={
 const NAV_MENU=[
   ['MAIN MENU',[['ai','AI assistant','#/ai',NIC.ai],['dashboard','Dashboard','#/dashboard',NIC.dash],['leads','Leads','#/leads',NIC.lead],['clients','Clients','#/clients',NIC.client],['tasks','Tasks','#/tasks',NIC.task]]],
   ['SALES & BILLING',[['quotations','Quotations','#/quotations',NIC.quote],['agreements','Agreements','#/agreements',NIC.agree],['invoices','Sales invoices','#/invoices',NIC.inv],['receipts','Receipts','#/receipts',NIC.rcpt],['pdc','PDC cheques','#/pdc',NIC.pdc],['payments','Payments','#/payments',NIC.pay],['retention','Retention','#/retention',NIC.ret]]],
-  ['DESKS',[['audit','Audit Desk','../audit/',NIC.desk],['vat','VAT Desk','',NIC.desk],['books','Bookkeeping Desk','',NIC.desk]]],
+  ['DESKS',[['audit','Audit Desk','../audit/',NIC.desk],['vat','VAT Desk','#/vat',NIC.desk],['books','Bookkeeping Desk','',NIC.desk]]],
   ['ADMINISTRATION',[['settings','Business details','#/settings',NIC.gear],['users','Users & access','../?go=users',NIC.users],['portal','Portal dashboard','../',NIC.dash]]]
 ];
 function renderNav(active){
@@ -683,6 +701,7 @@ function route(){
     settings:['settings',renderSettings],
     payments:['payments',renderPayments],
     pdc:['pdc',renderPdc],
+    vat:['vat',()=>{if(window.VATDESK)VATDESK.route(h);else app.innerHTML='<div class="empty">Loading the VAT Desk…</div>';}],
     retention:['retention',renderRetention],
     agreements:['agreements',renderAgreements],agreement:['agreements',()=>renderAgreementBuilder(id)],
     ai:['ai',renderAI]};
@@ -774,6 +793,9 @@ function renderTools(page){
        <span class="tcount" id="tcount"></span><button class="btn btn-sm" data-act="run-engine">⟳ Deadlines</button><button class="btn btn-primary btn-sm" data-act="new-task">＋ New task</button>`;
     $('#taskSearch').oninput=e=>{taskSearch=e.target.value;renderTasks();};
     $('#taskType').onchange=e=>{taskFilter=e.target.value;renderTasks();};
+  } else if(page==='vat'&&!(location.hash.split('/')[2])){
+    box.innerHTML=srch('vatSearch','Search clients…','')+`<span class="tcount" id="tcount"></span>`;
+    $('#vatSearch').oninput=e=>{if(window.VATDESK)VATDESK.search(e.target.value);};
   } else if(page==='pdc'){
     box.innerHTML=srch('pdcSearch','Search client, cheque no., bank…',pdcSearch)+`<span class="tcount" id="tcount"></span>`;
     $('#pdcSearch').oninput=e=>{pdcSearch=e.target.value;renderPdc();};
@@ -893,6 +915,7 @@ function auditInfo(name){
   return {year:ys.length?ys[ys.length-1]:0};
 }
 function deskCell(c,kind){
+  if(kind==='vat'){ if(!svcList(c).includes('VAT Filing')) return '<span class="desk-soon">—</span>'; return `<a class="btn btn-sm" href="#/vat" onclick="location.hash='#/vat';return false">Open</a>`; }
   if(kind!=='audit') return '<span class="desk-soon">Soon</span>';
   const a=auditInfo(c.name);
   return `${a&&a.year?`<span class="desk-yr">FY${a.year}</span>`:''}<a class="btn btn-sm" href="../audit/?client=${encodeURIComponent(c.name)}">${a?'Open':'Start'}</a>`;
@@ -1133,10 +1156,10 @@ function vatPanel(c,db,F){
   const ring=P.filter(p=>p.e.getFullYear()===yr);
   const rows=P.filter(p=>p.st!=='open'&&p.st!=='before').slice(-8).reverse(),cur=P.find(p=>p.st==='open');
   const due=P.filter(p=>p.st==='pending'||p.st==='overdue');
-  const head=(due.length?`<span class="pill ${due.some(p=>p.st==='overdue')?'high':'pending'}">${due.length} to file</span>`+(due.length>1?`<span class="link" style="font-size:12px" data-act="vat-file-all" data-id="${c.id}" title="Catching up: mark every pending / overdue period as filed">mark all filed</span>`:''):'<span class="pill completed">Up to date</span>')+`<select class="hd-in" data-cf="vatCycle" data-kind="client" data-id="${c.id}" title="VAT tax periods (stagger)">${VAT_CYCLES.map(([v,t])=>`<option value="${esc(v)}"${(c.vatCycle||'')===v?' selected':''}>${esc(t)}</option>`).join('')}</select><button class="btn btn-sm" disabled title="VAT working and reports – coming in the VAT desk">VAT desk · soon</button>`;
+  const head=(due.length?`<span class="pill ${due.some(p=>p.st==='overdue')?'high':'pending'}">${due.length} to file</span>`+(due.length>1?`<span class="link" style="font-size:12px" data-act="vat-file-all" data-id="${c.id}" title="Catching up: mark every pending / overdue period as filed">mark all filed</span>`:''):'<span class="pill completed">Up to date</span>')+`<select class="hd-in" data-cf="vatCycle" data-kind="client" data-id="${c.id}" title="VAT tax periods (stagger)">${VAT_CYCLES.map(([v,t])=>`<option value="${esc(v)}"${(c.vatCycle||'')===v?' selected':''}>${esc(t)}</option>`).join('')}</select>${(cur||rows[0])?`<a class="btn btn-sm" href="#/vat/${c.id}/${(cur||rows[0]).key}" title="Registers, VAT 201 and the client report for this period">VAT desk</a>`:''}`;
   const row=p=>{const[pc,pt]=ST_PILL[p.st];return `<tr><td><b>${esc(p.label)}</b></td><td>${fmtDate(ymd(p.due))}</td><td><span class="pill ${pc}">${pt}</span></td>
     <td class="sub2">${p.rec&&p.rec.status==='Filed'?fmtDate(p.rec.date)+(p.rec.ref?' · '+esc(p.rec.ref):'')+(p.rec.amount?' · AED '+money(p.rec.amount):''):p.st==='filed'?'Task completed':'—'}</td>
-    <td class="r">${p.st==='filed'?(p.rec?`<span class="link" data-act="vat-unfile" data-id="${c.id}" data-key="${p.key}">Undo</span>`:''):p.st==='open'?'<span class="sub2">opens '+fmtDate(ymd(new Date(p.e.getTime()+864e5)))+'</span>':`<button class="btn btn-sm btn-primary" data-act="vat-file" data-id="${c.id}" data-key="${p.key}" data-label="${esc(p.label)}">Mark filed</button>`}</td></tr>`;};
+    <td class="r"><a class="link" href="#/vat/${c.id}/${p.key}" style="margin-right:8px;font-weight:400">Open</a>${p.st==='filed'?(p.rec?`<span class="link" data-act="vat-unfile" data-id="${c.id}" data-key="${p.key}">Undo</span>`:''):p.st==='open'?'<span class="sub2">opens '+fmtDate(ymd(new Date(p.e.getTime()+864e5)))+'</span>':`<button class="btn btn-sm btn-primary" data-act="vat-file" data-id="${c.id}" data-key="${p.key}" data-label="${esc(p.label)}">Mark filed</button>`}</td></tr>`;};
   return svBox('🧾','VAT Filing',head,`
     ${c.vatCycle?`<div class="qring">${ring.map((p,i)=>`<div class="q ${p.st}${monthly?' m':''}" title="${esc(p.label)} · due ${fmtDate(ymd(p.due))} · ${ST_PILL[p.st][1]}"><i>${monthly?MON3[p.e.getMonth()]:'Q'+(i+1)}</i><span>${monthly?'':esc(MON3[p.s.getMonth()]+'–'+MON3[p.e.getMonth()])}</span></div>`).join('')}
       <div class="q-key"><span class="filed">Filed</span><span class="pending">Pending</span><span class="overdue">Overdue</span><span class="open">In progress</span></div></div>
