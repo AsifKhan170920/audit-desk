@@ -241,6 +241,31 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:11px;font-weight:600;z-index:200;box-shadow:var(--shadow);opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
 
+
+/* locked sections read as text: no borders, no arrows, no buttons that change things */
+.ed-tg{border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 10px;font-size:12px;font-weight:700;color:var(--brand-d);white-space:nowrap}
+.ed-tg:hover{border-color:var(--brand)}
+.cd-sec.editing{border-color:#9ab8f5;box-shadow:0 0 0 3px var(--brand-soft)}
+.cd-sec.editing .ed-tg{background:var(--brand);border-color:var(--brand);color:#fff}
+.cd-sec.locked .cd-f input,.cd-sec.locked .cd-f select,.cd-sec.locked .cd-f textarea,.cd-sec.locked .cd-b select,.cd-sec.locked .sv-h select[data-cf]{border-color:transparent!important;background:transparent!important;padding-left:0;-webkit-appearance:none;appearance:none;color:var(--ink);opacity:1;cursor:default;font-weight:600;resize:none;box-shadow:none}
+.cd-sec.locked .sv-h select[data-cf]{font-weight:700;padding-right:0;width:auto}
+.cd-sec.locked .sv-h select.pdc-sel,.cd-sec.locked .cd-b select.pdc-sel{padding:2px 8px;border-radius:20px}
+.cd-sec.locked .sv-h select.pdc-sel.pending,.cd-sec.locked .cd-b select.pdc-sel.pending{background:var(--amber-soft)!important;color:var(--amber)}
+.cd-sec.locked .sv-h select.pdc-sel.completed,.cd-sec.locked .cd-b select.pdc-sel.completed{background:var(--green-soft)!important;color:var(--green)}
+.cd-sec.locked .sv-h select.pdc-sel.high,.cd-sec.locked .cd-b select.pdc-sel.high{background:var(--red-soft)!important;color:var(--red)}
+.cd-sec.locked .sv-h select.pdc-sel.blue,.cd-sec.locked .cd-b select.pdc-sel.blue{background:var(--blue-soft)!important;color:var(--blue)}
+.cd-sec.locked .sv-h select.pdc-sel.low,.cd-sec.locked .cd-b select.pdc-sel.low{background:#f1f5f9!important;color:#475569}
+.cd-sec.locked input::-webkit-calendar-picker-indicator{display:none}
+.cd-sec.locked input[type=date][value=""],.cd-sec.locked input[type=month][value=""]{color:transparent}
+.cd-sec.locked input::placeholder,.cd-sec.locked textarea::placeholder{color:var(--faint)}
+.cd-sec.locked .cd-f{border-bottom:1px dashed var(--line)}
+.cd-sec.locked .cd-f label{margin-bottom:0}
+.cd-sec.locked .cd-f input,.cd-sec.locked .cd-f select{height:24px}
+.cd-sec.locked .cd-h .act>:not(.ed-tg):not(.pill),.cd-sec.locked .sv-h .act>button,.cd-sec.locked .sv-h .act>.link,.cd-sec.locked .sv-h .act>.hd-sep,.cd-sec.locked .sv-h .hd-in:not([data-cf]),
+.cd-sec.locked .cd-b button:not([data-act="pw-eye"]),.cd-sec.locked .cd-b .link[data-act]{display:none!important}
+.cd-sec.locked .svc-chk label:not(.on){display:none}
+.cd-sec.locked .svc-chk input{display:none}
+.cd-sec.locked .svc-chk label{cursor:default}
 /* ---------- client / lead page: numbered sections + comments & history (compact) ---------- */
 .cd-head{margin-bottom:10px;gap:10px;align-items:center}
 .cd-head .back{width:32px;height:32px}
@@ -936,7 +961,16 @@ function cdF(kind,o,gaps){
     show:(l,v,cls)=>`<div class="cd-f${cls?' '+cls:''}"><label>${l}</label><div class="cd-ro">${v}</div></div>`
   };
 }
-function cdSec(n,id,title,actions,body){return `<section class="cd-sec" id="${id}"><div class="cd-h"><span class="no">${n}</span><h2>${title}</h2>${actions?`<div class="act">${actions}</div>`:''}</div><div class="cd-b">${body}</div></section>`;}
+/* each section opens locked (plain text); its Edit toggle unlocks the fields and the buttons that change things */
+let CD_CUR='';const cdEditOn={};
+const cdIsEdit=sec=>!!cdEditOn[CD_CUR+'|'+sec];
+function cdSec(n,id,title,actions,body){const on=cdIsEdit(id);return `<section class="cd-sec ${on?'editing':'locked'}" id="${id}"><div class="cd-h"><span class="no">${n}</span><h2>${title}</h2><div class="act">${actions||''}<button class="ed-tg" data-act="cd-edit" data-key="${id}" title="${on?'Lock this section – changes are already saved':'Unlock this section to change it'}">${on?'✓ Done':'✎ Edit'}</button></div></div><div class="cd-b">${body}</div></section>`;}
+function cdApplyLocks(){
+  document.querySelectorAll('#app .cd-sec.locked').forEach(sec=>sec.querySelectorAll('input,select,textarea').forEach(el=>{
+    el.disabled=true;el.setAttribute('tabindex','-1');
+    if(el.tagName!=='SELECT'&&!['date','month','checkbox'].includes(el.type)&&!el.value)el.placeholder='—';
+  }));
+}
 function svBox(icon,title,act,body,cls){return `<div class="sv${cls?' '+cls:''}"><div class="sv-h"><span>${icon}</span><b>${esc(title)}</b>${act?`<div class="act">${act}</div>`:''}</div><div class="sv-b">${body}</div></div>`;}
 function cdNav(items){return `<div class="cd-nav">${items.map(([id,t])=>`<button data-act="cd-jump" data-to="${id}">${t}</button>`).join('')}</div>`;}
 
@@ -1152,6 +1186,7 @@ function asideHtml(kind,o,db){
 /* ----- the pages ----- */
 function renderClientDetail(id){
   const db=load();const c=db.clients.find(x=>x.id===id);if(!c){app.innerHTML='<div class="empty">Client not found</div>';return;}
+  CD_CUR=c.id;
   const p=db.partners.find(x=>x.id===c.partnerId),R=window.FTReminders,gaps=R?R.missing(c):[];
   app.innerHTML=`
   <div class="page-head cd-head"><div style="display:flex;gap:10px;align-items:center"><a class="back" href="#/clients">←</a>
@@ -1166,9 +1201,11 @@ function renderClientDetail(id){
     ${pdcSection(c,db)}
     ${cdSec(6,'cd-s6','Documents',`<button class="btn btn-sm" data-act="new-invoice-for" data-id="${c.id}">＋ Invoice</button><button class="btn btn-sm" data-act="new-receipt-for" data-id="${c.id}">＋ Receipt</button><button class="btn btn-sm" data-act="agr-for-client" data-id="${c.id}">＋ Agreement</button><button class="btn btn-sm" data-act="quo-for-client" data-id="${c.id}">＋ Quotation</button>`,clientDocsSection(c,db).replace('margin-top:20px','margin-top:0').replace(/<button class="btn btn-sm" data-act="[^"]+" data-id="[^"]+">＋ New<\/button>/g,''))}
   </div>${asideHtml('client',c,db)}</div>`;
+  setTimeout(cdApplyLocks);   // after the Contact & schedule card is added
 }
 function renderLeadDetail(id){
   const db=load();const l=db.leads.find(x=>x.id===id);if(!l){app.innerHTML='<div class="empty">Lead not found</div>';return;}
+  CD_CUR=l.id;
   const qts=db.quotations.filter(q=>q.refId===l.id||q.refName===l.name),ags=db.agreements.filter(a=>a.clientName===l.name);
   const docRow=(ic,go,t,sub,st)=>`<div class="rel-task" data-goto="${go}" style="cursor:pointer"><div class="ic">${ic}</div><div style="flex:1"><b style="font-size:13px">${esc(t)}</b><div style="color:var(--faint);font-size:11px">${sub}</div></div><span class="pill ${st==='Draft'?'draft':'final'}">${esc(st)}</span></div>`;
   app.innerHTML=`
@@ -1184,6 +1221,7 @@ function renderLeadDetail(id){
     ${cdSec(3,'cd-s4','Follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-lead="${l.id}">＋ Task</button>`,'<div id="cp-slot"></div>')}
     ${cdSec(4,'cd-s6','Quotations &amp; agreements',`<button class="btn btn-sm" data-act="new-quote-for" data-type="lead" data-id="${l.id}">＋ Quotation</button><button class="btn btn-sm" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">＋ Agreement</button>`,(qts.map(q=>docRow('📝','#/quotation/'+q.id,q.title,fmtDate(q.date)+' · AED '+money(q.amount),q.status)).join('')+ags.map(a=>docRow('📄','#/agreement/'+a.id,a.title,fmtDate(a.date)+' · AED '+money(a.amount),a.status)).join(''))||'<div class="empty" style="padding:18px">None yet.</div>')}
   </div>${asideHtml('lead',l,db)}</div>`;
+  setTimeout(cdApplyLocks);
 }
 
 /* ----- saving: every field writes as soon as it changes ----- */
@@ -1230,6 +1268,7 @@ function cdFileModal(kind,c,key,label){
 function cdAct(act,el,db,id){
   const c=db.clients.find(x=>x.id===id),key=el.getAttribute('data-key');
   switch(act){
+    case'cd-edit':{const k=CD_CUR+'|'+key;cdEditOn[k]=!cdEditOn[k];if(!cdEditOn[k])toast('Saved – section locked');const m=document.querySelector('.main'),mt=m?m.scrollTop:0,sc=document.scrollingElement,top=sc?sc.scrollTop:0;route();if(m)m.scrollTop=mt;if(sc)sc.scrollTop=top;return true;}
     case'cd-jump':{const t=document.getElementById(el.getAttribute('data-to'));if(t)t.scrollIntoView({behavior:'smooth',block:'start'});return true;}
     case'pw-eye':{const i=el.parentElement.querySelector('input');const sh=i.type==='password';i.type=sh?'text':'password';el.textContent=sh?'hide':'show';return true;}
     case'vat-file':case'ct-file':if(c)cdFileModal(act.slice(0,act.indexOf('-')),c,key,el.getAttribute('data-label'));return true;
