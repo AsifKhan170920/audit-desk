@@ -241,80 +241,100 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:11px;font-weight:600;z-index:200;box-shadow:var(--shadow);opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
 
-/* ---------- client / lead page: numbered sections + comments & history ---------- */
-.cd-stats{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:14px}.cd-stats .stat{padding:14px 16px}.cd-stats .num{font-size:19px}
-.cd-nav{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
-.cd-nav button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;font-weight:600;font-size:13px;color:var(--muted)}
+/* ---------- client / lead page: numbered sections + comments & history (compact) ---------- */
+.cd-head{margin-bottom:10px;gap:10px;align-items:center}
+.cd-head .back{width:32px;height:32px}
+.cd-head .btn{padding:5px 10px;font-size:12.5px;border-radius:8px;gap:5px}
+.cd-stats{grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.cd-stats .stat{padding:8px 12px;border-radius:10px;box-shadow:none}
+.cd-stats .lbl{font-size:10px}.cd-stats .num{font-size:15px;letter-spacing:-.3px;margin-top:1px}
+.cd-nav{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 10px}
+.cd-nav button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:3px 10px;font-weight:600;font-size:12px;color:var(--muted)}
 .cd-nav button:hover{border-color:var(--brand);color:var(--brand-d)}
-.cd-wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+.cd-wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;align-items:start;font-size:13px}
 .cd-main{min-width:0}
-.cd-aside{position:sticky;top:12px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 24px);overflow:auto}
-.cd-sec{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:18px;scroll-margin-top:12px}
-.cd-h{display:flex;align-items:center;gap:10px;padding:13px 20px;border-bottom:1px solid var(--line)}
-.cd-h .no{width:24px;height:24px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:12px;display:grid;place-items:center;flex:0 0 auto}
-.cd-h h2{font-size:15px;margin:0;font-weight:700}
-.cd-h .act,.sv-h .act{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.cd-b{padding:16px 20px}
-.cd-grp{font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px}
-.cd-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;margin-bottom:16px}
+.cd-aside{position:sticky;top:8px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 16px);overflow:auto}
+.cd-aside .card-p{padding:12px 14px}
+.cd-aside .sec-title{margin-bottom:8px;font-size:11px}
+.cd-sec{background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;scroll-margin-top:8px}
+.cd-h{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line)}
+.cd-h .no{width:19px;height:19px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:10.5px;display:grid;place-items:center;flex:0 0 auto}
+.cd-h h2{font-size:13.5px;margin:0;font-weight:700}
+.cd-h .act,.sv-h .act{margin-left:auto;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.cd-h .btn,.sv-h .btn,.cd-b .btn-sm{padding:3px 9px;font-size:12px;border-radius:7px}
+.cd-b{padding:10px 12px}
+.cd-grp{font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px}
+.cd-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px;margin-bottom:10px}
 .cd-f{min-width:0}.cd-f.span2{grid-column:span 2}.cd-f.span3{grid-column:1/-1}
-.cd-f label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px}
-.cd-f input,.cd-f select,.cd-f textarea,.bk-row input,.bk-row select{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fbfcfd;outline:none;color:var(--ink);min-width:0}
-.cd-f textarea{resize:vertical;min-height:38px}
+.cd-f label{display:block;font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:2px}
+.cd-f input,.cd-f select,.cd-f textarea,.bk-row input,.bk-row select{width:100%;border:1px solid var(--line);border-radius:7px;padding:4px 8px;height:30px;font-size:13px;background:#fbfcfd;outline:none;color:var(--ink);min-width:0}
+.cd-f textarea{resize:vertical;height:auto;min-height:30px}
 .cd-f input:focus,.cd-f select:focus,.cd-f textarea:focus,.bk-row input:focus,.bk-row select:focus{border-color:var(--brand);background:#fff}
 .cd-f.miss input,.cd-f.miss select{border-color:#f2b84b;background:#fffaf0}
 .cd-f.miss label:after{content:' · missing';color:var(--amber)}
-.cd-ro{padding:8px 0;font-weight:600}
-.pw{position:relative}.pw input{padding-right:52px}
-.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--brand-d);font-size:12px;font-weight:700}
-.svc-chk{display:flex;flex-wrap:wrap;gap:8px}
-.svc-chk label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:#475569}
-.svc-chk input{margin:0;width:15px;height:15px;accent-color:var(--brand)}
+.cd-ro{padding:5px 0;font-weight:600}
+.pw{position:relative}.pw input{padding-right:46px}
+.pw button{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--brand-d);font-size:11px;font-weight:700}
+.svc-chk{display:flex;flex-wrap:wrap;gap:5px}
+.svc-chk label{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:20px;padding:3px 9px;font-size:12px;font-weight:600;cursor:pointer;background:#fff;color:#475569}
+.svc-chk input{margin:0;width:13px;height:13px;accent-color:var(--brand)}
 .svc-chk label.on{background:var(--brand-soft);border-color:#bcd0fb;color:var(--brand-d)}
-.sv{border:1px solid var(--line);border-radius:12px;margin-bottom:14px}
-.sv:last-child{margin-bottom:0}
-.sv-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:#fafbfc;border-radius:12px 12px 0 0}
-.sv-h b{font-size:14px}
-.sv-b{padding:14px}
+.sv{border:1px solid var(--line);border-radius:9px;margin-bottom:8px}
+.sv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px}.sv-grid .sv{margin:0;grid-column:1/-1}.sv-grid .sv.half{grid-column:auto}
+.cd-form.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sv-h{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:#fafbfc;border-radius:9px 9px 0 0}
+.sv-h b{font-size:13px}
+.sv-b{padding:9px 10px}
 .sv-b .cd-form:last-child{margin-bottom:0}
-.qring{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin:0 0 14px}
-.q{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--muted);font-weight:600;min-width:56px}
-.q i{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:800;font-size:12px;border:3px solid #dbe1ea;color:#64748b;background:#fff}
-.q.m{min-width:38px}.q.m i{width:36px;height:36px;font-size:10px;border-width:2px}
+.cd-wrap .pill{padding:2px 8px;font-size:10.5px}
+.qring{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;margin:0 0 8px}
+.q{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;color:var(--muted);font-weight:600;min-width:46px}
+.q i{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:800;font-size:11px;border:2.5px solid #dbe1ea;color:#64748b;background:#fff}
+.q.m{min-width:30px}.q.m i{width:28px;height:28px;font-size:9.5px;border-width:2px}
 .q.filed i{border-color:#34a368;background:var(--green-soft);color:var(--green)}
 .q.pending i{border-color:#f59e0b;background:var(--amber-soft);color:var(--amber)}
 .q.overdue i{border-color:var(--red);background:var(--red-soft);color:var(--red)}
 .q.open i{border-color:#93b4f5;border-style:dashed;color:var(--brand-d)}
 .q.before i{opacity:.45}
-.q-key{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-left:auto;align-self:center}
-.q-key span:before{content:'';display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px;background:#dbe1ea}
+.q-key{display:flex;gap:8px;flex-wrap:wrap;font-size:10.5px;color:var(--muted);margin-left:auto;align-self:center}
+.q-key span:before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;vertical-align:-1px;background:#dbe1ea}
 .q-key .filed:before{background:#34a368}.q-key .pending:before{background:#f59e0b}.q-key .overdue:before{background:var(--red)}.q-key .open:before{background:#93b4f5}
-table.tbl.sm th{padding:8px 10px}table.tbl.sm td{padding:9px 10px;font-size:13px}
-table.tbl tfoot td{border-top:2px solid var(--line);padding:9px 10px}
+table.tbl.sm th{padding:5px 8px;font-size:10px}table.tbl.sm td{padding:5px 8px;font-size:12.5px}
+table.tbl.sm .btn-sm{padding:2px 8px;font-size:11.5px}
+table.tbl tfoot td{border-top:2px solid var(--line);padding:6px 8px}
 tr.late td{background:#fff7f7}
-.sub2{color:var(--faint);font-size:12px}
-.cd-hint{font-size:12px;color:var(--muted);margin-top:10px}.cd-hint.good{color:var(--green);margin:-6px 0 12px}
-.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
-.kpi{border:1px solid var(--line);border-radius:10px;padding:9px 11px;min-width:0}
-.kpi .l{font-size:10.5px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-.kpi .v{font-weight:700;margin-top:3px;font-size:13px}
-.bk-log{border:1px dashed #cdd8ea;border-radius:10px;padding:10px 12px;background:#f8faff}
-.bk-log>b{font-size:12px;color:var(--muted)}
-.bk-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
-.bk-row>*{flex:1 1 120px}.bk-row>.btn{flex:0 0 auto}
-.pdc-sel{border:1px solid var(--line);border-radius:20px;padding:4px 8px;font-size:12px;font-weight:700}
+.sub2{color:var(--faint);font-size:11.5px}
+.cd-hint{font-size:11.5px;color:var(--muted);margin-top:6px}.cd-hint.good{color:var(--green);margin:-4px 0 8px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:5px 9px;min-width:0}
+.kpi .l{font-size:9.5px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.kpi .v{font-weight:700;margin-top:1px;font-size:12.5px}
+.bk-log{border:1px dashed #cdd8ea;border-radius:8px;padding:6px 9px;background:#f8faff}
+.bk-log>b{font-size:11px;color:var(--muted)}
+.bk-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center}
+.bk-row>*{flex:1 1 110px}.bk-row>.btn{flex:0 0 auto}
+.pdc-sel{border:1px solid var(--line);border-radius:20px;padding:2px 6px;font-size:11.5px;font-weight:700}
 .pdc-sel.pending{background:var(--amber-soft);color:var(--amber)}.pdc-sel.blue{background:var(--blue-soft);color:var(--blue)}.pdc-sel.completed{background:var(--green-soft);color:var(--green)}.pdc-sel.high{background:var(--red-soft);color:var(--red)}.pdc-sel.low{background:#f1f5f9;color:#475569}
-.cd-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
-.cd-two .cp-card{box-shadow:none;margin-bottom:0!important}
-.cd-note{width:100%;border:1px solid var(--line);border-radius:11px;padding:10px 12px;resize:vertical;min-height:70px;outline:none}
+.cd-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:10px}
+.cd-two .cp-card{box-shadow:none;margin-bottom:0!important;padding:10px 12px}
+.cd-two .cp-card .kv{padding:5px 0}
+.cd-wrap .rel-task{padding:6px 8px;margin-top:6px;border-radius:8px}
+.cd-wrap .rel-task .ic{width:24px;height:24px}
+.cd-wrap .card-p .grid{gap:10px}
+.cd-note{width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 9px;resize:vertical;min-height:48px;outline:none;font-size:13px}
 .cd-note:focus{border-color:var(--brand)}
-.tl-i{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.cd-aside .activity-item{padding:7px 0;gap:8px}.cd-aside .mini-av{width:26px;height:26px;font-size:10px}
+.tl-i{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12px}
 .tl-i:last-child{border-bottom:0}
-.tl-ic{width:26px;height:26px;border-radius:8px;background:#f1f5f9;display:grid;place-items:center;flex:0 0 auto;font-size:13px}
-.tl-t{font-weight:600}.tl-d{font-size:11px;color:var(--faint);margin-top:1px}
+.tl-ic{width:22px;height:22px;border-radius:6px;background:#f1f5f9;display:grid;place-items:center;flex:0 0 auto;font-size:11px}
+.tl-t{font-weight:600}.tl-d{font-size:10.5px;color:var(--faint)}
+.pdc-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.pdc-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 10px}
+.pdc-tabs button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 11px;font-weight:600;font-size:12px;color:var(--muted)}
+.pdc-tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
 @media(max-width:1200px){.cd-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1100px){.cd-wrap{grid-template-columns:1fr}.cd-aside{position:static;max-height:none}.cd-two{grid-template-columns:1fr}}
-@media(max-width:760px){.cd-form,.kpis{grid-template-columns:1fr 1fr}.cd-stats{grid-template-columns:1fr 1fr}.cd-b{padding:14px}.q-key{margin-left:0}}
+@media(max-width:760px){.sv-grid .sv.half{grid-column:1/-1}.cd-form,.kpis,.pdc-stats{grid-template-columns:1fr 1fr}.cd-stats{grid-template-columns:1fr 1fr}.q-key{margin-left:0}}
 @media(max-width:480px){.cd-form{grid-template-columns:1fr}.cd-f.span2{grid-column:auto}}
 @media(max-width:900px){.stats{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr}.two-col{grid-template-columns:1fr}.nav-links{display:none}
   .shell{grid-template-columns:1fr}aside.side{position:static;height:auto}.side-nav{flex-direction:row;flex-wrap:wrap}.side-lbl{display:none}
@@ -566,6 +586,7 @@ const NIC={
   agree:SVG('<path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5"/><path d="M9 16c1.5-2 2.5-3 3.5-3s1.5 2 3 2"/>'),
   inv:SVG('<path d="M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>'),
   rcpt:SVG('<circle cx="12" cy="12" r="9"/><path d="M12 7v10M14.5 9.5a2.5 2.5 0 0 0-5 .6c0 2.4 5 1.4 5 3.8a2.5 2.5 0 0 1-5 .6"/>'),
+  pdc:SVG('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h7M6 14h4M15 14h3"/>'),
   pay:SVG('<rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/>'),
   ret:SVG('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v5l3 2"/>'),
   desk:SVG('<path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/>'),
@@ -574,7 +595,7 @@ const NIC={
 };
 const NAV_MENU=[
   ['MAIN MENU',[['ai','AI assistant','#/ai',NIC.ai],['dashboard','Dashboard','#/dashboard',NIC.dash],['leads','Leads','#/leads',NIC.lead],['clients','Clients','#/clients',NIC.client],['tasks','Tasks','#/tasks',NIC.task]]],
-  ['SALES & BILLING',[['quotations','Quotations','#/quotations',NIC.quote],['agreements','Agreements','#/agreements',NIC.agree],['invoices','Sales invoices','#/invoices',NIC.inv],['receipts','Receipts','#/receipts',NIC.rcpt],['payments','Payments','#/payments',NIC.pay],['retention','Retention','#/retention',NIC.ret]]],
+  ['SALES & BILLING',[['quotations','Quotations','#/quotations',NIC.quote],['agreements','Agreements','#/agreements',NIC.agree],['invoices','Sales invoices','#/invoices',NIC.inv],['receipts','Receipts','#/receipts',NIC.rcpt],['pdc','PDC cheques','#/pdc',NIC.pdc],['payments','Payments','#/payments',NIC.pay],['retention','Retention','#/retention',NIC.ret]]],
   ['DESKS',[['audit','Audit Desk','../audit/',NIC.desk],['vat','VAT Desk','',NIC.desk],['books','Bookkeeping Desk','',NIC.desk]]],
   ['ADMINISTRATION',[['settings','Business details','#/settings',NIC.gear],['users','Users & access','../?go=users',NIC.users],['portal','Portal dashboard','../',NIC.dash]]]
 ];
@@ -600,6 +621,7 @@ function route(){
     receipts:['receipts',renderReceipts],receipt:['receipts',()=>renderReceiptBuilder(id)],
     settings:['settings',renderSettings],
     payments:['payments',renderPayments],
+    pdc:['pdc',renderPdc],
     retention:['retention',renderRetention],
     agreements:['agreements',renderAgreements],agreement:['agreements',()=>renderAgreementBuilder(id)],
     ai:['ai',renderAI]};
@@ -691,6 +713,9 @@ function renderTools(page){
        <span class="tcount" id="tcount"></span><button class="btn btn-sm" data-act="run-engine">⟳ Deadlines</button><button class="btn btn-primary btn-sm" data-act="new-task">＋ New task</button>`;
     $('#taskSearch').oninput=e=>{taskSearch=e.target.value;renderTasks();};
     $('#taskType').onchange=e=>{taskFilter=e.target.value;renderTasks();};
+  } else if(page==='pdc'){
+    box.innerHTML=srch('pdcSearch','Search client, cheque no., bank…',pdcSearch)+`<span class="tcount" id="tcount"></span>`;
+    $('#pdcSearch').oninput=e=>{pdcSearch=e.target.value;renderPdc();};
   } else if(page==='ai'){
     box.innerHTML=`<button class="btn btn-sm" data-act="ai-voice">🎤 Speak</button><button class="btn btn-sm" data-act="ai-talk">Talk back and forth</button>`;
   } else box.innerHTML='';
@@ -911,7 +936,7 @@ function cdF(kind,o,gaps){
   };
 }
 function cdSec(n,id,title,actions,body){return `<section class="cd-sec" id="${id}"><div class="cd-h"><span class="no">${n}</span><h2>${title}</h2>${actions?`<div class="act">${actions}</div>`:''}</div><div class="cd-b">${body}</div></section>`;}
-function svBox(icon,title,act,body){return `<div class="sv"><div class="sv-h"><span>${icon}</span><b>${esc(title)}</b>${act?`<div class="act">${act}</div>`:''}</div><div class="sv-b">${body}</div></div>`;}
+function svBox(icon,title,act,body,cls){return `<div class="sv${cls?' '+cls:''}"><div class="sv-h"><span>${icon}</span><b>${esc(title)}</b>${act?`<div class="act">${act}</div>`:''}</div><div class="sv-b">${body}</div></div>`;}
 function cdNav(items){return `<div class="cd-nav">${items.map(([id,t])=>`<button data-act="cd-jump" data-to="${id}">${t}</button>`).join('')}</div>`;}
 
 /* ----- section 1: details (clients and leads share the same fields) ----- */
@@ -966,7 +991,7 @@ function vatPanel(c,db,F){
     <table class="tbl sm"><thead><tr><th>Tax period</th><th>Due</th><th>Status</th><th>Filed</th><th></th></tr></thead><tbody>
       ${cur?row(cur):''}${rows.map(row).join('')||'<tr><td colspan="5" class="empty" style="padding:16px">No ended periods since the contract started.</td></tr>'}</tbody></table>
     <div class="cd-hint">A period opens as <b>Pending</b> the day after it ends; the return is due on the 28th of the next month (Saturday / Sunday → Monday).</div>`
-    :'<div class="cd-hint">Choose the VAT tax periods to see the filing calendar.</div>'}`);
+    :'<div class="cd-hint">Choose the VAT tax periods to see the filing calendar.</div>'}`,'wide');
 }
 function ctYears(c,db){
   const ye=pDate(c.taxYearEnd);if(!ye)return[];const today=todayD(),out=[];
@@ -989,7 +1014,7 @@ function ctPanel(c,db,F){
       ${Y.map(y=>{const[pc,pt]=ST_PILL[y.st];return `<tr><td><b>FY${y.fy}</b></td><td class="sub2">${fmtDate(ymd(y.start))} – ${fmtDate(ymd(y.end))}</td><td>${fmtDate(ymd(y.due))}</td><td><span class="pill ${pc}">${y.st==='open'?'Year running':pt}</span></td>
         <td class="sub2">${y.rec&&y.rec.status==='Filed'?fmtDate(y.rec.date)+(y.rec.ref?' · '+esc(y.rec.ref):'')+(y.rec.amount!=null&&y.rec.amount!==''?' · AED '+money(y.rec.amount):''):y.st==='filed'?'Task completed':'—'}</td>
         <td class="r">${y.st==='filed'?(y.rec?`<span class="link" data-act="ct-unfile" data-id="${c.id}" data-key="${y.fy}">Undo</span>`:''):y.st==='open'?'':`<button class="btn btn-sm btn-primary" data-act="ct-file" data-id="${c.id}" data-key="${y.fy}" data-label="FY${y.fy}">Mark filed</button>`}</td></tr>`;}).join('')}</tbody></table>
-      <div class="cd-hint">Return and payment are due within 9 months after the financial year end.</div>`:'<div class="cd-hint">Enter the financial year end to see the filing years.</div>'}`);
+      <div class="cd-hint">Return and payment are due within 9 months after the financial year end.</div>`:'<div class="cd-hint">Enter the financial year end to see the filing years.</div>'}`,'wide');
 }
 function bkPanel(c,db,F){
   const r=remindersOn(db),plan=r?r.R.planOf(c,r.P):{bookkeeping:'Weekly'},rv=c.bkReviews||[],last=rv[0],today=todayD(),tStr=ymd(today);
@@ -1012,7 +1037,7 @@ function bkPanel(c,db,F){
         <select id="bk_status" title="Status">${opt(['On track','Waiting for client documents','Behind schedule'],'On track')}</select></div>
       <div class="bk-row"><input id="bk_note" placeholder="Note – e.g. bank statements for Aug still pending"><button class="btn btn-primary btn-sm" data-act="bk-log" data-id="${c.id}">Log review</button></div></div>
     ${rv.length?`<table class="tbl sm" style="margin-top:10px"><thead><tr><th>Review</th><th>Books to</th><th>Client contact</th><th>Status</th><th>Note</th><th>By</th></tr></thead><tbody>
-      ${rv.slice(0,8).map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${x.upto?MON3[+x.upto.slice(5,7)-1]+' '+x.upto.slice(0,4):'—'}</td><td>${esc(x.contact)}</td><td><span class="pill ${/Behind/.test(x.status)?'high':/Waiting/.test(x.status)?'pending':'completed'}">${esc(x.status)}</span></td><td class="sub2">${esc(x.note||'')}</td><td class="sub2">${esc(x.by||'')}</td></tr>`).join('')}</tbody></table>`:''}`);
+      ${rv.slice(0,8).map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${x.upto?MON3[+x.upto.slice(5,7)-1]+' '+x.upto.slice(0,4):'—'}</td><td>${esc(x.contact)}</td><td><span class="pill ${/Behind/.test(x.status)?'high':/Waiting/.test(x.status)?'pending':'completed'}">${esc(x.status)}</span></td><td class="sub2">${esc(x.note||'')}</td><td class="sub2">${esc(x.by||'')}</td></tr>`).join('')}</tbody></table>`:''}`,'wide');
 }
 const SVC_TRACK={
   'VAT Registration':{icon:'🆕',st:['Not started','Collecting documents','Submitted to FTA','Additional info requested','Approved – TRN issued','Rejected'],ref:'Application no.'},
@@ -1032,20 +1057,21 @@ function trackPanel(name,o,db,kind){
   let extra='';
   if(cfg.fy&&kind==='client'){const r=remindersOn(db),d=r?r.R.deadlines(o,todayD(),400,r.P).find(x=>x.kind===cfg.fy&&x.due>=ymd(new Date(Date.now()-60*864e5))):null;
     extra=`<div class="cd-hint">${o.taxYearEnd?`Year end ${fmtDate(o.taxYearEnd)}`:'Set the financial year end under Corporate Tax / Client details'}${d?` · due <b>${fmtDate(d.due)}</b>`:''} · <a class="link" href="../audit/?client=${encodeURIComponent(o.name)}">Open in Audit Desk</a></div>`;}
-  return svBox(cfg.icon,name,`<span class="pill ${tone}">${esc(st)}</span>`,`<div class="cd-form">
+  return svBox(cfg.icon,name,`<span class="pill ${tone}">${esc(st)}</span>`,`<div class="cd-form c2">
     <div class="cd-f"><label>Status</label><select ${at('status')}>${cfg.st.map(x=>`<option${x===st?' selected':''}>${esc(x)}</option>`).join('')}</select></div>
     ${cfg.ref?f('ref',cfg.ref):''}${f('date',cfg.fy?'Started':'Date submitted / started','date')}
     ${cfg.per?f('period',cfg.per):''}${cfg.amt?f('amount',cfg.amt,'number'):''}${f('next',cfg.next||'Next follow-up','date')}
-    <div class="cd-f span3"><label>Notes</label><textarea rows="1" ${at('note')}>${esc(s.note||'')}</textarea></div></div>${extra}`);
+    <div class="cd-f span3"><label>Notes</label><textarea rows="1" ${at('note')}>${esc(s.note||'')}</textarea></div></div>${extra}`,'half');
 }
 function servicesSection(kind,o,db){
-  const has=svcList(o).sort((a,b)=>(SVC_LIST.indexOf(a)+1||99)-(SVC_LIST.indexOf(b)+1||99)),F=cdF(kind,o,[]);
+  const big=['VAT Filing','CT Filing','Bookkeeping'],rank=x=>(big.includes(x)?0:100)+(SVC_LIST.indexOf(x)+1||99);   // full-width panels first, small trackers pair up below
+  const has=svcList(o).sort((a,b)=>rank(a)-rank(b)),F=cdF(kind,o,[]);
   const panels=has.map(s=>s==='VAT Filing'?(kind==='client'?vatPanel(o,db,F):svBox('🧾','VAT Filing','',`<div class="cd-form">${F.sel('vatCycle','VAT tax periods (stagger)',VAT_CYCLES,'span2')}${F.inp('trn','VAT TRN')}</div>`))
     :s==='CT Filing'?(kind==='client'?ctPanel(o,db,F):svBox('🏛','Corporate Tax Filing','',`<div class="cd-form">${F.inp('taxYearEnd','Financial year end','date')}${F.inp('turnoverEst','Turnover estimate (AED)','number')}</div>`))
     :s==='Bookkeeping'?(kind==='client'?bkPanel(o,db,F):svBox('📚','Bookkeeping','',`<div class="cd-form">${F.sel('bkSoftware','Accounting software',['','Manager.io','Zoho Books','QuickBooks','Tally','Xero','Excel','Other'])}</div>`))
     :SVC_TRACK[s]?trackPanel(s,o,db,kind):svBox('📌',s,'','<div class="cd-hint">Tracked in the follow-ups below.</div>'));
   return cdSec(2,'cd-s2','Services','',
-    panels.join('')||'<div class="empty" style="padding:22px">Tick the services opted under '+(kind==='lead'?'Lead':'Client')+' details to open a panel for each.</div>');
+    (panels.length?'<div class="sv-grid">'+panels.join('')+'</div>':'')||'<div class="empty" style="padding:22px">Tick the services opted under '+(kind==='lead'?'Lead':'Client')+' details to open a panel for each.</div>');
 }
 
 /* ----- section 3: client ledger with running balance ----- */
@@ -1137,9 +1163,9 @@ function renderClientDetail(id){
   const rows=ledgerRows(c,db),dr=rows.reduce((s,r)=>s+r.debit,0),cr=rows.reduce((s,r)=>s+r.credit,0),out=dr-cr;
   const chq=db.receipts.filter(r=>r.clientId===c.id&&(r.method==='PDC'||r.method==='CDC')&&['In hand','Deposited'].includes(pdcStatus(r)));
   app.innerHTML=`
-  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/clients">←</a>
-    <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="margin-top:4px;color:var(--muted);font-size:13px"><span class="pill active">${c.status}</span>${privateChip(c)} &nbsp;👤 ${esc((c.staff||[]).join(', ')||(p?p.name:'Unassigned'))}${!blankV(c.trn)?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><a class="btn" href="../audit/?client=${encodeURIComponent(c.name)}" title="Open this client in the Audit Desk – financial statements and the audit report" style="text-decoration:none">📊 Audit Desk</a><a class="btn" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive" style="text-decoration:none">📁 Cloud folder</a><button class="btn" data-act="edit-client" data-id="${c.id}" title="Status, partner and privacy">✎ Edit</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
+  <div class="page-head cd-head"><div style="display:flex;gap:10px;align-items:center"><a class="back" href="#/clients">←</a>
+    <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="color:var(--muted);font-size:12.5px"><span class="pill active">${c.status}</span>${privateChip(c)} &nbsp;👤 ${esc((c.staff||[]).join(', ')||(p?p.name:'Unassigned'))}${!blankV(c.trn)?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><a class="btn" href="../audit/?client=${encodeURIComponent(c.name)}" title="Open this client in the Audit Desk – financial statements and the audit report" style="text-decoration:none">📊 Audit Desk</a><a class="btn" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive" style="text-decoration:none">📁 Cloud folder</a><button class="btn" data-act="edit-client" data-id="${c.id}" title="Status, partner and privacy">✎ Edit</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
   <div class="stats cd-stats">
     <div class="stat"><div class="lbl">Invoiced</div><div class="num">AED ${money(dr)}</div></div>
     <div class="stat"><div class="lbl">Received</div><div class="num" style="color:var(--brand)">AED ${money(cr)}</div></div>
@@ -1161,11 +1187,11 @@ function renderLeadDetail(id){
   const qts=db.quotations.filter(q=>q.refId===l.id||q.refName===l.name),ags=db.agreements.filter(a=>a.clientName===l.name);
   const docRow=(ic,go,t,sub,st)=>`<div class="rel-task" data-goto="${go}" style="cursor:pointer"><div class="ic">${ic}</div><div style="flex:1"><b style="font-size:13px">${esc(t)}</b><div style="color:var(--faint);font-size:11px">${sub}</div></div><span class="pill ${st==='Draft'?'draft':'final'}">${esc(st)}</span></div>`;
   app.innerHTML=`
-  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start">
+  <div class="page-head cd-head"><div style="display:flex;gap:10px;align-items:center">
     <a class="back" href="#/leads">←</a>
-    <div><h1 style="font-size:24px">${esc(l.name)}</h1><div style="display:flex;gap:10px;align-items:center;margin-top:4px"><span class="pill blue">${esc(l.stage)}</span><span style="color:var(--faint);font-size:13px">🔗 ${esc(l.source)} · 👤 ${esc(l.assignedTo||'Unassigned')}</span></div></div>
+    <div><h1 style="font-size:24px">${esc(l.name)}</h1><div style="display:flex;gap:8px;align-items:center"><span class="pill blue">${esc(l.stage)}</span><span style="color:var(--faint);font-size:13px">🔗 ${esc(l.source)} · 👤 ${esc(l.assignedTo||'Unassigned')}</span></div></div>
   </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-quote-for" data-type="lead" data-id="${l.id}">🧾 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">📄 Agreement</button><button class="btn" data-act="edit-lead" data-id="${l.id}">✎ Edit</button><button class="btn" data-act="convert-lead" data-id="${l.id}">✔ Convert to Client</button><button class="btn btn-danger" data-act="del-lead" data-id="${l.id}">🗑 Delete</button></div></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-act="new-quote-for" data-type="lead" data-id="${l.id}">🧾 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">📄 Agreement</button><button class="btn" data-act="edit-lead" data-id="${l.id}">✎ Edit</button><button class="btn" data-act="convert-lead" data-id="${l.id}">✔ Convert to Client</button><button class="btn btn-danger" data-act="del-lead" data-id="${l.id}">🗑 Delete</button></div></div>
   ${cdNav([['cd-s1','1 · Details'],['cd-s2','2 · Services'],['cd-s4','3 · Follow-up'],['cd-s6','4 · Quotations & agreements']])}
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('lead',l,db,[])}
@@ -1232,6 +1258,7 @@ function cdAct(act,el,db,id){
       db.tasks.filter(t=>t.clientId===c.id&&(t.kind==='bookkeeping'||/^Bookkeeping Review/.test(t.title))&&t.status!=='Completed'&&(t.dueDate||'')<=lim).forEach(t=>{t.status='Completed';t.completedAt=r.date;});
       if(r.contact!=='No contact needed'){const type=/^Called/.test(r.contact)?'call':r.contact==='Meeting'?'meeting':'message';c.contacts=c.contacts||[];c.contacts.unshift({date:r.date,type,note:'Bookkeeping review – '+r.contact,by:r.by});c.contacts=c.contacts.slice(0,100);if(!c.lastContact||r.date>c.lastContact)c.lastContact=r.date;}
       save();toast('Review logged');route();return true;}
+    case'pdc-tab':{pdcFilter=key||'Open';renderPdc();return true;}
     case'ledger-add':{if(!c)return true;const dr=+$('#lg_dr').value||0,cr=+$('#lg_cr').value||0;if(!dr&&!cr){toast('Enter a debit or a credit');return true;}
       c.ledger=c.ledger||[];c.ledger.push({id:uid('lg'),date:$('#lg_date').value||ymd(new Date()),type:$('#lg_type').value,ref:$('#lg_ref').value.trim(),debit:dr,credit:cr});save();toast('Entry added');route();return true;}
     case'ledger-del':{if(!c)return true;if(!confirm('Delete this ledger entry?'))return true;c.ledger=(c.ledger||[]).filter(r=>r.id!==key);save();route();return true;}
@@ -1240,6 +1267,41 @@ function cdAct(act,el,db,id){
       syncPdcTask(db,rc);save();toast('Cheque added');route();return true;}
   }
   return false;
+}
+
+
+/* ============================================================= PDC CHEQUES (all clients) */
+let pdcFilter='Open',pdcSearch='';
+function renderPdc(){
+  undockAI();
+  const db=load(),tStr=ymd(new Date()),wk=ymd(new Date(Date.now()+7*864e5)),q=pdcSearch.toLowerCase();
+  const all=db.receipts.filter(r=>r.method==='PDC'||r.method==='CDC').map(r=>({r,st:pdcStatus(r),c:db.clients.find(x=>x.id===r.clientId)}));
+  const sum=a=>a.reduce((s,x)=>s+(+x.r.amount||0),0);
+  const inHand=all.filter(x=>x.st==='In hand'),dueNow=inHand.filter(x=>x.r.chequeDate&&x.r.chequeDate<=wk),dep=all.filter(x=>x.st==='Deposited'),bnc=all.filter(x=>x.st==='Bounced');
+  const tabs=[['Open','In hand + deposited',x=>x.st==='In hand'||x.st==='Deposited'],['Due','Due to deposit (7 days)',x=>x.st==='In hand'&&x.r.chequeDate&&x.r.chequeDate<=wk],['In hand','In hand',x=>x.st==='In hand'],['Deposited','Deposited',x=>x.st==='Deposited'],['Cleared','Cleared',x=>x.st==='Cleared'],['Bounced','Bounced',x=>x.st==='Bounced'],['All','All',()=>true]];
+  const tab=tabs.find(t=>t[0]===pdcFilter)||tabs[0];
+  const list=all.filter(tab[2]).filter(x=>!q||[x.r.clientName,x.c&&x.c.name,x.r.chequeNo,x.r.bank,x.r.receiptNo].some(v=>String(v||'').toLowerCase().includes(q)))
+    .sort((a,b)=>(a.r.chequeDate||a.r.date||'').localeCompare(b.r.chequeDate||b.r.date||''));
+  const tone={'In hand':'pending','Deposited':'blue','Cleared':'completed','Bounced':'high','Returned to client':'low'};
+  const sched=db.agreements.filter(a=>(a.cheques||[]).length&&a.status!=='Draft').flatMap(a=>a.cheques.map(ch=>({a,ch}))).filter(x=>x.ch.date&&x.ch.date>=tStr).sort((x,y)=>x.ch.date.localeCompare(y.ch.date)).slice(0,30);
+  app.innerHTML=`
+  <div class="page-head"><div><h1>PDC cheques</h1></div></div>
+  <div class="stats cd-stats pdc-stats">
+    <div class="stat"><div class="lbl">In hand</div><div class="num">${inHand.length} · AED ${money(sum(inHand))}</div></div>
+    <div class="stat"><div class="lbl">Due to deposit (7 days)</div><div class="num" style="${dueNow.length?'color:var(--red)':''}">${dueNow.length} · AED ${money(sum(dueNow))}</div></div>
+    <div class="stat"><div class="lbl">Deposited, awaiting clearance</div><div class="num">${dep.length} · AED ${money(sum(dep))}</div></div>
+    <div class="stat"><div class="lbl">Bounced</div><div class="num" style="${bnc.length?'color:var(--red)':''}">${bnc.length} · AED ${money(sum(bnc))}</div></div></div>
+  <div class="pdc-tabs">${tabs.map(t=>`<button class="${t[0]===tab[0]?'on':''}" data-act="pdc-tab" data-key="${t[0]}">${t[1]} (${all.filter(t[2]).length})</button>`).join('')}</div>
+  <div class="card"><div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th>Cheque date</th><th>Client</th><th>Cheque no.</th><th>Bank</th><th>Type</th><th class="r">Amount (AED)</th><th>Receipt</th><th>Status</th></tr></thead><tbody>
+  ${list.map(({r,st,c})=>{const late=st==='In hand'&&r.chequeDate&&r.chequeDate<=tStr;return `<tr${late?' class="late"':''}><td>${r.chequeDate?fmtDate(r.chequeDate):'—'}${late?' <span class="pill high">deposit</span>':''}</td>
+    <td>${c?`<span class="link" data-goto="#/client/${c.id}">${esc(c.name)}</span>`:esc(r.clientName||'—')}</td><td>${esc(r.chequeNo||'—')}</td><td>${esc(r.bank||'—')}</td><td>${esc(r.method)}</td><td class="r mono">${money(r.amount)}</td>
+    <td><span class="link" data-goto="#/receipt/${r.id}">${esc(r.receiptNo)}</span></td><td><select data-pdc="${r.id}" class="pdc-sel ${tone[st]}">${PDC_ST.map(x=>`<option${x===st?' selected':''}>${x}</option>`).join('')}</select></td></tr>`;}).join('')||'<tr><td colspan="8" class="empty" style="padding:22px">No cheques here.</td></tr>'}
+  </tbody>${list.length?`<tfoot><tr><td colspan="5"><b>Total</b></td><td class="r mono"><b>${money(list.reduce((s,x)=>s+(+x.r.amount||0),0))}</b></td><td colspan="2"></td></tr></tfoot>`:''}</table></div></div>
+  ${sched.length?`<div class="card card-p" style="margin-top:12px"><div class="sec-title" style="margin-bottom:6px">📄 Coming under agreements (not yet received)</div><table class="tbl sm"><thead><tr><th>Date</th><th>Agreement</th><th>Client</th><th>Type</th><th class="r">Amount (AED)</th></tr></thead><tbody>
+    ${sched.map(({a,ch})=>`<tr><td>${fmtDate(ch.date)}</td><td><span class="link" data-goto="#/agreement/${a.id}">${esc(a.title)}</span></td><td>${esc(a.clientName||'')}</td><td>${esc(ch.type||'PDC')}</td><td class="r mono">${money(ch.amount||0)}</td></tr>`).join('')}</tbody></table></div>`:''}
+  <div class="cd-hint">Add a cheque from the client page (section 5) or as a receipt with method PDC / CDC. Status changes here update the client's ledger and reminders.</div>`;
+  setCount(`${list.length} cheque${list.length!==1?'s':''}`);
+  pageTitle();
 }
 
 /* ============================================================= TASKS */
