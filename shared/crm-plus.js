@@ -225,7 +225,7 @@
       (gaps.length ? '<div style="margin-top:12px;background:var(--amber-soft);border-radius:10px;padding:10px 12px;font-size:13px"><b>🧩 Missing:</b> ' + esc2(gaps.join(', ')) + ' <span class="link" data-act="edit-client" data-id="' + c.id + '">Edit client</span></div>' : '<div style="margin-top:12px;font-size:13px;color:var(--brand-d)">✓ All key details present</div>') +
       (dls.length ? '<div class="sec-title" style="margin-top:16px">⏰ Coming deadlines</div>' + dls.map(function (d) { return '<div class="kv"><span class="k">' + esc2(d.title.replace(' — ' + c.name, '')) + '</span><span class="v">' + fmtDate(d.due) + ' · ' + status(d) + '</span></div>'; }).join('') : '') +
       '</div>';
-    var col = document.querySelector('#app .detail-grid > div:nth-child(2)');
+    var col = document.querySelector('#cp-slot') || document.querySelector('#app .detail-grid > div:nth-child(2)');
     if (col) col.insertAdjacentHTML('afterbegin', html);
   };
 
@@ -243,7 +243,7 @@
         .map(function (b) { return '<button class="btn btn-sm" data-cp="lead-touch" data-id="' + l.id + '" data-note="' + esc2(b[0]) + '">' + b[1] + '</button>'; }).join('') +
       (l.phone && !/^-?$/.test(l.phone) ? '<a class="btn btn-sm" href="tel:' + esc2(String(l.phone).replace(/[^+\d]/g, '')) + '">☎ Call now</a><a class="btn btn-sm" target="_blank" href="https://wa.me/' + esc2(String(l.phone).replace(/[^\d]/g, '').replace(/^0/, '971')) + '">WhatsApp</a>' : '') +
       '</div><div style="font-size:12px;color:var(--muted);margin-top:8px">Logging contact stops today’s reminders for this lead.</div></div>';
-    var col = document.querySelector('#app .detail-grid > div:nth-child(2)');
+    var col = document.querySelector('#cp-slot') || document.querySelector('#app .detail-grid > div:nth-child(2)');
     if (col) col.insertAdjacentHTML('afterbegin', html);
   };
 
@@ -546,7 +546,7 @@
   }
 
   /* ----- quick edit of a client (fix a wrong VAT period, year end, services …) ----- */
-  var SERVICE_LIST = ['VAT', 'Corporate Tax', 'Bookkeeping', 'Audit', 'Financial Statements', 'AML'];
+  var SERVICE_LIST = ['VAT Filing', 'VAT Registration', 'VAT Refund', 'CT Registration', 'CT Filing', 'Bookkeeping', 'Financial Statements', 'Audit', 'AML', 'FTA Inquiry', 'Software'];
   var VAT_CYCLES = [['Monthly', 'Monthly – every month'], ['Stagger 1', 'Stagger 1 – quarters end Jan, Apr, Jul, Oct'], ['Stagger 2', 'Stagger 2 – quarters end Feb, May, Aug, Nov'], ['Stagger 3', 'Stagger 3 – quarters end Mar, Jun, Sep, Dec']];
   var REPLAN_KEYS = {vatCycle: ['vat'], services: ['vat', 'corporate_tax', 'financial_statements', 'audit', 'bookkeeping'], taxYearEnd: ['corporate_tax', 'financial_statements', 'audit'], bookkeepingStart: ['bookkeeping']};
   var CODE_PREFIX = {vat: 'VAT|', corporate_tax: 'CT|', financial_statements: 'FS|', audit: 'AUD|', bookkeeping: 'BK|'};

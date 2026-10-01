@@ -241,6 +241,81 @@ select.sel{border:1px solid var(--line);border-radius:11px;padding:9px 12px;back
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:11px;font-weight:600;z-index:200;box-shadow:var(--shadow);opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
 
+/* ---------- client / lead page: numbered sections + comments & history ---------- */
+.cd-stats{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:14px}.cd-stats .stat{padding:14px 16px}.cd-stats .num{font-size:19px}
+.cd-nav{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.cd-nav button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;font-weight:600;font-size:13px;color:var(--muted)}
+.cd-nav button:hover{border-color:var(--brand);color:var(--brand-d)}
+.cd-wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+.cd-main{min-width:0}
+.cd-aside{position:sticky;top:12px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 24px);overflow:auto}
+.cd-sec{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:18px;scroll-margin-top:12px}
+.cd-h{display:flex;align-items:center;gap:10px;padding:13px 20px;border-bottom:1px solid var(--line)}
+.cd-h .no{width:24px;height:24px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:12px;display:grid;place-items:center;flex:0 0 auto}
+.cd-h h2{font-size:15px;margin:0;font-weight:700}
+.cd-h .act,.sv-h .act{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.cd-b{padding:16px 20px}
+.cd-grp{font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px}
+.cd-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;margin-bottom:16px}
+.cd-f{min-width:0}.cd-f.span2{grid-column:span 2}.cd-f.span3{grid-column:1/-1}
+.cd-f label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.cd-f input,.cd-f select,.cd-f textarea,.bk-row input,.bk-row select{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fbfcfd;outline:none;color:var(--ink);min-width:0}
+.cd-f textarea{resize:vertical;min-height:38px}
+.cd-f input:focus,.cd-f select:focus,.cd-f textarea:focus,.bk-row input:focus,.bk-row select:focus{border-color:var(--brand);background:#fff}
+.cd-f.miss input,.cd-f.miss select{border-color:#f2b84b;background:#fffaf0}
+.cd-f.miss label:after{content:' · missing';color:var(--amber)}
+.cd-ro{padding:8px 0;font-weight:600}
+.pw{position:relative}.pw input{padding-right:52px}
+.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--brand-d);font-size:12px;font-weight:700}
+.svc-chk{display:flex;flex-wrap:wrap;gap:8px}
+.svc-chk label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:#475569}
+.svc-chk input{margin:0;width:15px;height:15px;accent-color:var(--brand)}
+.svc-chk label.on{background:var(--brand-soft);border-color:#bcd0fb;color:var(--brand-d)}
+.sv{border:1px solid var(--line);border-radius:12px;margin-bottom:14px}
+.sv:last-child{margin-bottom:0}
+.sv-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:#fafbfc;border-radius:12px 12px 0 0}
+.sv-h b{font-size:14px}
+.sv-b{padding:14px}
+.sv-b .cd-form:last-child{margin-bottom:0}
+.qring{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin:0 0 14px}
+.q{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--muted);font-weight:600;min-width:56px}
+.q i{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:800;font-size:12px;border:3px solid #dbe1ea;color:#64748b;background:#fff}
+.q.m{min-width:38px}.q.m i{width:36px;height:36px;font-size:10px;border-width:2px}
+.q.filed i{border-color:#34a368;background:var(--green-soft);color:var(--green)}
+.q.pending i{border-color:#f59e0b;background:var(--amber-soft);color:var(--amber)}
+.q.overdue i{border-color:var(--red);background:var(--red-soft);color:var(--red)}
+.q.open i{border-color:#93b4f5;border-style:dashed;color:var(--brand-d)}
+.q.before i{opacity:.45}
+.q-key{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-left:auto;align-self:center}
+.q-key span:before{content:'';display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px;background:#dbe1ea}
+.q-key .filed:before{background:#34a368}.q-key .pending:before{background:#f59e0b}.q-key .overdue:before{background:var(--red)}.q-key .open:before{background:#93b4f5}
+table.tbl.sm th{padding:8px 10px}table.tbl.sm td{padding:9px 10px;font-size:13px}
+table.tbl tfoot td{border-top:2px solid var(--line);padding:9px 10px}
+tr.late td{background:#fff7f7}
+.sub2{color:var(--faint);font-size:12px}
+.cd-hint{font-size:12px;color:var(--muted);margin-top:10px}.cd-hint.good{color:var(--green);margin:-6px 0 12px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:9px 11px;min-width:0}
+.kpi .l{font-size:10.5px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.kpi .v{font-weight:700;margin-top:3px;font-size:13px}
+.bk-log{border:1px dashed #cdd8ea;border-radius:10px;padding:10px 12px;background:#f8faff}
+.bk-log>b{font-size:12px;color:var(--muted)}
+.bk-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.bk-row>*{flex:1 1 120px}.bk-row>.btn{flex:0 0 auto}
+.pdc-sel{border:1px solid var(--line);border-radius:20px;padding:4px 8px;font-size:12px;font-weight:700}
+.pdc-sel.pending{background:var(--amber-soft);color:var(--amber)}.pdc-sel.blue{background:var(--blue-soft);color:var(--blue)}.pdc-sel.completed{background:var(--green-soft);color:var(--green)}.pdc-sel.high{background:var(--red-soft);color:var(--red)}.pdc-sel.low{background:#f1f5f9;color:#475569}
+.cd-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.cd-two .cp-card{box-shadow:none;margin-bottom:0!important}
+.cd-note{width:100%;border:1px solid var(--line);border-radius:11px;padding:10px 12px;resize:vertical;min-height:70px;outline:none}
+.cd-note:focus{border-color:var(--brand)}
+.tl-i{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.tl-i:last-child{border-bottom:0}
+.tl-ic{width:26px;height:26px;border-radius:8px;background:#f1f5f9;display:grid;place-items:center;flex:0 0 auto;font-size:13px}
+.tl-t{font-weight:600}.tl-d{font-size:11px;color:var(--faint);margin-top:1px}
+@media(max-width:1200px){.cd-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1100px){.cd-wrap{grid-template-columns:1fr}.cd-aside{position:static;max-height:none}.cd-two{grid-template-columns:1fr}}
+@media(max-width:760px){.cd-form,.kpis{grid-template-columns:1fr 1fr}.cd-stats{grid-template-columns:1fr 1fr}.cd-b{padding:14px}.q-key{margin-left:0}}
+@media(max-width:480px){.cd-form{grid-template-columns:1fr}.cd-f.span2{grid-column:auto}}
 @media(max-width:900px){.stats{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr}.two-col{grid-template-columns:1fr}.nav-links{display:none}
   .shell{grid-template-columns:1fr}aside.side{position:static;height:auto}.side-nav{flex-direction:row;flex-wrap:wrap}.side-lbl{display:none}
   .wrap{padding:16px 14px 50px}.topbar{padding:12px 14px}.top-search{display:none}}
@@ -303,6 +378,7 @@ function migrate(m){
   m=m||{};
   ['team','partners','clients','leads','tasks','quotations','agreements','invoices','receipts','services','genLog'].forEach(k=>{if(!Array.isArray(m[k]))m[k]=[];});
   m.business=Object.assign({},BIZ_DEFAULT,(m.business||{}));
+  m.clients.concat(m.leads).forEach(o=>{if(o&&Array.isArray(o.services))o.services=svcList(o);});   // VAT → VAT Filing, Corporate Tax → CT Filing
   return m;
 }
 function save(){ try{localStorage.setItem(STORE_KEY,JSON.stringify(withHidden(mem)));}catch(e){} }
@@ -718,39 +794,6 @@ function leadCard(l){return `<div class="kcard" draggable="true" data-drag="lead
   <div class="tags">${(l.services||[]).slice(0,3).map(s=>`<span class="pill tag">${esc(s)}</span>`).join('')}<span class="pill blue">${esc(l.source)}</span></div>
   <div class="foot"><span class="who">${initials(l.assignedTo)}</span><span>${fmtDate(l.date)}</span></div></div>`;}
 
-function renderLeadDetail(id){
-  const db=load();const l=db.leads.find(x=>x.id===id);if(!l){app.innerHTML='<div class="empty">Lead not found</div>';return;}
-  app.innerHTML=`
-  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start">
-    <a class="back" href="#/leads">←</a>
-    <div><h1 style="font-size:24px">${esc(l.name)}</h1><div style="display:flex;gap:10px;align-items:center;margin-top:4px"><span class="pill blue">${esc(l.stage)}</span><span style="color:var(--faint);font-size:13px">🔗 ${esc(l.source)}</span></div></div>
-  </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-quote-for" data-type="lead" data-id="${l.id}">🧾 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">📄 Agreement</button><button class="btn" data-act="edit-lead" data-id="${l.id}">✎ Edit</button><button class="btn" data-act="convert-lead" data-id="${l.id}">✔ Convert to Client</button><button class="btn btn-danger" data-act="del-lead" data-id="${l.id}">🗑 Delete</button></div></div>
-  <div class="detail-grid">
-    <div>
-      <div class="card card-p" style="margin-bottom:18px">
-        <div class="note-box"><div class="mini-av">WA</div><div style="flex:1">
-          <textarea id="leadNote" placeholder="Add a note..."></textarea>
-          <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary btn-sm" data-act="post-lead-note" data-id="${l.id}">Post</button></div>
-        </div></div>
-      </div>
-      <div class="card card-p">
-        <div class="sec-title">☰ Activity</div>
-        ${(l.notes&&l.notes.length)?l.notes.map(n=>`<div class="activity-item"><div class="mini-av">${initials(n.by)}</div><div style="flex:1"><div style="display:flex;justify-content:space-between"><b>${esc(n.by)}</b><span style="color:var(--faint);font-size:12px">${esc(n.at)}</span></div><div>${esc(n.text)}</div></div></div>`).join(''):`<div class="empty">No activity yet<br><span style="font-size:12px">Add a note to get started</span></div>`}
-      </div>
-    </div>
-    <div>
-      <div class="card card-p" style="margin-bottom:18px">
-        <div class="sec-title">👤 Details</div>
-        ${kv('Phone',l.phone)}${kv('Email',l.email)}${kv('Contact',l.contact)}${kv('Trade Licence',l.tradeLicence)}${kv('Source',l.source)}${kv('Address',l.address)}
-      </div>
-      <div class="card card-p">
-        <div style="display:flex;justify-content:space-between;align-items:center"><div class="sec-title" style="margin:0">✔ Related Tasks</div><button class="btn btn-sm" data-act="new-task-for" data-lead="${l.id}">＋ New Task</button></div>
-        <div class="empty" style="padding:24px">No tasks linked to this lead.</div>
-      </div>
-    </div>
-  </div>`;
-}
 function kv(k,v){return `<div class="kv"><span class="k">${k}</span><span class="v">${esc(v)||'—'}</span></div>`;}
 function statusPill(s){return{'Not Started':'low','In Progress':'progress','Pending to Client':'pending','Completed':'completed'}[s]||'low';}
 
@@ -768,7 +811,7 @@ function deskCell(c,kind){
   const a=auditInfo(c.name);
   return `${a&&a.year?`<span class="desk-yr">FY${a.year}</span>`:''}<a class="btn btn-sm" href="../audit/?client=${encodeURIComponent(c.name)}">${a?'Open':'Start'}</a>`;
 }
-const CL_SERVICES=['VAT','Corporate Tax','Bookkeeping','Audit','Financial Statements','AML','Other'];
+const CL_SERVICES=['VAT Filing','VAT Registration','VAT Refund','CT Registration','CT Filing','Bookkeeping','Financial Statements','Audit','AML','FTA Inquiry','Software'];
 /* the services a client has bought, add and remove them here */
 function svcCell(c){
   const has=(c.services||[]);
@@ -831,45 +874,372 @@ function clientCard(c,p){return `<div class="kcard" draggable="true" data-drag="
   <div class="tags">${(c.services||[]).map(s=>`<span class="pill tag">${esc(s)}</span>`).join('')}</div>
   <div class="chip-row">${(c.staff||[]).map(s=>`<span class="who">${initials(s)}</span>`).join('')||'<span style="font-size:11px;color:var(--faint)">No staff</span>'}</div></div>`;}
 
+/* ============================================================= CLIENT & LEAD PAGE
+   Numbered sections down the page (details · services · ledger · reminders · PDC · documents),
+   with comments and history alongside. Fields save as soon as they change. */
+const SVC_LIST=['VAT Filing','VAT Registration','VAT Refund','CT Registration','CT Filing','Bookkeeping','Financial Statements','Audit','AML','FTA Inquiry','Software'];
+const SVC_ALIAS={'vat':'VAT Filing','vat return filing':'VAT Filing','vat returns':'VAT Filing','corporate tax':'CT Filing','ct':'CT Filing','corporate tax return filing':'CT Filing','book keeping':'Bookkeeping','accounting':'Bookkeeping','preparation of financial statements':'Financial Statements','fs':'Financial Statements','financial audit':'Audit'};
+function svcNorm(s){const k=String(s||'').trim(),a=SVC_ALIAS[k.toLowerCase()];if(a)return a;return SVC_LIST.find(x=>x.toLowerCase()===k.toLowerCase())||k;}
+function svcList(o){const out=[];(o.services||[]).forEach(s=>{const n=svcNorm(s);if(n&&!out.includes(n))out.push(n);});return out;}
+const VAT_CYCLES=[['','— choose the tax periods —'],['Stagger 3','Jan–Mar · Apr–Jun · Jul–Sep · Oct–Dec'],['Stagger 1','Feb–Apr · May–Jul · Aug–Oct · Nov–Jan'],['Stagger 2','Mar–May · Jun–Aug · Sep–Nov · Dec–Feb'],['Monthly','Monthly']];
+const MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const CD_CONTACT={call:'📞 Call',message:'💬 Message',feedback:'⭐ Feedback',meeting:'🤝 Meeting'};
+const meName=()=>{const m=window.FT&&FT.me;return (m&&(m.name||m.id))||'Team';};
+const todayD=()=>new Date(ymd(new Date())+'T00:00:00');
+function pDate(s){if(!s)return null;const d=new Date(String(s).slice(0,10)+'T00:00:00');return isNaN(d)?null:d;}
+const blankV=v=>v==null||v===''||v==='-';
+// VAT return: 28th of the month after the period; Saturday / Sunday move to Monday
+function vatDueW(pe){const d=new Date(pe.getFullYear(),pe.getMonth()+1,28),w=d.getDay();if(w===6)d.setDate(d.getDate()+2);if(w===0)d.setDate(d.getDate()+1);return d;}
+function perLabel(s,e,monthly){return monthly?MON3[e.getMonth()]+' '+e.getFullYear():MON3[s.getMonth()]+(s.getFullYear()!==e.getFullYear()?' '+s.getFullYear():'')+'–'+MON3[e.getMonth()]+' '+e.getFullYear();}
+function setPath(o,path,v){const p=path.split('.');let x=o;for(let i=0;i<p.length-1;i++){x=x[p[i]]=(x[p[i]]&&typeof x[p[i]]==='object')?x[p[i]]:{};}x[p[p.length-1]]=v;}
+function getPath(o,path){return path.split('.').reduce((x,k)=>x==null?undefined:x[k],o);}
+const ST_PILL={filed:['completed','Filed'],pending:['pending','Pending'],overdue:['high','Overdue'],open:['blue','In progress'],before:['low','Before contract']};
+function remindersOn(db){const R=window.FTReminders;return R?{R,P:R.policyOf(db)}:null;}
+
+/* ----- inputs bound to a client / lead field ----- */
+function cdF(kind,o,gaps){
+  const miss=k=>(gaps||[]).includes(k)?' miss':'';
+  const at=k=>`data-cf="${esc(k)}" data-kind="${kind}" data-id="${o.id}"`;
+  const val=k=>{const v=getPath(o,k);return blankV(v)?'':v;};
+  const wrap=(k,l,cls,inner)=>`<div class="cd-f${cls?' '+cls:''}${miss(k)}"><label>${l}</label>${inner}</div>`;
+  return {
+    inp:(k,l,t,cls,ph)=>wrap(k,l,cls,`<input type="${t||'text'}" ${at(k)} value="${esc(val(k))}"${ph?` placeholder="${esc(ph)}"`:''}${t==='number'?' step="any"':''}>`),
+    area:(k,l,cls,ph)=>wrap(k,l,cls,`<textarea rows="2" ${at(k)}${ph?` placeholder="${esc(ph)}"`:''}>${esc(val(k))}</textarea>`),
+    sel:(k,l,opts,cls)=>wrap(k,l,cls,`<select ${at(k)}>${opts.map(x=>{const[v,t]=Array.isArray(x)?x:[x,x];return `<option value="${esc(v)}"${String(val(k))===String(v)?' selected':''}>${esc(t)}</option>`;}).join('')}</select>`),
+    pw:(k,l,cls)=>wrap(k,l,cls,`<div class="pw"><input type="password" autocomplete="new-password" ${at(k)} value="${esc(val(k))}"><button type="button" data-act="pw-eye">show</button></div>`),
+    show:(l,v,cls)=>`<div class="cd-f${cls?' '+cls:''}"><label>${l}</label><div class="cd-ro">${v}</div></div>`
+  };
+}
+function cdSec(n,id,title,actions,body){return `<section class="cd-sec" id="${id}"><div class="cd-h"><span class="no">${n}</span><h2>${title}</h2>${actions?`<div class="act">${actions}</div>`:''}</div><div class="cd-b">${body}</div></section>`;}
+function svBox(icon,title,act,body){return `<div class="sv"><div class="sv-h"><span>${icon}</span><b>${esc(title)}</b>${act?`<div class="act">${act}</div>`:''}</div><div class="sv-b">${body}</div></div>`;}
+function cdNav(items){return `<div class="cd-nav">${items.map(([id,t])=>`<button data-act="cd-jump" data-to="${id}">${t}</button>`).join('')}</div>`;}
+
+/* ----- section 1: details (clients and leads share the same fields) ----- */
+const GAP_FIELD={'phone':'phone','email':'email','trade licence no':'tradeLicence','address':'address','TRN':'trn','FTA portal email':'portalId','FTA portal ID':'portalId','contract expiry':'contractEnd','VAT cycle':'vatCycle','tax year end':'taxYearEnd'};
+function detailsSection(kind,o,db,gaps){
+  const F=cdF(kind,o,(gaps||[]).map(g=>GAP_FIELD[g]).filter(Boolean)), has=svcList(o), period=(o.contractType||'Period')!=='One time';
+  const contactKey=kind==='lead'?'contact':'contactPerson';
+  return cdSec(1,'cd-s1',kind==='lead'?'Lead details':'Client details','',`
+    <div class="cd-grp">Company &amp; contacts</div>
+    <div class="cd-form">${F.inp('name','Company name','text','span2')}${F.inp('email','Email address','email')}
+      ${F.inp(contactKey,'Primary contact person')}${F.inp('phone','Primary contact no.','tel')}${F.inp('tradeLicence','Trade licence no.')}
+      ${F.inp('contact2','Secondary contact person')}${F.inp('phone2','Secondary contact no.','tel')}${F.inp('address','Address')}</div>
+    <div class="cd-grp">FTA portal &amp; agent</div>
+    <div class="cd-form">${F.inp('portalId','FTA portal email','email')}${F.pw('portalPassword','FTA portal password')}${F.inp('trn','TRN')}
+      ${F.inp('agentName','Agent name')}${F.inp('agentPhone','Agent contact no.','tel')}<div></div></div>
+    <div class="cd-grp">Contract</div>
+    <div class="cd-form">${F.sel('contractType','Contract type',['Period','One time'])}
+      ${period?F.inp('contractStart','Period start date','date')+F.inp('contractEnd','Period end date','date'):F.inp('contractStart','Date of engagement','date')+'<div></div>'}
+      ${F.inp('contractPrice',kind==='lead'?'Quoted price (AED)':'Contract price (AED)','number')}
+      ${kind==='lead'?F.sel('stage','Stage',LEAD_STAGES)+F.sel('source','Source',['Website','Referral','Walk-in','Social']):''}</div>
+    <div class="cd-grp">Services opted</div>
+    <div class="svc-chk">${SVC_LIST.map(s=>`<label class="${has.includes(s)?'on':''}"><input type="checkbox" data-cf="services" data-kind="${kind}" data-id="${o.id}" value="${esc(s)}"${has.includes(s)?' checked':''}>${esc(s)}</label>`).join('')}</div>`);
+}
+
+/* ----- section 2: one panel per service ----- */
+function vatPeriods(c,db){
+  const today=todayD(),monthly=/month/i.test(c.vatCycle||''),ends=vatMonths(c.vatCycle),len=monthly?1:3,out=[];
+  // periods before the engagement are not ours; with no start date only the last 6 months are listed
+  const from=pDate(c.contractStart)||pDate(c.bookkeepingStart)||pDate(c.createdAt)||new Date(today.getFullYear(),today.getMonth()-6,1);
+  for(let i=-27;i<=3;i++){const d=new Date(today.getFullYear(),today.getMonth()+i,1),m=d.getMonth()+1;if(!ends.includes(m))continue;
+    const e=monthEnd(d.getFullYear(),m),s=new Date(e.getFullYear(),e.getMonth()-len+1,1),key=ymd(e).slice(0,7),due=vatDueW(e);
+    const rec=(c.vatFilings||{})[key]||null,code='|'+e.getFullYear()+'-'+(e.getMonth()+1);
+    const task=db.tasks.find(t=>t.clientId===c.id&&/^VAT\|/.test(t.code||'')&&t.code.endsWith(code));
+    let st=(rec&&rec.status==='Filed')||(task&&task.status==='Completed')?'filed':e>=today?'open':due<today?'overdue':'pending';
+    if(st!=='filed'&&from&&e<from)st='before';
+    out.push({key,s,e,due,rec,task,st,label:perLabel(s,e,monthly)});}
+  return out;
+}
+function vatPanel(c,db,F){
+  const P=vatPeriods(c,db),yr=todayD().getFullYear(),monthly=/month/i.test(c.vatCycle||'');
+  const ring=P.filter(p=>p.e.getFullYear()===yr);
+  const rows=P.filter(p=>p.st!=='open'&&p.st!=='before').slice(-8).reverse(),cur=P.find(p=>p.st==='open');
+  const due=P.filter(p=>p.st==='pending'||p.st==='overdue');
+  const head=(due.length?`<span class="pill ${due.some(p=>p.st==='overdue')?'high':'pending'}">${due.length} to file</span>`+(due.length>1?`<span class="link" style="font-size:12px" data-act="vat-file-all" data-id="${c.id}" title="Catching up: mark every pending / overdue period as filed">mark all filed</span>`:''):'<span class="pill completed">Up to date</span>')+`<button class="btn btn-sm" disabled title="VAT working and reports – coming in the VAT desk">VAT desk · soon</button>`;
+  const row=p=>{const[pc,pt]=ST_PILL[p.st];return `<tr><td><b>${esc(p.label)}</b></td><td>${fmtDate(ymd(p.due))}</td><td><span class="pill ${pc}">${pt}</span></td>
+    <td class="sub2">${p.rec&&p.rec.status==='Filed'?fmtDate(p.rec.date)+(p.rec.ref?' · '+esc(p.rec.ref):'')+(p.rec.amount?' · AED '+money(p.rec.amount):''):p.st==='filed'?'Task completed':'—'}</td>
+    <td class="r">${p.st==='filed'?(p.rec?`<span class="link" data-act="vat-unfile" data-id="${c.id}" data-key="${p.key}">Undo</span>`:''):p.st==='open'?'<span class="sub2">opens '+fmtDate(ymd(new Date(p.e.getTime()+864e5)))+'</span>':`<button class="btn btn-sm btn-primary" data-act="vat-file" data-id="${c.id}" data-key="${p.key}" data-label="${esc(p.label)}">Mark filed</button>`}</td></tr>`;};
+  return svBox('🧾','VAT Filing',head,`
+    <div class="cd-form">${F.sel('vatCycle','VAT tax periods (stagger)',VAT_CYCLES,'span2')}${F.inp('trn','VAT TRN')}</div>
+    ${c.vatCycle?`<div class="qring">${ring.map((p,i)=>`<div class="q ${p.st}${monthly?' m':''}" title="${esc(p.label)} · due ${fmtDate(ymd(p.due))} · ${ST_PILL[p.st][1]}"><i>${monthly?MON3[p.e.getMonth()]:'Q'+(i+1)}</i><span>${monthly?'':esc(MON3[p.s.getMonth()]+'–'+MON3[p.e.getMonth()])}</span></div>`).join('')}
+      <div class="q-key"><span class="filed">Filed</span><span class="pending">Pending</span><span class="overdue">Overdue</span><span class="open">In progress</span></div></div>
+    <table class="tbl sm"><thead><tr><th>Tax period</th><th>Due</th><th>Status</th><th>Filed</th><th></th></tr></thead><tbody>
+      ${cur?row(cur):''}${rows.map(row).join('')||'<tr><td colspan="5" class="empty" style="padding:16px">No ended periods since the contract started.</td></tr>'}</tbody></table>
+    <div class="cd-hint">A period opens as <b>Pending</b> the day after it ends; the return is due on the 28th of the next month (Saturday / Sunday → Monday).</div>`
+    :'<div class="cd-hint">Choose the VAT tax periods to see the filing calendar.</div>'}`);
+}
+function ctYears(c,db){
+  const ye=pDate(c.taxYearEnd);if(!ye)return[];const today=todayD(),out=[];
+  for(let i=-4;i<=1;i++){const end=new Date(ye.getFullYear()+i,ye.getMonth(),ye.getDate()),start=new Date(end.getFullYear()-1,end.getMonth(),end.getDate()+1);
+    if(start>today||start<new Date(2023,5,1))continue;   // corporate tax applies to years starting on or after 1 June 2023
+    const fy=end.getFullYear(),due=addMonthsEnd(end,9),rec=(c.ctFilings||{})[fy]||null,task=db.tasks.find(t=>t.clientId===c.id&&/^CT\|/.test(t.code||'')&&t.code.endsWith('|'+fy));
+    const st=(rec&&rec.status==='Filed')||(task&&task.status==='Completed')?'filed':end>=today?'open':due<today?'overdue':'pending';
+    out.push({fy,start,end,due,rec,task,st});}
+  return out.slice(-3).reverse();
+}
+function ctPanel(c,db,F){
+  const Y=ctYears(c,db),ye=pDate(c.taxYearEnd),t=+c.turnoverEst||0;
+  const fyTxt=ye?`${new Date(ye.getFullYear()-1,ye.getMonth(),ye.getDate()+1).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${ye.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`:'—';
+  const due=Y.filter(y=>y.st==='pending'||y.st==='overdue');
+  const head=Y.length?(due.length?`<span class="pill ${due.some(y=>y.st==='overdue')?'high':'pending'}">${due.length} to file</span>`:'<span class="pill completed">Up to date</span>'):'';
+  return svBox('🏛','Corporate Tax Filing',head,`
+    <div class="cd-form">${F.inp('taxYearEnd','Financial year end','date')}${F.show('Financial year',fyTxt)}${F.inp('turnoverEst','Turnover estimate (AED)','number')}</div>
+    ${t>0&&t<=3000000?'<div class="cd-hint good">Revenue within AED 3m – Small Business Relief can be elected for tax periods ending on or before 31 Dec 2026.</div>':''}
+    ${Y.length?`<table class="tbl sm"><thead><tr><th>Financial year</th><th>Period</th><th>Filing due</th><th>Status</th><th>Filed</th><th></th></tr></thead><tbody>
+      ${Y.map(y=>{const[pc,pt]=ST_PILL[y.st];return `<tr><td><b>FY${y.fy}</b></td><td class="sub2">${fmtDate(ymd(y.start))} – ${fmtDate(ymd(y.end))}</td><td>${fmtDate(ymd(y.due))}</td><td><span class="pill ${pc}">${y.st==='open'?'Year running':pt}</span></td>
+        <td class="sub2">${y.rec&&y.rec.status==='Filed'?fmtDate(y.rec.date)+(y.rec.ref?' · '+esc(y.rec.ref):'')+(y.rec.amount!=null&&y.rec.amount!==''?' · AED '+money(y.rec.amount):''):y.st==='filed'?'Task completed':'—'}</td>
+        <td class="r">${y.st==='filed'?(y.rec?`<span class="link" data-act="ct-unfile" data-id="${c.id}" data-key="${y.fy}">Undo</span>`:''):y.st==='open'?'':`<button class="btn btn-sm btn-primary" data-act="ct-file" data-id="${c.id}" data-key="${y.fy}" data-label="FY${y.fy}">Mark filed</button>`}</td></tr>`;}).join('')}</tbody></table>
+      <div class="cd-hint">Return and payment are due within 9 months after the financial year end.</div>`:'<div class="cd-hint">Enter the financial year end to see the filing years.</div>'}`);
+}
+function bkPanel(c,db,F){
+  const r=remindersOn(db),plan=r?r.R.planOf(c,r.P):{bookkeeping:'Weekly'},rv=c.bkReviews||[],last=rv[0],today=todayD(),tStr=ymd(today);
+  const next=r?(r.R.deadlines(c,today,90,r.P).find(d=>d.kind==='bookkeeping'&&d.due>=tStr)||{}).due:'';
+  let lag=null;if(c.bkUpto){const[y,m]=c.bkUpto.split('-').map(Number);lag=(today.getFullYear()*12+today.getMonth())-(y*12+m);}   // 1 = last month is done
+  const lagTxt=lag==null?'<span class="sub2">not set</span>':`${MON3[+c.bkUpto.slice(5,7)-1]} ${c.bkUpto.slice(0,4)} <span class="pill ${lag<=1?'completed':lag===2?'pending':'high'}">${lag<=1?'current':(lag-1)+' month'+(lag>2?'s':'')+' behind'}</span>`;
+  const ago=c.lastContact?Math.round((today-pDate(c.lastContact))/864e5):null;
+  const head=`<span class="pill blue">${esc(plan.bookkeeping)} review</span><button class="btn btn-sm" disabled title="Bookkeeping working – coming in the bookkeeping desk">Bookkeeping desk · soon</button>`;
+  const opt=(a,v)=>a.map(x=>`<option${x===v?' selected':''}>${x}</option>`).join('');
+  return svBox('📚','Bookkeeping',head,`
+    <div class="kpis"><div class="kpi"><div class="l">Books updated to</div><div class="v">${lagTxt}</div></div>
+      <div class="kpi"><div class="l">Last review</div><div class="v">${last?fmtDate(last.date)+` <span class="pill ${/Behind/.test(last.status)?'high':/Waiting/.test(last.status)?'pending':'completed'}">${esc(last.status)}</span>`:'<span class="sub2">none yet</span>'}</div></div>
+      <div class="kpi"><div class="l">Next review</div><div class="v">${next?fmtDate(next):'—'}</div></div>
+      <div class="kpi"><div class="l">Client contact</div><div class="v">${c.lastContact?fmtDate(c.lastContact)+` <span class="sub2">(${ago===0?'today':ago+'d ago'})</span>`:'<span class="sub2">not logged</span>'}</div></div></div>
+    <div class="cd-form">${F.sel('plan.bookkeeping','Review every',[['auto','Automatic ('+plan.bookkeeping+')'],['Weekly','Weekly'],['Fortnightly','Every 2 weeks'],['Monthly','Monthly']])}
+      ${F.sel('bkSoftware','Accounting software',['','Manager.io','Zoho Books','QuickBooks','Tally','Xero','Excel','Other'])}${F.inp('bookkeepingStart','Bookkeeping started','date')}</div>
+    <div class="bk-log"><b>Log this week’s review</b>
+      <div class="bk-row"><input type="date" id="bk_date" value="${tStr}" title="Review date"><input type="month" id="bk_upto" value="${esc(c.bkUpto||ymd(new Date(today.getFullYear(),today.getMonth(),0)).slice(0,7))}" title="Books updated up to">
+        <select id="bk_contact" title="Contact with the client">${opt(['Called – responsive','Called – no answer','WhatsApp sent','Email sent','Meeting','Documents received','No contact needed'],'Called – responsive')}</select>
+        <select id="bk_status" title="Status">${opt(['On track','Waiting for client documents','Behind schedule'],'On track')}</select></div>
+      <div class="bk-row"><input id="bk_note" placeholder="Note – e.g. bank statements for Aug still pending"><button class="btn btn-primary btn-sm" data-act="bk-log" data-id="${c.id}">Log review</button></div></div>
+    ${rv.length?`<table class="tbl sm" style="margin-top:10px"><thead><tr><th>Review</th><th>Books to</th><th>Client contact</th><th>Status</th><th>Note</th><th>By</th></tr></thead><tbody>
+      ${rv.slice(0,8).map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${x.upto?MON3[+x.upto.slice(5,7)-1]+' '+x.upto.slice(0,4):'—'}</td><td>${esc(x.contact)}</td><td><span class="pill ${/Behind/.test(x.status)?'high':/Waiting/.test(x.status)?'pending':'completed'}">${esc(x.status)}</span></td><td class="sub2">${esc(x.note||'')}</td><td class="sub2">${esc(x.by||'')}</td></tr>`).join('')}</tbody></table>`:''}`);
+}
+const SVC_TRACK={
+  'VAT Registration':{icon:'🆕',st:['Not started','Collecting documents','Submitted to FTA','Additional info requested','Approved – TRN issued','Rejected'],ref:'Application no.'},
+  'VAT Refund':{icon:'💸',st:['Not started','Preparing claim','Submitted to FTA','Under FTA review','Additional info requested','Approved','Refund received','Rejected'],ref:'Claim reference',per:'Refund period',amt:'Refund amount (AED)'},
+  'CT Registration':{icon:'🆕',st:['Not started','Collecting documents','Submitted to FTA','Additional info requested','Approved – TRN issued','Rejected'],ref:'Application no.'},
+  'Financial Statements':{icon:'📊',st:['Not started','Collecting data','In progress','Under review','Issued'],fy:'financial_statements'},
+  'Audit':{icon:'🔎',st:['Not started','Planning','Fieldwork','Queries with client','Report issued'],fy:'audit'},
+  'AML':{icon:'🛡',st:['Not started','Risk assessment in progress','goAML registered','Policies & KYC in place','Annual review done'],ref:'goAML ID',next:'Next review'},
+  'FTA Inquiry':{icon:'✉',st:['Open','Submitted to FTA','FTA replied','Closed'],ref:'Case / reference no.',per:'Subject'},
+  'Software':{icon:'💻',st:['Not started','Setting up','Training','Live'],ref:'Software',next:'Renewal date'}
+};
+function trackPanel(name,o,db,kind){
+  const cfg=SVC_TRACK[name],s=(o.svc||{})[name]||{},st=s.status||cfg.st[0];
+  const at=k=>`data-cf="svc.${esc(name)}.${k}" data-kind="${kind}" data-id="${o.id}"`;
+  const f=(k,l,t,cls)=>`<div class="cd-f${cls?' '+cls:''}"><label>${l}</label><input type="${t||'text'}" ${at(k)} value="${esc(s[k]==null?'':s[k])}"${t==='number'?' step="any"':''}></div>`;
+  const tone=/Rejected|info requested|Queries/i.test(st)?'high':/Approved|received|Closed|Live|Issued|issued|done|registered|in place/i.test(st)?'completed':st===cfg.st[0]?'low':'pending';
+  let extra='';
+  if(cfg.fy&&kind==='client'){const r=remindersOn(db),d=r?r.R.deadlines(o,todayD(),400,r.P).find(x=>x.kind===cfg.fy&&x.due>=ymd(new Date(Date.now()-60*864e5))):null;
+    extra=`<div class="cd-hint">${o.taxYearEnd?`Year end ${fmtDate(o.taxYearEnd)}`:'Set the financial year end under Corporate Tax / Client details'}${d?` · due <b>${fmtDate(d.due)}</b>`:''} · <a class="link" href="../audit/?client=${encodeURIComponent(o.name)}">Open in Audit Desk</a></div>`;}
+  return svBox(cfg.icon,name,`<span class="pill ${tone}">${esc(st)}</span>`,`<div class="cd-form">
+    <div class="cd-f"><label>Status</label><select ${at('status')}>${cfg.st.map(x=>`<option${x===st?' selected':''}>${esc(x)}</option>`).join('')}</select></div>
+    ${cfg.ref?f('ref',cfg.ref):''}${f('date',cfg.fy?'Started':'Date submitted / started','date')}
+    ${cfg.per?f('period',cfg.per):''}${cfg.amt?f('amount',cfg.amt,'number'):''}${f('next',cfg.next||'Next follow-up','date')}
+    <div class="cd-f span3"><label>Notes</label><textarea rows="1" ${at('note')}>${esc(s.note||'')}</textarea></div></div>${extra}`);
+}
+function servicesSection(kind,o,db){
+  const has=svcList(o).sort((a,b)=>(SVC_LIST.indexOf(a)+1||99)-(SVC_LIST.indexOf(b)+1||99)),F=cdF(kind,o,[]);
+  const panels=has.map(s=>s==='VAT Filing'?(kind==='client'?vatPanel(o,db,F):svBox('🧾','VAT Filing','',`<div class="cd-form">${F.sel('vatCycle','VAT tax periods (stagger)',VAT_CYCLES,'span2')}${F.inp('trn','VAT TRN')}</div>`))
+    :s==='CT Filing'?(kind==='client'?ctPanel(o,db,F):svBox('🏛','Corporate Tax Filing','',`<div class="cd-form">${F.inp('taxYearEnd','Financial year end','date')}${F.inp('turnoverEst','Turnover estimate (AED)','number')}</div>`))
+    :s==='Bookkeeping'?(kind==='client'?bkPanel(o,db,F):svBox('📚','Bookkeeping','',`<div class="cd-form">${F.sel('bkSoftware','Accounting software',['','Manager.io','Zoho Books','QuickBooks','Tally','Xero','Excel','Other'])}</div>`))
+    :SVC_TRACK[s]?trackPanel(s,o,db,kind):svBox('📌',s,'','<div class="cd-hint">Tracked in the follow-ups below.</div>'));
+  return cdSec(2,'cd-s2','Services','',
+    panels.join('')||'<div class="empty" style="padding:22px">Tick the services opted under '+(kind==='lead'?'Lead':'Client')+' details to open a panel for each.</div>');
+}
+
+/* ----- section 3: client ledger with running balance ----- */
+function ledgerRows(c,db){
+  const invs=db.invoices.filter(v=>v.clientId===c.id),rcs=db.receipts.filter(r=>r.clientId===c.id),rows=[];
+  if(!invs.length&&!rcs.length&&!(c.ledger||[]).length&&((c.invoiced||0)||(c.received||0)))rows.push({date:'',type:'Brought forward',ref:'',debit:+c.invoiced||0,credit:+c.received||0});
+  invs.forEach(v=>rows.push({date:v.date,type:v.title||'Invoice',ref:v.invoiceNo,debit:itemsTotal(v.items)+vatSum(v.items,v.vatRate!=null?v.vatRate:5),credit:0,go:'#/invoice/'+v.id}));
+  rcs.forEach(r=>{const chq=r.method==='PDC'||r.method==='CDC',st=pdcStatus(r);if(chq&&st!=='Cleared')return;
+    rows.push({date:chq&&r.chequeDate?r.chequeDate:r.date,type:'Receipt · '+r.method,ref:r.receiptNo,debit:0,credit:+r.amount||0,go:'#/receipt/'+r.id});});
+  (c.ledger||[]).forEach(r=>rows.push({date:r.date,type:r.type,ref:r.ref,debit:+r.debit||0,credit:+r.credit||0,lid:r.id}));
+  rows.sort((a,b)=>(a.date||'').localeCompare(b.date||''));let bal=0;rows.forEach(r=>{bal+=r.debit-r.credit;r.bal=bal;});
+  return rows;
+}
+function ledgerSection(c,db){
+  const rows=ledgerRows(c,db),dr=rows.reduce((s,r)=>s+r.debit,0),cr=rows.reduce((s,r)=>s+r.credit,0);
+  return cdSec(3,'cd-s3','Client ledger',`<button class="btn btn-sm" data-act="new-invoice-for" data-id="${c.id}">＋ Invoice</button><button class="btn btn-sm" data-act="new-receipt-for" data-id="${c.id}">＋ Receipt</button>`,`
+    <div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th>Date</th><th>Type</th><th>Ref</th><th class="r">Debit</th><th class="r">Credit</th><th class="r">Balance</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr${r.go?` data-goto="${r.go}" style="cursor:pointer"`:''}><td>${r.date?fmtDate(r.date):'—'}</td><td>${esc(r.type)}</td><td>${esc(r.ref||'')}</td><td class="r mono">${r.debit?money(r.debit):''}</td><td class="r mono">${r.credit?money(r.credit):''}</td><td class="r mono"><b>${money(r.bal)}</b></td><td class="r">${r.lid?`<span class="link" data-act="ledger-del" data-id="${c.id}" data-key="${r.lid}" title="Delete this entry">✕</span>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="empty" style="padding:18px">No transactions yet.</td></tr>'}
+    </tbody>${rows.length?`<tfoot><tr><td colspan="3"><b>Total</b></td><td class="r mono"><b>${money(dr)}</b></td><td class="r mono"><b>${money(cr)}</b></td><td class="r mono"><b style="color:${dr-cr>0?'var(--red)':'var(--green)'}">${money(dr-cr)}</b></td><td></td></tr></tfoot>`:''}</table></div>
+    <div class="bk-row" style="margin-top:12px"><input type="date" id="lg_date" value="${ymd(new Date())}"><select id="lg_type"><option>Opening balance</option><option>Adjustment</option><option>Credit note</option><option>Write-off</option><option>Other</option></select>
+      <input id="lg_ref" placeholder="Ref"><input type="number" step="any" id="lg_dr" placeholder="Debit"><input type="number" step="any" id="lg_cr" placeholder="Credit"><button class="btn btn-sm" data-act="ledger-add" data-id="${c.id}">＋ Entry</button></div>
+    <div class="cd-hint">Invoices are debits and receipts credits; a cheque counts once it is marked <b>Cleared</b> under PDC management.</div>`);
+}
+
+/* ----- section 4: reminders & follow-up (the Contact & schedule card is placed in #cp-slot) ----- */
+function remindersSection(c,db){
+  const rel=db.tasks.filter(t=>t.clientId===c.id&&t.status!=='Completed').sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
+  return cdSec(4,'cd-s4','Reminders &amp; follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-client="${c.id}">＋ Task</button><button class="btn btn-sm" data-act="gen-client-tasks" data-id="${c.id}">⟳ Deadlines</button>`,`
+    <div class="cd-two"><div id="cp-slot"></div>
+    <div><div class="cd-grp">Open tasks</div>${rel.length?rel.slice(0,10).map(t=>`<div class="rel-task" data-goto="#/task/${t.id}" style="cursor:pointer;margin-top:8px"><div class="ic">🔔</div><div style="flex:1"><b style="font-size:13px">${esc(t.title)}</b><div style="color:var(--faint);font-size:11px">${esc(t.type)} · ${fmtDate(t.dueDate)} · ${esc((t.assignees||[]).join(', '))}</div></div><span class="pill ${statusPill(t.status)}">${esc(t.status)}</span></div>`).join(''):'<div class="empty" style="padding:18px">No open tasks.</div>'}</div></div>
+    ${clientServicesSection(c,db).replace('<div style="margin-top:20px">','<div style="margin-top:16px">')}`);
+}
+
+/* ----- section 5: PDC management ----- */
+const PDC_ST=['In hand','Deposited','Cleared','Bounced','Returned to client'];
+function pdcStatus(r){return r.pdcStatus||(r.cleared?'Cleared':'In hand');}
+function pdcSection(c,db){
+  const rows=db.receipts.filter(r=>r.clientId===c.id&&(r.method==='PDC'||r.method==='CDC')).sort((a,b)=>(a.chequeDate||a.date||'').localeCompare(b.chequeDate||b.date||''));
+  const tStr=ymd(new Date()),inHand=rows.filter(r=>['In hand','Deposited'].includes(pdcStatus(r))),nxt=inHand.filter(r=>pdcStatus(r)==='In hand')[0];
+  const sched=db.agreements.filter(a=>(a.clientId===c.id||a.clientName===c.name)&&(a.cheques||[]).length);
+  const tone={'In hand':'pending','Deposited':'blue','Cleared':'completed','Bounced':'high','Returned to client':'low'};
+  return cdSec(5,'cd-s5','PDC management','',`
+    <div class="kpis"><div class="kpi"><div class="l">Cheques in hand</div><div class="v">${inHand.length} · AED ${money(inHand.reduce((s,r)=>s+(+r.amount||0),0))}</div></div>
+      <div class="kpi"><div class="l">Next to deposit</div><div class="v">${nxt?fmtDate(nxt.chequeDate)+(nxt.chequeDate<=tStr?' <span class="pill high">due</span>':''):'—'}</div></div>
+      <div class="kpi"><div class="l">Cleared</div><div class="v">${rows.filter(r=>pdcStatus(r)==='Cleared').length}</div></div>
+      <div class="kpi"><div class="l">Bounced</div><div class="v" style="${rows.some(r=>pdcStatus(r)==='Bounced')?'color:var(--red)':''}">${rows.filter(r=>pdcStatus(r)==='Bounced').length}</div></div></div>
+    <div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th>Cheque date</th><th>Cheque no.</th><th>Bank</th><th>Type</th><th class="r">Amount</th><th>Receipt</th><th>Status</th></tr></thead><tbody>
+    ${rows.map(r=>{const st=pdcStatus(r),late=st==='In hand'&&r.chequeDate&&r.chequeDate<=tStr;return `<tr${late?' class="late"':''}><td>${r.chequeDate?fmtDate(r.chequeDate):'—'}${late?' <span class="pill high">deposit</span>':''}</td><td>${esc(r.chequeNo||'—')}</td><td>${esc(r.bank||'—')}</td><td>${esc(r.method)}</td><td class="r mono">${money(r.amount)}</td>
+      <td><span class="link" data-goto="#/receipt/${r.id}">${esc(r.receiptNo)}</span></td><td><select data-pdc="${r.id}" class="pdc-sel ${tone[st]}">${PDC_ST.map(x=>`<option${x===st?' selected':''}>${x}</option>`).join('')}</select></td></tr>`;}).join('')||'<tr><td colspan="7" class="empty" style="padding:16px">No cheques recorded.</td></tr>'}</tbody></table></div>
+    <div class="bk-row" style="margin-top:12px"><select id="pd_type"><option>PDC</option><option>CDC</option></select><input id="pd_no" placeholder="Cheque no."><input id="pd_bank" placeholder="Bank"><input type="date" id="pd_date" title="Cheque date"><input type="number" step="any" id="pd_amt" placeholder="Amount (AED)"><button class="btn btn-sm btn-primary" data-act="pdc-add" data-id="${c.id}">＋ Add cheque</button></div>
+    ${sched.length?`<div class="cd-grp" style="margin-top:16px">Cheque schedules in agreements</div>${sched.map(a=>`<div class="sub2" style="margin-bottom:6px"><span class="link" data-goto="#/agreement/${a.id}">${esc(a.title)}</span> — ${a.cheques.map(q=>`${esc(q.type||'PDC')} ${q.date?fmtDate(q.date):'—'} · AED ${money(q.amount||0)}`).join(' &nbsp;|&nbsp; ')}</div>`).join('')}`:''}
+    <div class="cd-hint">A PDC creates a high-priority reminder on its date. Marking it <b>Cleared</b> credits the ledger and closes the reminder.</div>`);
+}
+
+/* ----- comments and history (right-hand column) ----- */
+function historyItems(kind,o,db){
+  const ev=[],add=(d,ic,t,s)=>{if(d)ev.push({d:String(d),ic,t,s:s||''});};
+  (o.notes||[]).forEach(n=>add(n.ts||'',`💬`,`Comment – ${esc(n.by||'')}`,esc(n.text)));
+  if(kind==='client'){
+    (o.contacts||[]).forEach(x=>add(x.date,'📇',CD_CONTACT[x.type]||esc(x.type),esc(x.note||'')+(x.by?' · '+esc(x.by):'')));
+    db.invoices.filter(v=>v.clientId===o.id).forEach(v=>add(v.date,'🧾',`Invoice ${esc(v.invoiceNo)}`,'AED '+money(itemsTotal(v.items)+vatSum(v.items,v.vatRate!=null?v.vatRate:5))));
+    db.receipts.filter(r=>r.clientId===o.id).forEach(r=>add(r.date,'💵',`Receipt ${esc(r.receiptNo)}`,'AED '+money(r.amount)+' · '+esc(r.method)));
+    db.tasks.filter(t=>t.clientId===o.id&&t.status==='Completed').forEach(t=>add(t.completedAt||t.dueDate,'✅',esc(t.title),'Task completed'));
+    Object.entries(o.vatFilings||{}).forEach(([k,f])=>add(f.date,'🧾',`VAT return filed – period ending ${MON3[+k.slice(5,7)-1]} ${k.slice(0,4)}`,f.ref?'Ref '+esc(f.ref):''));
+    Object.entries(o.ctFilings||{}).forEach(([k,f])=>add(f.date,'🏛',`Corporate tax return filed – FY${k}`,f.ref?'Ref '+esc(f.ref):''));
+    (o.bkReviews||[]).forEach(x=>add(x.date,'📚',`Bookkeeping review – ${esc(x.status)}`,esc(x.contact)+(x.note?' · '+esc(x.note):'')));
+  } else if(o.lastActivity) add(o.lastActivity,'📞','Last contact','');
+  (o.svcLog||[]).forEach(x=>add(x.ts,'🔁',`${esc(x.name)} → ${esc(x.status)}`,esc(x.by||'')));
+  db.quotations.filter(q=>q.refId===o.id||q.refName===o.name).forEach(q=>add(q.date,'📝',`Quotation – ${esc(q.title)}`,'AED '+money(q.amount)+' · '+esc(q.status)));
+  db.agreements.filter(a=>a.clientId===o.id||a.clientName===o.name).forEach(a=>add(a.date,'📄',`Agreement – ${esc(a.title)}`,esc(a.status)));
+  return ev.sort((a,b)=>b.d.localeCompare(a.d));
+}
+function asideHtml(kind,o,db){
+  const notes=o.notes||[],hist=historyItems(kind,o,db),noteId=kind==='lead'?'leadNote':'clientNote',act=kind==='lead'?'post-lead-note':'post-client-note';
+  return `<aside class="cd-aside">
+    <div class="card card-p"><div class="sec-title">💬 Comments</div>
+      <textarea id="${noteId}" class="cd-note" placeholder="Add a comment…"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin:8px 0 4px"><button class="btn btn-primary btn-sm" data-act="${act}" data-id="${o.id}">Post</button></div>
+      ${notes.length?notes.slice(0,25).map(n=>`<div class="activity-item"><div class="mini-av">${initials(n.by)}</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:13px">${esc(n.by)}</b><span class="sub2">${n.ts?fmtDate(n.ts.slice(0,10)):esc(n.at||'')}</span></div><div style="font-size:13px;white-space:pre-wrap;word-break:break-word">${esc(n.text)}</div></div></div>`).join(''):'<div class="empty" style="padding:14px">No comments yet.</div>'}</div>
+    <div class="card card-p"><div class="sec-title">🕘 History</div>
+      ${hist.length?`<div class="tl">${hist.slice(0,40).map(h=>`<div class="tl-i"><span class="tl-ic">${h.ic}</span><div><div class="tl-t">${h.t}</div>${h.s?`<div class="sub2">${h.s}</div>`:''}<div class="tl-d">${fmtDate(h.d.slice(0,10))}</div></div></div>`).join('')}</div>`:'<div class="empty" style="padding:14px">Nothing yet.</div>'}</div>
+  </aside>`;
+}
+
+/* ----- the pages ----- */
 function renderClientDetail(id){
   const db=load();const c=db.clients.find(x=>x.id===id);if(!c){app.innerHTML='<div class="empty">Client not found</div>';return;}
-  const p=db.partners.find(x=>x.id===c.partnerId);
-  const outstanding=(c.invoiced||0)-(c.received||0);
-  const rel=db.tasks.filter(t=>t.clientId===c.id);
+  const p=db.partners.find(x=>x.id===c.partnerId),R=window.FTReminders,gaps=R?R.missing(c):[];
+  const rows=ledgerRows(c,db),dr=rows.reduce((s,r)=>s+r.debit,0),cr=rows.reduce((s,r)=>s+r.credit,0),out=dr-cr;
+  const chq=db.receipts.filter(r=>r.clientId===c.id&&(r.method==='PDC'||r.method==='CDC')&&['In hand','Deposited'].includes(pdcStatus(r)));
   app.innerHTML=`
   <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start"><a class="back" href="#/clients">←</a>
-    <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="margin-top:4px;color:var(--muted);font-size:13px"><span class="pill active">${c.status}</span>${privateChip(c)} &nbsp;👤 ${esc(p?p.name:'Unassigned')}${c.trn&&c.trn!=='-'?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><a class="btn" href="../audit/?client=${encodeURIComponent(c.name)}" title="Open this client in the Audit Desk – financial statements and the audit report" style="text-decoration:none">📊 Audit Desk</a><a class="btn" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive" style="text-decoration:none">📁 Cloud folder</a><button class="btn" data-act="edit-client" data-id="${c.id}">✎ Edit</button><button class="btn" data-act="gen-client-tasks" data-id="${c.id}">⟳ Deadlines</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
-  <div class="detail-grid">
-    <div>
-      <div class="stats" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:18px">
-        <div class="stat"><div class="lbl">Invoiced</div><div class="num" style="font-size:22px">AED ${money(c.invoiced)}</div></div>
-        <div class="stat"><div class="lbl">Received</div><div class="num" style="font-size:22px;color:var(--brand)">AED ${money(c.received)}</div></div>
-        <div class="stat"><div class="lbl">Outstanding</div><div class="num" style="font-size:22px;color:${outstanding>0?'var(--red)':'var(--ink)'}">AED ${money(outstanding)}</div></div>
-      </div>
-      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">📒 Client Ledger</div>
-        <table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Ref</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>
-        ${(c.ledger&&c.ledger.length)?c.ledger.map(r=>`<tr><td>${fmtDate(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.ref)}</td><td class="r mono">${r.debit?money(r.debit):'—'}</td><td class="r mono">${r.credit?money(r.credit):'—'}</td></tr>`).join(''):`<tr><td colspan="5" class="empty">No transactions found.</td></tr>`}
-        </tbody></table></div>
-      <div class="card card-p"><div class="note-box"><div class="mini-av">WA</div><div style="flex:1"><textarea id="clientNote" placeholder="Add a note..."></textarea>
-        <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary btn-sm" data-act="post-client-note" data-id="${c.id}">Post</button></div></div></div>
-        ${(c.notes&&c.notes.length)?`<div style="margin-top:16px">${c.notes.map(n=>`<div class="activity-item"><div class="mini-av">${initials(n.by)}</div><div style="flex:1"><b>${esc(n.by)}</b><div>${esc(n.text)}</div></div></div>`).join('')}</div>`:''}
-      </div>
-    </div>
-    <div>
-      <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">🏢 Details</div>
-        ${kv('Phone',c.phone)}${kv('Email',c.email)}${kv('Trade Licence',c.tradeLicence)}${kv('Contract Expiry',c.contractExpiry?fmtDate(c.contractExpiry):'-')}${kv('Partner',p?p.name:'-')}${kv('TRN',c.trn)}${kv('VAT Cycle',c.vatCycle)}${kv('Tax Year End',c.taxYearEnd)}${kv('Portal ID',c.portalId||'-')}
-        <div class="kv"><span class="k">Portal Password</span><span class="v" data-mask="${esc(c.portalPassword||'')}">${c.portalPassword?'••••••••':'-'} <span class="link" data-act="toggle-mask" style="font-size:11px">show</span></span></div>
-        ${kv('Address',c.address)}
-        <div class="chip-row" style="margin-top:12px">${(c.services||[]).map(s=>`<span class="pill active">${esc(s)}</span>`).join('')}</div>
-      </div>
-      <div class="card card-p"><div style="display:flex;justify-content:space-between;align-items:center"><div class="sec-title" style="margin:0">✔ Related Tasks</div><button class="btn btn-sm" data-act="new-task-for" data-client="${c.id}">＋ New Task</button></div>
-        ${rel.length?rel.map(t=>`<div class="rel-task" data-goto="#/task/${t.id}" style="cursor:pointer"><div class="ic">🔔</div><div style="flex:1"><b style="font-size:13px">${esc(t.title)}</b><div style="color:var(--faint);font-size:11px">${t.type} · ${fmtDate(t.dueDate)} · ${(t.assignees||[]).join(',')}</div></div><span class="pill ${statusPill(t.status)}">${t.status}</span></div>`).join(''):`<div class="empty" style="padding:24px">No tasks linked yet.</div>`}
-      </div>
-    </div>
+    <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="margin-top:4px;color:var(--muted);font-size:13px"><span class="pill active">${c.status}</span>${privateChip(c)} &nbsp;👤 ${esc((c.staff||[]).join(', ')||(p?p.name:'Unassigned'))}${!blankV(c.trn)?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><a class="btn" href="../audit/?client=${encodeURIComponent(c.name)}" title="Open this client in the Audit Desk – financial statements and the audit report" style="text-decoration:none">📊 Audit Desk</a><a class="btn" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive" style="text-decoration:none">📁 Cloud folder</a><button class="btn" data-act="edit-client" data-id="${c.id}" title="Status, partner and privacy">✎ Edit</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
+  <div class="stats cd-stats">
+    <div class="stat"><div class="lbl">Invoiced</div><div class="num">AED ${money(dr)}</div></div>
+    <div class="stat"><div class="lbl">Received</div><div class="num" style="color:var(--brand)">AED ${money(cr)}</div></div>
+    <div class="stat"><div class="lbl">Outstanding</div><div class="num" style="color:${out>0?'var(--red)':'var(--ink)'}">AED ${money(out)}</div></div>
+    <div class="stat"><div class="lbl">Contract price</div><div class="num">${+c.contractPrice?'AED '+money(c.contractPrice):'—'}</div></div>
+    <div class="stat"><div class="lbl">Cheques in hand</div><div class="num">${chq.length?'AED '+money(chq.reduce((s,r)=>s+(+r.amount||0),0)):'—'}</div></div></div>
+  ${cdNav([['cd-s1','1 · Details'],['cd-s2','2 · Services'],['cd-s3','3 · Ledger'],['cd-s4','4 · Reminders'],['cd-s5','5 · PDC'],['cd-s6','6 · Documents']])}
+  <div class="cd-wrap"><div class="cd-main">
+    ${detailsSection('client',c,db,gaps)}
+    ${servicesSection('client',c,db)}
+    ${ledgerSection(c,db)}
+    ${remindersSection(c,db)}
+    ${pdcSection(c,db)}
+    ${cdSec(6,'cd-s6','Documents','',clientDocsSection(c,db).replace('margin-top:20px','margin-top:0'))}
+  </div>${asideHtml('client',c,db)}</div>`;
+}
+function renderLeadDetail(id){
+  const db=load();const l=db.leads.find(x=>x.id===id);if(!l){app.innerHTML='<div class="empty">Lead not found</div>';return;}
+  const qts=db.quotations.filter(q=>q.refId===l.id||q.refName===l.name),ags=db.agreements.filter(a=>a.clientName===l.name);
+  const docRow=(ic,go,t,sub,st)=>`<div class="rel-task" data-goto="${go}" style="cursor:pointer"><div class="ic">${ic}</div><div style="flex:1"><b style="font-size:13px">${esc(t)}</b><div style="color:var(--faint);font-size:11px">${sub}</div></div><span class="pill ${st==='Draft'?'draft':'final'}">${esc(st)}</span></div>`;
+  app.innerHTML=`
+  <div class="page-head"><div style="display:flex;gap:14px;align-items:flex-start">
+    <a class="back" href="#/leads">←</a>
+    <div><h1 style="font-size:24px">${esc(l.name)}</h1><div style="display:flex;gap:10px;align-items:center;margin-top:4px"><span class="pill blue">${esc(l.stage)}</span><span style="color:var(--faint);font-size:13px">🔗 ${esc(l.source)} · 👤 ${esc(l.assignedTo||'Unassigned')}</span></div></div>
   </div>
-  ${clientServicesSection(c,db)}
-  ${clientDocsSection(c,db)}`;
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-act="new-quote-for" data-type="lead" data-id="${l.id}">🧾 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">📄 Agreement</button><button class="btn" data-act="edit-lead" data-id="${l.id}">✎ Edit</button><button class="btn" data-act="convert-lead" data-id="${l.id}">✔ Convert to Client</button><button class="btn btn-danger" data-act="del-lead" data-id="${l.id}">🗑 Delete</button></div></div>
+  ${cdNav([['cd-s1','1 · Details'],['cd-s2','2 · Services'],['cd-s4','3 · Follow-up'],['cd-s6','4 · Quotations & agreements']])}
+  <div class="cd-wrap"><div class="cd-main">
+    ${detailsSection('lead',l,db,[])}
+    ${servicesSection('lead',l,db)}
+    ${cdSec(3,'cd-s4','Follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-lead="${l.id}">＋ Task</button>`,'<div id="cp-slot"></div>')}
+    ${cdSec(4,'cd-s6','Quotations &amp; agreements','',(qts.map(q=>docRow('📝','#/quotation/'+q.id,q.title,fmtDate(q.date)+' · AED '+money(q.amount),q.status)).join('')+ags.map(a=>docRow('📄','#/agreement/'+a.id,a.title,fmtDate(a.date)+' · AED '+money(a.amount),a.status)).join(''))||'<div class="empty" style="padding:18px">None yet.</div>')}
+  </div>${asideHtml('lead',l,db)}</div>`;
+}
+
+/* ----- saving: every field writes as soon as it changes ----- */
+const CD_REPLAN={vatCycle:'vatCycle',taxYearEnd:'taxYearEnd',services:'services',bookkeepingStart:'bookkeepingStart','plan.bookkeeping':'bookkeepingStart'};
+document.addEventListener('change',e=>{
+  const el=e.target.closest&&e.target.closest('[data-cf]');
+  if(!el){const ps=e.target.closest&&e.target.closest('[data-pdc]');if(ps)pdcSetStatus(ps.getAttribute('data-pdc'),ps.value);return;}
+  const db=load(),kind=el.dataset.kind,o=(kind==='lead'?db.leads:db.clients).find(x=>x.id===el.dataset.id);if(!o)return;
+  const f=el.dataset.cf;let redraw=el.tagName==='SELECT'||el.type==='checkbox';
+  if(f==='services'){const s=svcList(o),n=el.value;o.services=el.checked?(s.includes(n)?s:s.concat(n)):s.filter(x=>x!==n);}
+  else{let v=el.type==='number'?(el.value===''?'':+el.value):el.value.trim();
+    if(f==='name'&&!v){toast('The name cannot be empty');el.value=o.name;return;}
+    setPath(o,f,v);
+    if(f==='contractEnd')o.contractExpiry=v;
+    if(f==='contractType'&&v==='One time')o.contractExpiry='';
+    if(f==='contactPerson')o.contact=v;
+    if(/^svc\..+\.status$/.test(f)){o.svcLog=o.svcLog||[];o.svcLog.unshift({ts:new Date().toISOString(),name:f.split('.')[1],status:v,by:meName()});o.svcLog=o.svcLog.slice(0,60);}
+    if(['name','taxYearEnd','contractStart','contractEnd','turnoverEst','contractPrice','bookkeepingStart'].includes(f))redraw=true;}
+  if(kind==='client'&&CD_REPLAN[f]&&window.CRMPLUS&&CRMPLUS.replanClient){try{const pl=CRMPLUS.replanClient(db,o,[CD_REPLAN[f]]);if(pl&&pl.next)setTimeout(()=>toast('Reminders re-planned'),900);}catch(err){}}
+  if(kind==='lead')o.lastActivity=o.lastActivity||ymd(new Date());
+  save();toast('Saved');
+  if(redraw){const sc=document.scrollingElement,top=sc?sc.scrollTop:0,m=document.querySelector('.main'),mt=m?m.scrollTop:0;route();if(sc)sc.scrollTop=top;if(m)m.scrollTop=mt;}
+});
+function pdcSetStatus(rid,v){
+  const db=load(),r=db.receipts.find(x=>x.id===rid);if(!r)return;
+  r.pdcStatus=v;r.cleared=v==='Cleared';r.isPDC=r.method==='PDC';
+  if(r.taskId){const t=db.tasks.find(x=>x.id===r.taskId);if(t&&(v==='Cleared'||v==='Returned to client')){t.status='Completed';t.completedAt=ymd(new Date());}}
+  if(v==='Bounced'){const c=db.clients.find(x=>x.id===r.clientId);db.tasks.unshift({id:uid('t'),title:'Bounced cheque — '+(c?c.name:r.clientName)+' ('+(r.chequeNo||r.receiptNo)+')',type:'Reminder',status:'Not Started',dueDate:ymd(new Date()),recurrence:'None',priority:'High',clientId:r.clientId,assignees:(c&&c.staff)||[],source:'pdc',checklist:['Inform the client','Agree replacement payment','Update the receipt'],comments:[],createdBy:'System',createdAt:ymd(new Date())});}
+  save();toast('Cheque '+v.toLowerCase());route();
+}
+function cdFiled(db,c,kind,key,date,ref,amount){
+  const store=kind==='vat'?(c.vatFilings=c.vatFilings||{}):(c.ctFilings=c.ctFilings||{});
+  store[key]={status:'Filed',date,ref,amount,by:meName(),ts:new Date().toISOString()};
+  const code=kind==='vat'?'|'+key.slice(0,4)+'-'+(+key.slice(5,7)):'|'+key,pre=kind==='vat'?/^VAT\|/:/^CT\|/;
+  db.tasks.filter(t=>t.clientId===c.id&&pre.test(t.code||'')&&t.code.endsWith(code)&&t.status!=='Completed').forEach(t=>{t.status='Completed';t.completedAt=date;});
+}
+function cdFileModal(kind,c,key,label){
+  modal(`<div class="modal"><div class="modal-head"><h3>${kind==='vat'?'VAT return filed':'Corporate tax return filed'} — ${esc(label)}</h3><button class="x" data-act="close">×</button></div>
+    <div class="two-col"><div class="field"><label>Filed on</label><input type="date" id="fl_date" value="${ymd(new Date())}"></div><div class="field"><label>FTA reference no.</label><input id="fl_ref" placeholder="e.g. 230011801439"></div></div>
+    <div class="field"><label>${kind==='vat'?'VAT payable / (refundable)':'Corporate tax payable'} (AED, optional)</label><input type="number" step="any" id="fl_amt"></div>
+    <button class="btn btn-primary" style="width:100%" data-act="${kind}-file-save" data-id="${c.id}" data-key="${esc(key)}">Save</button></div>`);
+}
+/* actions used by the sections – called from handleAct */
+function cdAct(act,el,db,id){
+  const c=db.clients.find(x=>x.id===id),key=el.getAttribute('data-key');
+  switch(act){
+    case'cd-jump':{const t=document.getElementById(el.getAttribute('data-to'));if(t)t.scrollIntoView({behavior:'smooth',block:'start'});return true;}
+    case'pw-eye':{const i=el.parentElement.querySelector('input');const sh=i.type==='password';i.type=sh?'text':'password';el.textContent=sh?'hide':'show';return true;}
+    case'vat-file':case'ct-file':if(c)cdFileModal(act.slice(0,act.indexOf('-')),c,key,el.getAttribute('data-label'));return true;
+    case'vat-file-save':case'ct-file-save':{if(!c)return true;const date=$('#fl_date').value||ymd(new Date()),a=$('#fl_amt').value;cdFiled(db,c,act.slice(0,act.indexOf('-')),key,date,$('#fl_ref').value.trim(),a===''?'':+a);save();closeModal();toast('Marked as filed');route();return true;}
+    case'vat-file-all':{if(!c)return true;const due=vatPeriods(c,db).filter(p=>p.st==='pending'||p.st==='overdue');if(!due.length||!confirm('Mark '+due.length+' VAT period(s) as filed?'))return true;due.forEach(p=>cdFiled(db,c,'vat',p.key,ymd(new Date()),'',''));save();toast(due.length+' period(s) marked filed');route();return true;}
+    case'vat-unfile':case'ct-unfile':{if(!c)return true;const st=act==='vat-unfile'?c.vatFilings:c.ctFilings;if(st)delete st[key];save();toast('Filing undone');route();return true;}
+    case'bk-log':{if(!c)return true;const r={date:$('#bk_date').value||ymd(new Date()),upto:$('#bk_upto').value,contact:$('#bk_contact').value,status:$('#bk_status').value,note:$('#bk_note').value.trim(),by:meName(),ts:new Date().toISOString()};
+      c.bkReviews=c.bkReviews||[];c.bkReviews.unshift(r);c.bkReviews.sort((a,b)=>b.date.localeCompare(a.date));c.bkReviews=c.bkReviews.slice(0,120);
+      if(r.upto&&(!c.bkUpto||r.upto>c.bkUpto))c.bkUpto=r.upto;
+      const lim=ymd(new Date(pDate(r.date).getTime()+3*864e5));
+      db.tasks.filter(t=>t.clientId===c.id&&(t.kind==='bookkeeping'||/^Bookkeeping Review/.test(t.title))&&t.status!=='Completed'&&(t.dueDate||'')<=lim).forEach(t=>{t.status='Completed';t.completedAt=r.date;});
+      if(r.contact!=='No contact needed'){const type=/^Called/.test(r.contact)?'call':r.contact==='Meeting'?'meeting':'message';c.contacts=c.contacts||[];c.contacts.unshift({date:r.date,type,note:'Bookkeeping review – '+r.contact,by:r.by});c.contacts=c.contacts.slice(0,100);if(!c.lastContact||r.date>c.lastContact)c.lastContact=r.date;}
+      save();toast('Review logged');route();return true;}
+    case'ledger-add':{if(!c)return true;const dr=+$('#lg_dr').value||0,cr=+$('#lg_cr').value||0;if(!dr&&!cr){toast('Enter a debit or a credit');return true;}
+      c.ledger=c.ledger||[];c.ledger.push({id:uid('lg'),date:$('#lg_date').value||ymd(new Date()),type:$('#lg_type').value,ref:$('#lg_ref').value.trim(),debit:dr,credit:cr});save();toast('Entry added');route();return true;}
+    case'ledger-del':{if(!c)return true;if(!confirm('Delete this ledger entry?'))return true;c.ledger=(c.ledger||[]).filter(r=>r.id!==key);save();route();return true;}
+    case'pdc-add':{if(!c)return true;const amt=+$('#pd_amt').value||0,dt=$('#pd_date').value;if(!amt||!dt){toast('Enter the cheque date and amount');return true;}
+      const rc=mkReceipt(db,c.id);rc.method=$('#pd_type').value;rc.isPDC=rc.method==='PDC';rc.chequeNo=$('#pd_no').value.trim();rc.bank=$('#pd_bank').value.trim();rc.chequeDate=dt;rc.amount=amt;rc.reference='Cheque';rc.pdcStatus='In hand';
+      syncPdcTask(db,rc);save();toast('Cheque added');route();return true;}
+  }
+  return false;
 }
 
 /* ============================================================= TASKS */
@@ -1763,6 +2133,7 @@ document.addEventListener('click',e=>{
 });
 function handleAct(act,el){
   const db=load();const id=el.getAttribute('data-id');
+  if(cdAct(act,el,db,id))return;
   switch(act){
     case'ai-voice':{if(window.CRMAI)CRMAI.open();const m=document.querySelector('#cai .mic');if(m)m.click();break;}
     case'ai-talk':{if(window.CRMAI)CRMAI.open();const cv=document.querySelector('#cai .conv');if(cv)cv.click();const m2=document.querySelector('#cai .mic');if(m2&&!m2.classList.contains('on'))m2.click();break;}
@@ -1778,9 +2149,9 @@ function handleAct(act,el){
     case'new-agreement-for':{const type=el.getAttribute('data-type');const src=(type==='lead'?db.leads:db.clients).find(x=>x.id===id);const a={id:uid('a'),title:'Service Agreement',clientId:type==='client'?id:null,clientName:src?src.name:'',clientLicence:src?(src.tradeLicence||''):'',reference:'',amount:0,status:'Draft',date:ymd(new Date()),...agTemplate(0)};a.items=[{desc:'',qty:1,unit:0}];db.agreements.unshift(a);save();toast('Agreement created');location.hash='#/agreement/'+a.id;break;}
     case'save-lead':{const name=$('#m_name').value.trim();if(!name){toast('Enter a name');return;}db.leads.unshift({id:uid('l'),name,stage:$('#m_stage').value,source:$('#m_source').value,phone:$('#m_phone').value||'-',email:$('#m_email').value||'-',contact:'-',address:'-',tradeLicence:$('#m_licence').value||'',services:[],date:ymd(new Date()),assignedTo:'Waseem',notes:[]});save();closeModal();toast('Lead added');route();break;}
     case'del-lead':db.leads=db.leads.filter(l=>l.id!==id);save();location.hash='#/leads';toast('Lead deleted');break;
-    case'convert-lead':{const l=db.leads.find(x=>x.id===id);if(l){db.clients.unshift({id:uid('c'),name:l.name,status:'Active',partnerId:'p_un',email:l.email,phone:l.phone,services:l.services||[],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:'',address:l.address,staff:[],invoiced:0,received:0,ledger:[],notes:[]});l.stage='Closed';save();toast('Converted to client');location.hash='#/clients';}break;}
-    case'post-lead-note':{const l=db.leads.find(x=>x.id===id);const v=$('#leadNote').value.trim();if(v){l.notes.unshift({by:'Waseem',at:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'}),text:v});save();route();}break;}
-    case'post-client-note':{const c=db.clients.find(x=>x.id===id);const v=$('#clientNote').value.trim();if(v){c.notes.unshift({by:'Waseem',text:v});save();route();}break;}
+    case'convert-lead':{const l=db.leads.find(x=>x.id===id);if(l){db.clients.unshift({id:uid('c'),name:l.name,status:'Active',partnerId:'p_un',email:l.email,phone:l.phone,services:l.services||[],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:l.contractEnd||'',address:l.address,staff:[],invoiced:0,received:0,ledger:[],notes:(l.notes||[]).slice(),contactPerson:l.contact&&l.contact!=='-'?l.contact:'',contact2:l.contact2||'',phone2:l.phone2||'',portalId:l.portalId||'',portalPassword:l.portalPassword||'',agentName:l.agentName||'',agentPhone:l.agentPhone||'',contractType:l.contractType||'Period',contractStart:l.contractStart||'',contractEnd:l.contractEnd||'',contractPrice:l.contractPrice||'',tradeLicence:l.tradeLicence||'',trn:l.trn||'-',vatCycle:l.vatCycle||'Stagger 3',taxYearEnd:l.taxYearEnd||'2025-12-31',turnoverEst:l.turnoverEst||'',svc:l.svc||{},createdAt:ymd(new Date())});l.stage='Closed';save();toast('Converted to client');location.hash='#/clients';}break;}
+    case'post-lead-note':{const l=db.leads.find(x=>x.id===id);const v=$('#leadNote').value.trim();if(v){l.notes=l.notes||[];l.notes.unshift({by:meName(),at:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'}),ts:new Date().toISOString(),text:v});l.lastActivity=ymd(new Date());save();route();}break;}
+    case'post-client-note':{const c=db.clients.find(x=>x.id===id);const v=$('#clientNote').value.trim();if(v){c.notes=c.notes||[];c.notes.unshift({by:meName(),ts:new Date().toISOString(),text:v});save();route();}break;}
     case'del-client':db.clients=db.clients.filter(c=>c.id!==id);save();location.hash='#/clients';toast('Client deleted');break;
     case'new-client':{const c={id:uid('c'),name:'New client',status:'Active',partnerId:(db.partners[0]||{}).id||'p_un',email:'',phone:'',trn:'-',tradeLicence:'',services:[],staff:[],ledger:[],notes:[],invoiced:0,received:0};
       db.clients.unshift(c);save();openEditClient(c.id);break;}

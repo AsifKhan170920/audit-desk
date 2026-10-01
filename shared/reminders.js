@@ -54,7 +54,7 @@
   /* ---------- a client's services ---------- */
   function has(c, what) {
     var list = (c.services || []).map(lc);
-    var alias = {vat: ['vat', 'vat return filing', 'vat returns'], ct: ['corporate tax', 'ct', 'corporate tax return filing'], fs: ['financial statements', 'preparation of financial statements', 'fs'],
+    var alias = {vat: ['vat', 'vat filing', 'vat return filing', 'vat returns'], ct: ['corporate tax', 'ct', 'ct filing', 'corporate tax return filing'], fs: ['financial statements', 'preparation of financial statements', 'fs'],
       audit: ['audit', 'financial audit'], bk: ['bookkeeping', 'book keeping', 'accounting']};
     return (alias[what] || [what]).some(function (a) { return list.indexOf(a) >= 0; });
   }
@@ -145,8 +145,8 @@
     if ((has(c, 'ct') || has(c, 'fs') || has(c, 'audit')) && blank(c.taxYearEnd)) m.push('tax year end');
     if (has(c, 'vat') && blank(c.trn)) m.push('TRN');
     if (has(c, 'vat') && blank(c.vatCycle)) m.push('VAT cycle');
-    if ((has(c, 'vat') || has(c, 'ct')) && blank(c.portalId)) m.push('FTA portal ID');
-    if (blank(c.contractExpiry)) m.push('contract expiry');
+    if ((has(c, 'vat') || has(c, 'ct')) && blank(c.portalId)) m.push('FTA portal email');
+    if (c.contractType !== 'One time' && blank(c.contractExpiry)) m.push('contract expiry');
     if (!(c.staff || []).length) m.push('assigned staff');
     return m;
   }
