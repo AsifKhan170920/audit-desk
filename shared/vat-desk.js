@@ -28,7 +28,7 @@
   var BLOCK_RE = /entertain|hospitality|meal|lunch|dinner|restaurant|cafe|gift|personal|car rental|fuel – private|leisure|club membership/i;
   var KEY = function (id) { return 'ftvat-' + id; };
   var r2 = function (n) { return Math.round((+n || 0) * 100) / 100; };
-  var CUR = null, TAB = 'boxes', FILTER = '', LIST_FILTER = 'due', LIST_SEARCH = '', pushTimer = null;
+  var CUR = null, TAB = 'boxes', FILTER = '', LIST_FILTER = 'due', LIST_SEARCH = '', pushTimers = {};
 
   /* ---------- storage: one record per return ---------- */
   function cloud() { return window.FT && FT.pull && FT.push && FT.me; }
@@ -59,7 +59,7 @@
     var sum = {id: r.id, clientId: r.clientId, period: r.period, status: r.status, payable: B.n14, lines: r.lines.length, updated: r.updated, by: r.updatedBy};
     if (row) Object.assign(row, sum); else ix.push(sum);
     save();
-    if (cloud()) { clearTimeout(pushTimer); pushTimer = setTimeout(function () { pushNow(r, text); }, 1200); }
+    if (cloud()) { clearTimeout(pushTimers[r.id]); pushTimers[r.id] = setTimeout(function () { delete pushTimers[r.id]; pushNow(r, text); }, 1200); }
     if (!quiet) toast('Saved');
   }
   async function pushNow(r, text) {
@@ -67,6 +67,13 @@
       var res = await FT.push('crm', KEY(r.id), text);
       if (res && res.conflict) { toast('This return was changed by ' + (res.by || 'someone else') + ' – reloading their copy'); CUR = await openReturn(r.clientId, r.period); draw(); }
     } catch (e) { toast('Could not save online – will retry with the next change'); }
+  }
+  function outside(r, l) { return !!(l.date && (l.date < r.start || l.date > r.end)); }
+  function periodFor(c, date) {   // the client's tax period (YYYY-MM of its last month) that contains this date
+    var d = pDate(date); if (!d) return '';
+    var ends = vatMonths(c.vatCycle);
+    for (var i = 0; i < 12; i++) { var m = new Date(d.getFullYear(), d.getMonth() + i, 1); if (ends.indexOf(m.getMonth() + 1) >= 0) return ymd(m).slice(0, 7); }
+    return '';
   }
   function client(id) { return load().clients.find(function (c) { return c.id === id; }); }
 
@@ -104,7 +111,7 @@
   function monthly(r) {
     var s = pDate(r.start), M = [], i;
     for (i = 0; i < 12; i++) { var d = new Date(s.getFullYear(), s.getMonth() + i, 1); if (ymd(d) > r.end) break; M.push({key: ymd(d).slice(0, 7), label: MON3[d.getMonth()] + ' ' + d.getFullYear(), sales: 0, out: 0, purch: 0, inp: 0}); }
-    var other = {key: 'x', label: 'Dated outside the period', sales: 0, out: 0, purch: 0, inp: 0};
+    var other = {key: 'x', label: 'Invoices dated in other periods, declared here', sales: 0, out: 0, purch: 0, inp: 0};
     (r.lines || []).forEach(function (l) {
       var m = M.find(function (x) { return (l.date || '').slice(0, 7) === x.key; }) || other, n = +l.net || 0, v = +l.vat || 0, rec = l.rec === '' || l.rec == null ? 100 : +l.rec;
       if (l.reg === 'sales' && l.cat !== 'OS') { m.sales += l.cat === 'TR' ? 0 : n; m.out += l.cat === 'SR' ? v : l.cat === 'TR' ? -Math.abs(v) : 0; }
@@ -122,7 +129,7 @@
     (r.lines || []).forEach(function (l) {
       var n = +l.net || 0, v = +l.vat || 0, tag = (REGS.find(function (x) { return x[0] === l.reg; }) || [])[1] + ' · ' + (l.no || l.party || 'line');
       if (l.reg === 'adj') return;
-      if (l.date && (l.date < r.start || l.date > r.end)) out.push(['warn', tag, 'Dated ' + fmtDate(l.date) + ' – outside the tax period', l.id]);
+      if (outside(r, l) && !l.here) out.push(['warn', tag, 'Dated ' + fmtDate(l.date) + ' – in another tax period. Declare it here (e.g. invoice received late) or move it to its own period.', l.id, 'date']);
       if (!l.date) out.push(['warn', tag, 'No date', l.id]);
       if ((l.cat === 'SR' || l.cat === 'IM' || l.cat === 'RC') && n && Math.abs(v - n * 0.05) > Math.max(1, Math.abs(n) * 0.002)) out.push(['high', tag, 'VAT ' + money(v) + ' is not 5% of ' + money(n) + ' (' + money(n * 0.05) + ')', l.id]);
       if ((l.cat === 'ZR' || l.cat === 'EX' || l.cat === 'NV') && v) out.push(['high', tag, 'VAT charged on a ' + (l.cat === 'ZR' ? 'zero-rated' : l.cat === 'EX' ? 'exempt' : 'no-VAT') + ' line', l.id]);
@@ -191,7 +198,7 @@
   function body(r, c, B, K) {
     if (TAB === 'boxes') return boxesHtml(r, B, true);
     if (TAB === 'month') return monthHtml(r);
-    if (TAB === 'checks') return K.length ? '<table class="tbl sm"><thead><tr><th></th><th>Line</th><th>Issue</th><th></th></tr></thead><tbody>' + K.map(function (k) { return '<tr><td><span class="pill ' + (k[0] === 'high' ? 'high' : 'pending') + '">' + (k[0] === 'high' ? 'Fix' : 'Check') + '</span></td><td>' + esc(k[1]) + '</td><td>' + esc(k[2]) + '</td><td class="r">' + (k[3] ? '<span class="link" data-vd="goto-line" data-v="' + k[3] + '">Show</span>' : '') + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No issues found.</div>';
+    if (TAB === 'checks') return K.length ? '<table class="tbl sm"><thead><tr><th></th><th>Line</th><th>Issue</th><th></th></tr></thead><tbody>' + K.map(function (k) { return '<tr><td><span class="pill ' + (k[0] === 'high' ? 'high' : 'pending') + '">' + (k[0] === 'high' ? 'Fix' : 'Check') + '</span></td><td>' + esc(k[1]) + '</td><td>' + esc(k[2]) + '</td><td class="r" style="white-space:nowrap">' + (k[4] === 'date' ? '<span class="link" data-vd="here" data-v="' + k[3] + '">Declare here</span> · <span class="link" data-vd="move" data-v="' + k[3] + '">Move</span> · ' : '') + (k[3] ? '<span class="link" data-vd="goto-line" data-v="' + k[3] + '">Show</span>' : '') + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No issues found.</div>';
     if (TAB === 'docs') return docsHtml(r, c);
     return regHtml(r, TAB);
   }
@@ -219,6 +226,12 @@
       M.map(function (m) { return '<tr' + (m.key === 'x' ? ' class="late"' : '') + '><td>' + esc(m.label) + '</td><td class="r mono">' + money(m.sales) + '</td><td class="r mono">' + money(m.out) + '</td><td class="r mono">' + money(m.purch) + '</td><td class="r mono">' + money(m.inp) + '</td><td class="r mono">' + money(m.net) + '</td></tr>'; }).join('') +
       '</tbody><tfoot><tr><td>Total</td><td class="r mono">' + money(T.sales) + '</td><td class="r mono">' + money(T.out) + '</td><td class="r mono">' + money(T.purch) + '</td><td class="r mono">' + money(T.inp) + '</td><td class="r mono">' + money(T.net) + '</td></tr></tfoot></table>';
   }
+  function dateTag(r, l) {
+    if (!outside(r, l)) return '';
+    var c = client(r.clientId) || {}, p = periodFor(c, l.date);
+    return l.here ? '<div class="vd-late on" title="' + esc(l.here) + '">✓ declared here' + (l.here !== 'yes' ? ' – ' + esc(l.here) : '') + ' <span class="link" data-vd="unhere" data-v="' + l.id + '">undo</span></div>'
+      : '<div class="vd-late">other period' + (p ? ' (' + esc(periodLabel(newReturn(r.clientId, p))) + ')' : '') + ': <span class="link" data-vd="here" data-v="' + l.id + '">declare here</span> · <span class="link" data-vd="move" data-v="' + l.id + '">move</span></div>';
+  }
   function regHtml(r, reg) {
     var all = r.lines.filter(function (l) { return l.reg === reg; }), q = FILTER.toLowerCase();
     var L = all.filter(function (l) { return !q || [l.no, l.party, l.trn, l.desc].join(' ').toLowerCase().indexOf(q) >= 0; }).sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); });
@@ -232,7 +245,7 @@
       '<div style="overflow-x:auto"><table class="tbl sm vd-reg"><thead><tr>' + head + '<th></th></tr></thead><tbody>' +
       (L.map(function (l) {
         return '<tr id="vl-' + l.id + '">' + (reg === 'adj' ? '<td>' + inp(l, 'date', 'date') + '</td><td>' + inp(l, 'no') + '</td><td>' + inp(l, 'desc') + '</td><td>' + cat(l) + '</td>' :
-          '<td>' + inp(l, 'date', 'date') + '</td><td>' + inp(l, 'no', '', '100px') + '</td><td>' + inp(l, 'party') + '</td><td>' + inp(l, 'trn', '', '130px') + '</td><td>' + (reg === 'sales' ? em(l) : inp(l, 'desc')) + '</td><td>' + cat(l) + '</td>') +
+          '<td>' + inp(l, 'date', 'date') + dateTag(r, l) + '</td><td>' + inp(l, 'no', '', '100px') + '</td><td>' + inp(l, 'party') + '</td><td>' + inp(l, 'trn', '', '130px') + '</td><td>' + (reg === 'sales' ? em(l) : inp(l, 'desc')) + '</td><td>' + cat(l) + '</td>') +
           '<td class="r">' + inp(l, 'net', 'number', '100px') + '</td><td class="r">' + inp(l, 'vat', 'number', '90px') + '</td>' + (reg === 'sales' || reg === 'adj' ? '' : '<td class="r">' + inp(l, 'rec', 'number', '60px') + '</td>') +
           '<td class="r"><span class="link" data-vd="del" data-v="' + l.id + '" title="Delete">✕</span></td></tr>';
       }).join('') || '<tr><td colspan="11" class="empty" style="padding:22px">No lines – import the client\'s register from Excel, paste rows, or add lines one by one.</td></tr>') +
@@ -259,8 +272,8 @@
       var L = r.lines.filter(function (l) { return l.reg === key; }).sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); }); if (!L.length) return '';
       var T = L.reduce(function (t, l) { t.n += +l.net || 0; t.v += +l.vat || 0; return t; }, {n: 0, v: 0}), cn = function (l) { return ((CATS[key].find(function (x) { return x[0] === l.cat; }) || [])[1] || l.cat || '').replace(/ –.*$/, ''); };
       return '<div class="pb"></div><h2>' + title + '</h2><table class="f"><thead><tr><th>#</th><th>Date</th><th>Invoice no.</th><th>' + (key === 'sales' ? 'Customer' : key === 'adj' ? 'Description' : 'Supplier') + '</th><th>TRN</th><th>' + (key === 'sales' ? 'Emirate' : 'Category') + '</th><th class="r">Net (AED)</th><th class="r">VAT (AED)</th></tr></thead><tbody>' +
-        L.map(function (l, i) { return '<tr><td>' + (i + 1) + '</td><td>' + (l.date ? fmtDate(l.date) : '') + '</td><td>' + esc(l.no || '') + '</td><td>' + esc(key === 'adj' ? l.desc || '' : l.party || '') + '</td><td>' + esc(l.trn || '') + '</td><td>' + esc(key === 'sales' ? (l.cat === 'SR' ? ((EMIRATES.find(function (e) { return e[0] === (l.emirate || c.emirate || 'DXB'); }) || [])[1] || '') : cn(l)) : cn(l)) + '</td><td class="r">' + money(l.net) + '</td><td class="r">' + money(l.vat) + '</td></tr>'; }).join('') +
-        '</tbody><tfoot><tr><td colspan="6">Total – ' + L.length + ' lines</td><td class="r">' + money(T.n) + '</td><td class="r">' + money(T.v) + '</td></tr></tfoot></table>';
+        L.map(function (l, i) { return '<tr><td>' + (i + 1) + '</td><td>' + (l.date ? fmtDate(l.date) : '') + (outside(r, l) ? ' *' : '') + '</td><td>' + esc(l.no || '') + '</td><td>' + esc(key === 'adj' ? l.desc || '' : l.party || '') + '</td><td>' + esc(l.trn || '') + '</td><td>' + esc(key === 'sales' ? (l.cat === 'SR' ? ((EMIRATES.find(function (e) { return e[0] === (l.emirate || c.emirate || 'DXB'); }) || [])[1] || '') : cn(l)) : cn(l)) + '</td><td class="r">' + money(l.net) + '</td><td class="r">' + money(l.vat) + '</td></tr>'; }).join('') +
+        '</tbody><tfoot><tr><td colspan="6">Total – ' + L.length + ' lines</td><td class="r">' + money(T.n) + '</td><td class="r">' + money(T.v) + '</td></tr></tfoot></table>' + (L.some(function (l) { return outside(r, l); }) ? '<div class="notes" style="font-size:8pt;margin-top:3px">* Invoice dated in another tax period and declared in this return' + (key === 'sales' ? '' : ' (e.g. tax invoice received after that period)') + '.</div>' : '');
     };
     var boxRow = function (k, cols) { var x = B[k]; return '<tr><td class="ctr">' + k + '</td><td>' + BOX_TXT[k] + '</td><td class="r">' + (cols[0] ? money(x.amt) : '') + '</td><td class="r">' + (cols[1] ? money(x.vat) : '') + '</td><td class="r">' + (cols[2] ? money(x.adj) : '') + '</td></tr>'; };
     var open = K.filter(function (k) { return k[0] === 'high'; });
@@ -385,6 +398,15 @@
     toast(added + ' line' + (added !== 1 ? 's' : '') + ' imported' + (skipped ? ' · ' + skipped + ' empty / total rows skipped' : ''));
   }
 
+  async function moveLine(id) {
+    var l = lineById(id), c = client(CUR.clientId); if (!l || !c) return;
+    var p = periodFor(c, l.date); if (!p) { toast('Set the client\'s VAT periods first'); return; }
+    if (p === CUR.period) { toast('This line already belongs to this period'); return; }
+    var target = await openReturn(CUR.clientId, p), ln = Object.assign({}, l); delete ln.here;
+    target.lines.push(ln); saveReturn(target, true);
+    CUR.lines = CUR.lines.filter(function (x) { return x.id !== id; }); saveReturn(CUR, true); draw();
+    toast('Moved to the ' + periodLabel(target) + ' return');
+  }
   /* ---------- clicks & edits ---------- */
   function lineById(id) { return CUR && CUR.lines.find(function (l) { return l.id === id; }); }
   document.addEventListener('click', function (e) {
@@ -397,6 +419,10 @@
       case 'del': CUR.lines = CUR.lines.filter(function (l) { return l.id !== v; }); saveReturn(CUR, true); draw(); break;
       case 'clear': if (confirm('Delete all lines in this register?')) { CUR.lines = CUR.lines.filter(function (l) { return l.reg !== v; }); saveReturn(CUR); draw(); } break;
       case 'goto-line': { var l = lineById(v); if (l) { TAB = l.reg; draw(); var rw = document.getElementById('vl-' + v); if (rw) { rw.scrollIntoView({block: 'center'}); rw.classList.add('late'); } } break; }
+      case 'here': { var lh = lineById(v); if (!lh) break; modal('<div class="modal"><div class="modal-head"><h3>Declare in this period</h3><button class="x" data-act="close">×</button></div><p class="sub2" style="margin-top:0">' + esc((lh.no || lh.party || 'Line') + ' is dated ' + fmtDate(lh.date) + '.') + '</p><div class="field"><label>Reason (shown on the report)</label><select id="vh_why"><option>' + (lh.reg === 'sales' ? 'Tax point (payment / delivery) in this period' : 'Tax invoice received in this period') + '</option><option>Missed in the earlier return (below AED 10,000 net error – corrected here)</option><option>Credit / debit note issued in this period</option><option>Other</option></select></div><button class="btn btn-primary" style="width:100%" data-vd="here-save" data-v="' + lh.id + '">Declare here</button></div>'); break; }
+      case 'here-save': { var lw = lineById(v); if (lw) { lw.here = $('#vh_why').value; saveReturn(CUR, true); } closeModal(); draw(); break; }
+      case 'unhere': { var lu = lineById(v); if (lu) { delete lu.here; saveReturn(CUR, true); draw(); } break; }
+      case 'move': moveLine(v); break;
       case 'import': importModal(v); break;
       case 'imp-read': impRead(); break;
       case 'imp-go': impGo(); break;
