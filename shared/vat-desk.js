@@ -265,122 +265,82 @@
       '<tr><td>Filed on EmaraTax</td><td>' + (r.filed ? fmtDate(r.filed.date) + (r.filed.ref ? ' · ref ' + esc(r.filed.ref) : '') + (r.filed.amount !== '' && r.filed.amount != null ? ' · AED ' + money(r.filed.amount) : '') : '<span class="link" data-vd="file">mark filed</span>') + '</td></tr></tbody></table>';
   }
 
-  /* ---------- our own VAT report on the letterhead (not the FTA box layout) ---------- */
+  /* ---------- VAT report on the letterhead: one simple page (info, sales, purchases, VAT control account) ---------- */
+  function nextDue(r, c) {
+    var monthly = /month/i.test(c.vatCycle || ''), e = pDate(r.end), ne = new Date(e.getFullYear(), e.getMonth() + (monthly ? 1 : 3) + 1, 0);
+    var d = new Date(ne.getFullYear(), ne.getMonth() + 1, 28), w = d.getDay(); if (w === 6) d.setDate(d.getDate() + 2); if (w === 0) d.setDate(d.getDate() + 1); return ymd(d);
+  }
   function report() {
-    var r = CUR, c = client(r.clientId) || {}, b = biz(), B = calc(r, c), M = monthly(r), due = dueOf(r), K = checks(r), em = c.emirate || 'DXB';
-    var L = r.lines || [], sum = function (f) { return r2(L.filter(f).reduce(function (s, l) { return s + (+l.net || 0); }, 0)); }, sumV = function (f) { return r2(L.filter(f).reduce(function (s, l) { return s + (+l.vat || 0); }, 0)); };
+    var r = CUR, c = client(r.clientId) || {}, b = biz(), B = calc(r, c), due = dueOf(r), em = c.emirate || 'DXB', L = r.lines || [];
+    var A = function (n) { n = r2(n); return !n ? '–' : n < 0 ? '(' + money(-n) + ')' : money(n); };
     var recOf = function (l) { return l.rec === '' || l.rec == null ? 100 : +l.rec; };
-    var A = function (n) { return n < 0 ? '(' + money(-n) + ')' : money(n); };
-    // figures in our own layout
-    var srN = ['1a', '1b', '1c', '1d', '1e', '1f', '1g'].reduce(function (s, k) { return s + B[k].amt; }, 0), srV = ['1a', '1b', '1c', '1d', '1e', '1f', '1g'].reduce(function (s, k) { return s + B[k].vat + B[k].adj; }, 0);
-    var zr = B['4'].amt, ex = B['5'].amt, tr = B['2'], rc = B['3'], im = {amt: B['6'].amt + B['7'].amt, vat: B['6'].vat + B['7'].vat};
-    var sales = r2(srN + zr + ex), purchN = sum(function (l) { return l.reg === 'purchases'; }), impN = sum(function (l) { return l.reg === 'imports' || l.reg === 'rc'; });
-    var inPur = r2(B['9'].vat + B['9'].adj), inImp = B['10'].vat;
-    var blocked = r2(L.reduce(function (s, l) { var v = +l.vat || 0; if (l.reg === 'purchases' && l.cat === 'BL') return s + v; if ((l.reg === 'purchases' && l.cat === 'SR') || (l.reg === 'imports' && l.cat !== 'IB') || (l.reg === 'rc' && l.cat !== 'RB')) return s + v * (100 - recOf(l)) / 100; if ((l.reg === 'imports' && l.cat === 'IB') || (l.reg === 'rc' && l.cat === 'RB')) return s + v; return s; }, 0));
-    var pay = B.n14 >= 0, netAbs = Math.abs(B.n14), per = periodLabel(r);
-    var pct = function (a) { return sales ? Math.round(a / sales * 1000) / 10 + '%' : '—'; };
-    var emRows = EMIRATES.map(function (e) { return {n: e[1], a: B[e[2]].amt, v: B[e[2]].vat + B[e[2]].adj}; }).filter(function (x) { return x.a || x.v; });
-    var top = function (reg) {
-      var g = {}; L.filter(function (l) { return reg.indexOf(l.reg) >= 0; }).forEach(function (l) { var k = (l.party || '(not named)').trim(); g[k] = g[k] || {n: k, a: 0, v: 0, c: 0}; g[k].a += +l.net || 0; g[k].v += +l.vat || 0; g[k].c++; });
-      return Object.keys(g).map(function (k) { return g[k]; }).sort(function (a, b) { return b.a - a.a; }).slice(0, 5);
-    };
-    var topC = top(['sales']), topS = top(['purchases', 'imports', 'rc']);
-    var narrative = esc(c.name || 'The company') + ' recorded sales of <b>AED ' + money(sales) + '</b> for ' + esc(per) +
-      (sales ? ' – standard rated ' + pct(srN) + (zr ? ', zero rated ' + pct(zr) : '') + (ex ? ', exempt ' + pct(ex) : '') : '') + '. ' +
-      'Output VAT is <b>AED ' + money(B.n12) + '</b> and recoverable input VAT on purchases' + (impN ? ', imports and services from abroad' : '') + ' is <b>AED ' + money(B.n13) + '</b>' + (blocked ? ' (AED ' + money(blocked) + ' of input VAT is not recoverable and has been left out)' : '') + '. ' +
-      (pay ? 'The net VAT of <b>AED ' + money(netAbs) + '</b> is payable to the Federal Tax Authority by <b>' + fmtDate(due) + '</b>.' : 'The period shows a VAT refund position of <b>AED ' + money(netAbs) + '</b>, which can be carried forward or claimed from the Federal Tax Authority.');
-
-    // monthly chart (inline SVG): output vs input VAT per month
-    var MM = M.filter(function (m) { return m.key !== 'x'; }), mx = Math.max.apply(null, MM.map(function (m) { return Math.max(m.out, m.inp, 1); }).concat([1]));
-    var W = 420, H = 150, gw = W / Math.max(MM.length, 1), bw = Math.min(34, gw / 3);
-    var chart = '<svg viewBox="0 0 ' + W + ' ' + (H + 34) + '" width="100%" height="' + (H + 34) + '" style="max-width:' + W + 'px">' +
-      [0.25, 0.5, 0.75, 1].map(function (f) { return '<line x1="0" x2="' + W + '" y1="' + (H - H * f) + '" y2="' + (H - H * f) + '" stroke="#e8edf2"/>'; }).join('') +
-      MM.map(function (m, i) { var x = i * gw + gw / 2, ho = m.out / mx * (H - 14), hi = m.inp / mx * (H - 14);
-        return '<rect x="' + (x - bw - 2) + '" y="' + (H - ho) + '" width="' + bw + '" height="' + ho + '" fill="#17324c" rx="2"/><rect x="' + (x + 2) + '" y="' + (H - hi) + '" width="' + bw + '" height="' + hi + '" fill="#c1922b" rx="2"/>' +
-          '<text x="' + x + '" y="' + (H + 14) + '" text-anchor="middle" font-size="12" fill="#54687c" font-family="Arial">' + esc(m.label) + '</text>' +
-          '<text x="' + x + '" y="' + (H + 28) + '" text-anchor="middle" font-size="11" fill="' + (m.net >= 0 ? '#a61b1b' : '#1f6b3a') + '" font-family="Arial">net ' + A(m.net) + '</text>'; }).join('') +
-      '<line x1="0" x2="' + W + '" y1="' + H + '" y2="' + H + '" stroke="#9aa6b2"/></svg>' +
-      '<div class="legend"><span><i style="background:#17324c"></i>Output VAT</span><span><i style="background:#c1922b"></i>Input VAT recoverable</span></div>';
+    // months of the period (+ invoices of other periods declared here)
+    var s0 = pDate(r.start), M = [];
+    for (var i = 0; i < 12; i++) { var d = new Date(s0.getFullYear(), s0.getMonth() + i, 1); if (ymd(d) > r.end) break; M.push({key: ymd(d).slice(0, 7), label: d.toLocaleDateString('en-GB', {month: 'long'}).toUpperCase() + (s0.getFullYear() !== pDate(r.end).getFullYear() ? ' ' + d.getFullYear() : ''), std: 0, zr: 0, ex: 0, sv: 0, reg: 0, imp: 0, pv: 0, rcv: 0}); }
+    var other = {key: 'x', label: 'OTHER PERIODS *', std: 0, zr: 0, ex: 0, sv: 0, reg: 0, imp: 0, pv: 0, rcv: 0};
+    L.forEach(function (l) {
+      var m = M.find(function (x) { return (l.date || '').slice(0, 7) === x.key; }) || other, n = +l.net || 0, v = +l.vat || 0;
+      if (l.reg === 'sales') { if (l.cat === 'SR') { m.std += n; m.sv += v; } else if (l.cat === 'ZR') m.zr += n; else if (l.cat === 'EX') m.ex += n; else if (l.cat === 'TR') m.sv -= Math.abs(v); }
+      else if (l.reg === 'purchases') { if (l.cat === 'SR' || l.cat === 'BL') m.reg += n; if (l.cat === 'SR') m.pv += v * recOf(l) / 100; }
+      else if (l.reg === 'imports' || l.reg === 'rc') { m.imp += n; m.rcv += v; }
+    });
+    if (other.std || other.zr || other.ex || other.reg || other.imp || other.sv || other.pv) M.push(other);
+    var T = M.reduce(function (t, m) { ['std', 'zr', 'ex', 'sv', 'reg', 'imp', 'pv', 'rcv'].forEach(function (k) { t[k] += m[k]; }); return t; }, {std: 0, zr: 0, ex: 0, sv: 0, reg: 0, imp: 0, pv: 0, rcv: 0});
+    // VAT control account
+    var outSup = r2(['1a', '1b', '1c', '1d', '1e', '1f', '1g', '2'].reduce(function (s, k) { return s + B[k].vat + B[k].adj; }, 0));
+    var outRc = r2(B['3'].vat + B['6'].vat + B['7'].vat);
+    var inLocal = r2(B['9'].vat + B['9'].adj);
+    var inImpG = r2(L.filter(function (l) { return l.reg === 'imports' && l.cat !== 'IB'; }).reduce(function (s, l) { return s + (+l.vat || 0) * recOf(l) / 100; }, 0));
+    var inImpS = r2(L.filter(function (l) { return l.reg === 'rc' && l.cat !== 'RB'; }).reduce(function (s, l) { return s + (+l.vat || 0) * recOf(l) / 100; }, 0));
+    var pay = B.n14 >= 0, per = fmtDate(r.start).toUpperCase() + ' – ' + fmtDate(r.end).toUpperCase();
+    var late = L.some(function (l) { return outside(r, l); });
 
     var reg = function (key, title) {
       var X = L.filter(function (l) { return l.reg === key; }).sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); }); if (!X.length) return '';
-      var T = X.reduce(function (t, l) { t.n += +l.net || 0; t.v += +l.vat || 0; return t; }, {n: 0, v: 0}), cn = function (l) { return ((CATS[key].find(function (x) { return x[0] === l.cat; }) || [])[1] || l.cat || '').replace(/ –.*$/, ''); };
-      return '<section class="pb"><div class="sec"><span class="sn">' + title[0] + '</span>' + title[1] + '</div><table class="t reg"><thead><tr><th>#</th><th>Date</th><th>Invoice no.</th><th>' + (key === 'sales' ? 'Customer' : key === 'adj' ? 'Description' : 'Supplier') + '</th><th>TRN</th><th>' + (key === 'sales' ? 'Emirate / type' : 'Type') + '</th><th class="r">Net (AED)</th><th class="r">VAT (AED)</th><th class="r">Total (AED)</th></tr></thead><tbody>' +
-        X.map(function (l, i) { var n = +l.net || 0, v = +l.vat || 0; return '<tr><td>' + (i + 1) + '</td><td>' + (l.date ? fmtDate(l.date) : '') + (outside(r, l) ? '*' : '') + '</td><td>' + esc(l.no || '') + '</td><td>' + esc(key === 'adj' ? l.desc || '' : l.party || '') + '</td><td>' + esc(l.trn || '') + '</td><td>' + esc(key === 'sales' && l.cat === 'SR' ? ((EMIRATES.find(function (e) { return e[0] === (l.emirate || em); }) || [])[1] || '') : cn(l)) + '</td><td class="r">' + A(n) + '</td><td class="r">' + A(v) + '</td><td class="r">' + A(n + v) + '</td></tr>'; }).join('') +
-        '</tbody><tfoot><tr><td colspan="6">Total · ' + X.length + ' entr' + (X.length === 1 ? 'y' : 'ies') + '</td><td class="r">' + A(T.n) + '</td><td class="r">' + A(T.v) + '</td><td class="r">' + A(T.n + T.v) + '</td></tr></tfoot></table>' +
-        (X.some(function (l) { return outside(r, l); }) ? '<div class="fn">* Invoice dated in another tax period and declared in this return' + (key === 'sales' ? '' : ' (e.g. tax invoice received after that period)') + '.</div>' : '') + '</section>';
+      var S = X.reduce(function (t, l) { t.n += +l.net || 0; t.v += +l.vat || 0; return t; }, {n: 0, v: 0});
+      return '<h3>' + title + '</h3><table class="t sm"><thead><tr><th>#</th><th>Date</th><th>Invoice no.</th><th>' + (key === 'sales' ? 'Customer' : 'Supplier') + '</th><th>TRN</th><th class="r">Net</th><th class="r">VAT</th><th class="r">Total</th></tr></thead><tbody>' +
+        X.map(function (l, i) { var n = +l.net || 0, v = +l.vat || 0; return '<tr><td>' + (i + 1) + '</td><td>' + (l.date ? fmtDate(l.date) : '') + (outside(r, l) ? ' *' : '') + '</td><td>' + esc(l.no || '') + '</td><td>' + esc(key === 'adj' ? l.desc || '' : l.party || '') + '</td><td>' + esc(l.trn || '') + '</td><td class="r">' + A(n) + '</td><td class="r">' + A(v) + '</td><td class="r">' + A(n + v) + '</td></tr>'; }).join('') +
+        '</tbody><tfoot><tr><td colspan="5">TOTAL</td><td class="r">' + A(S.n) + '</td><td class="r">' + A(S.v) + '</td><td class="r">' + A(S.n + S.v) + '</td></tr></tfoot></table>';
     };
-    var lineRow = function (label, amt, vat, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + label + '</td><td class="r">' + (amt === null ? '' : A(amt)) + '</td><td class="r">' + (vat === null ? '' : A(vat)) + '</td></tr>'; };
-    var open = K.filter(function (k) { return k[0] === 'high'; }), lateN = L.filter(function (l) { return outside(r, l) && l.here; }).length;
-    var points = [];
-    if (r.notes) points.push(esc(r.notes));
-    if (blocked) points.push('Input VAT of AED ' + money(blocked) + ' is not recoverable (blocked expenses such as entertainment, or partial recovery) and is excluded from the claim.');
-    if (lateN) points.push(lateN + ' invoice' + (lateN > 1 ? 's' : '') + ' dated in another tax period ' + (lateN > 1 ? 'are' : 'is') + ' declared in this return (marked * in the registers).');
-    open.slice(0, 8).forEach(function (k) { points.push(esc(k[1] + ' – ' + k[2])); });
-    if (open.length > 8) points.push('…and ' + (open.length - 8) + ' more line(s) to be confirmed.');
-    var docsGot = DOCS.filter(function (x, i) { return (r.docs || {})[i]; });
+    var regs = reg('sales', 'Sales register') + reg('purchases', 'Purchase register') + reg('imports', 'Import register') + reg('rc', 'Imported services (reverse charge)') + reg('adj', 'Adjustments');
 
-    var css = '@page{size:A4;margin:14mm 14mm 16mm;@bottom-left{content:"' + esc((c.name || '').replace(/"/g, '')) + ' · VAT report ' + esc(per) + '";font:7pt Arial;color:#9aa6b2}@bottom-right{content:"Page " counter(page) " of " counter(pages);font:7pt Arial;color:#9aa6b2}}' +
-      '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0}body{background:#e7ebf0;font:9.5pt/1.5 "Segoe UI",Arial,sans-serif;color:#26313d}' +
-      '.toolbar{width:210mm;margin:14px auto 0;text-align:right}.toolbar button{background:#17324c;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:600 10pt Arial;cursor:pointer}' +
-      '.page{width:210mm;background:#fff;margin:14px auto;padding:14mm;box-shadow:0 6px 30px rgba(0,0,0,.14)}@media print{body{background:#fff}.page{width:auto;margin:0;padding:0;box-shadow:none}.toolbar{display:none}section.pb{page-break-before:always}.keep{page-break-inside:avoid}}' +
+    var css = '@page{size:A4;margin:12mm 13mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0}' +
+      'body{background:#e7ebf0;font:9.5pt/1.4 "Segoe UI",Arial,sans-serif;color:#1f2a36}.toolbar{width:210mm;margin:14px auto 0;display:flex;justify-content:flex-end;gap:8px}' +
+      '.toolbar button{background:#17324c;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:600 10pt Arial;cursor:pointer}.toolbar button.alt{background:#fff;color:#17324c;border:1px solid #17324c}' +
+      '.page{width:210mm;min-height:297mm;background:#fff;margin:14px auto;padding:13mm 14mm;box-shadow:0 6px 30px rgba(0,0,0,.14)}@media print{body{background:#fff}.page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}.toolbar{display:none}.regs{page-break-before:always}}' +
       '.top{display:flex;justify-content:space-between;align-items:flex-start}.lh-l{display:flex;gap:11px;align-items:center}.fx{font:800 15pt Arial;color:#1c3d5a;line-height:1}.intl{font:700 7.5pt Arial;color:#c1922b;letter-spacing:4px;margin-top:2px}' +
-      '.co{font-size:7.8pt;color:#7b8794;text-align:right;line-height:1.5}.rule{margin:9px 0 0}.rule .n{height:2.5px;background:#17324c}.rule .g{height:2px;background:#c1922b;margin-top:2px}' +
-      '.hero{margin:18px 0 12px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px}.hero .k{font:700 8pt Arial;letter-spacing:3px;color:#c1922b}.hero h1{font:800 24pt Arial;color:#17324c;margin:2px 0 0;letter-spacing:-.3px}.hero .p{font-size:10.5pt;color:#54687c;margin-top:2px}' +
-      '.cl{min-width:240px;border:1px solid #e3e8ee;border-radius:8px;padding:9px 12px;font-size:8.6pt;line-height:1.6}.cl b{color:#17324c}.cl .nm{font:700 11pt Arial;color:#17324c;margin-bottom:2px}' +
-      '.result{display:flex;justify-content:space-between;align-items:center;border-radius:10px;padding:14px 18px;margin:6px 0 14px;color:#fff}.result.pay{background:linear-gradient(90deg,#17324c,#244a6e)}.result.ref{background:linear-gradient(90deg,#1f6b3a,#2c8a50)}' +
-      '.result .l{font:700 8pt Arial;letter-spacing:2px;opacity:.85}.result .v{font:800 22pt Arial;letter-spacing:-.5px}.result .d{text-align:right;font-size:9pt;opacity:.95}.result .d b{font-size:11pt;display:block}' +
-      '.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}.kpi{border:1px solid #e3e8ee;border-top:3px solid #c1922b;border-radius:6px;padding:8px 10px}.kpi .l{font:700 7pt Arial;letter-spacing:1.2px;color:#7b8794;text-transform:uppercase}.kpi .v{font:700 13pt Arial;color:#17324c;margin-top:2px}.kpi .s{font-size:7.5pt;color:#7b8794}' +
-      '.sec{font:700 11pt Arial;color:#17324c;margin:16px 0 7px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e3e8ee;padding-bottom:5px}.sn{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#17324c;color:#fff;font-size:8.5pt}' +
-      '.lead{font-size:9.8pt;color:#33404d;margin:0 0 4px}' +
-      'table.t{width:100%;border-collapse:collapse;font-size:8.6pt}table.t th{text-align:left;font:700 7.4pt Arial;letter-spacing:.6px;text-transform:uppercase;color:#54687c;border-bottom:1.5px solid #17324c;padding:5px 7px}table.t td{padding:5px 7px;border-bottom:1px solid #edf1f5}' +
-      'table.t .r{text-align:right;font-variant-numeric:tabular-nums}table.t tr.h td{font:700 8pt Arial;color:#c1922b;letter-spacing:1px;text-transform:uppercase;border-bottom:none;padding-top:9px}table.t tr.st td{font-weight:700;border-top:1px solid #9aa6b2;background:#f7f9fb}' +
-      'table.t tr.grand td{font:800 10.5pt Arial;color:#17324c;border-top:2px solid #17324c;border-bottom:3px double #17324c;background:#eef2f6}table.t tr.mut td{color:#8a96a3;font-style:italic}table.t tfoot td{font-weight:700;border-top:1.5px solid #17324c;background:#f7f9fb}' +
-      'table.reg{font-size:7.8pt}table.reg td{padding:3px 6px}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}.legend{display:flex;gap:16px;font-size:8pt;color:#54687c;margin-top:2px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}' +
-      '.pts{margin:0;padding-left:16px;font-size:9pt;color:#33404d}.pts li{margin-bottom:3px}.fn{font-size:7.5pt;color:#7b8794;margin-top:4px}' +
-      '.appr{border:1px solid #cfd6de;border-radius:8px;padding:12px 14px;margin-top:6px}.appr p{margin:0 0 10px;font-size:9pt}.sg{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}.ln{border-bottom:1px solid #9aa6b2;height:24px;margin:2px 0 8px}.lb{font:700 7pt Arial;letter-spacing:1.2px;color:#7b8794;text-transform:uppercase}' +
-      '.stamp{border:1.5px dashed #b8c2cc;border-radius:50%;width:120px;height:120px;display:flex;align-items:center;justify-content:center;color:#9aa6b2;font-size:8pt;margin:6px auto 0}.prep{font-size:8pt;color:#54687c;margin-top:10px;border-top:1px solid #edf1f5;padding-top:6px}';
-    var html = '<!doctype html><html><head><meta charset="utf-8"><title>VAT report – ' + esc(c.name) + ' – ' + esc(per) + '</title><style>' + css + '</style></head><body>' +
-      '<div class="toolbar"><button onclick="window.print()">🖨 Print / Save as PDF</button></div><div class="page">' +
+      '.co{font-size:7.8pt;color:#7b8794;text-align:right;line-height:1.5}.rule{margin:9px 0 16px}.rule .n{height:2.5px;background:#17324c}.rule .g{height:2px;background:#c1922b;margin-top:2px}' +
+      'table{width:100%;border-collapse:collapse}.info td{border:1px solid #9fb0c2;padding:5px 8px;font-size:8.8pt}.info td.k{background:#f2f5f8;color:#43566a;width:19%}.info td.v{font-weight:600;width:37%}' +
+      'h2{font:700 13pt Arial;color:#17324c;text-align:center;margin:18px 0 6px}h3{font:700 10.5pt Arial;color:#17324c;margin:14px 0 6px}' +
+      '.t th{background:#17324c;color:#fff;font:600 8.3pt Arial;padding:5px 8px;border:1px solid #17324c}.t thead tr:nth-child(2) th{background:#e8eef5;color:#17324c;font-weight:600;border-color:#9fb0c2}' +
+      '.t td{border:1px solid #c9d3de;padding:5px 8px;font-size:9pt}.t .r{text-align:right;font-variant-numeric:tabular-nums}.t .m{font-weight:600;color:#43566a;width:22%}' +
+      '.t tfoot td{font-weight:700;background:#f2f5f8;border-top:2px solid #17324c}.t.sm td{font-size:8pt;padding:3px 6px}.t.sm th{font-size:7.8pt}' +
+      '.ca{margin-top:22px}.ca th{text-align:left}.ca td{border:1px solid #c9d3de;padding:4px 8px;font-size:9pt;vertical-align:top}.ca .lbl{width:30%}.ca .amt{width:20%;text-align:right;font-variant-numeric:tabular-nums}' +
+      '.ca tr.tot td{background:#e8eef5;font-weight:700;color:#17324c}.ca tr.net td{background:#17324c;color:#fff;font:700 10.5pt Arial}.ca td.blank{border:none}' +
+      '.note{font-size:8pt;color:#54687c;margin-top:12px}.sign{display:flex;justify-content:space-between;align-items:flex-end;margin-top:34px;font-size:8.5pt;color:#43566a}.sign div{width:42%;border-top:1px solid #7b8794;padding-top:4px;text-align:center}';
+    var html = '<!doctype html><html><head><meta charset="utf-8"><title>VAT report – ' + esc(c.name) + ' – ' + esc(periodLabel(r)) + '</title><style>' + css + '</style></head><body>' +
+      '<div class="toolbar">' + (regs ? '<button class="alt" onclick="var x=document.getElementById(\'regs\');x.style.display=x.style.display===\'none\'?\'\':\'none\';this.textContent=x.style.display===\'none\'?\'Show registers\':\'Hide registers\'">Show registers</button>' : '') + '<button onclick="window.print()">🖨 Print / Save as PDF</button></div><div class="page">' +
       '<div class="top"><div class="lh-l">' + resolveLogo() + '<div><div class="fx">' + esc(b.name) + '</div><div class="intl">AUDIT · TAX · ADVISORY</div></div></div><div class="co"><b style="color:#17324c;font:700 9pt Arial">' + esc(b.name) + '</b><br>' + (b.licence ? 'Licence No. ' + esc(b.licence) + '<br>' : '') + (b.trn ? 'TRN ' + esc(b.trn) + '<br>' : '') + bizAddrBr() + '<br>' + esc(b.email) + ' · ' + esc(b.phone) + '</div></div>' +
       '<div class="rule"><div class="n"></div><div class="g"></div></div>' +
-      // 1. cover
-      '<div class="hero"><div><div class="k">VAT REPORT</div><h1>' + esc(per) + '</h1><div class="p">' + fmtDate(r.start) + ' to ' + fmtDate(r.end) + ' · prepared ' + fmtDate(ymd(new Date())) + '</div></div>' +
-      '<div class="cl"><div class="nm">' + esc(c.name) + '</div>TRN <b>' + esc(c.trn && c.trn !== '-' ? c.trn : '—') + '</b><br>Trade licence <b>' + esc(c.tradeLicence || '—') + '</b>' + (c.address && c.address !== '-' ? '<br>' + esc(c.address) : '') + '</div></div>' +
-      '<div class="result ' + (pay ? 'pay' : 'ref') + '"><div><div class="l">' + (pay ? 'NET VAT PAYABLE' : 'NET VAT REFUNDABLE') + '</div><div class="v">AED ' + money(netAbs) + '</div></div><div class="d">' + (pay ? 'Pay by<b>' + fmtDate(due) + '</b>' : 'Return due<b>' + fmtDate(due) + '</b>') + '</div></div>' +
-      '<div class="kpis"><div class="kpi"><div class="l">Total sales</div><div class="v">' + money(sales) + '</div><div class="s">AED, excluding VAT</div></div><div class="kpi"><div class="l">Output VAT</div><div class="v">' + money(B.n12) + '</div><div class="s">on sales &amp; imports</div></div>' +
-      '<div class="kpi"><div class="l">Input VAT recoverable</div><div class="v">' + money(B.n13) + '</div><div class="s">on purchases ' + money(r2(purchN + impN)) + '</div></div><div class="kpi"><div class="l">Effective VAT on sales</div><div class="v">' + (sales ? (Math.round(B.n14 / sales * 1000) / 10) + '%' : '—') + '</div><div class="s">net VAT ÷ sales</div></div></div>' +
-      // 2. summary
-      '<div class="sec"><span class="sn">1</span>Summary</div><p class="lead">' + narrative + '</p>' +
-      // 3. computation
-      '<div class="keep"><div class="sec"><span class="sn">2</span>VAT computation</div><table class="t"><thead><tr><th>Description</th><th class="r">Value (AED)</th><th class="r">VAT (AED)</th></tr></thead><tbody>' +
-      '<tr class="h"><td colspan="3">Output tax – sales and other outputs</td></tr>' + lineRow('Standard rated sales (5%)', srN, srV) + (zr ? lineRow('Zero rated sales (exports, international services)', zr, 0) : '') + (ex ? lineRow('Exempt sales', ex, 0) : '') +
-      (tr.amt || tr.vat ? lineRow('Tax refunds to tourists', tr.amt, tr.vat) : '') + (rc.amt || rc.vat ? lineRow('Services received from abroad (reverse charge)', rc.amt, rc.vat) : '') + (im.amt || im.vat ? lineRow('Goods imported through customs', im.amt, im.vat) : '') +
-      '<tr class="st"><td>Total output VAT</td><td class="r"></td><td class="r">' + A(B.n12) + '</td></tr>' +
-      '<tr class="h"><td colspan="3">Input tax – purchases and expenses</td></tr>' + lineRow('Purchases and expenses – VAT recoverable', B['9'].amt, inPur) + (inImp || B['10'].amt ? lineRow('Imports and reverse charge – VAT recoverable', B['10'].amt, inImp) : '') +
-      (blocked ? lineRow('Input VAT not recoverable (excluded)', null, blocked, 'mut') : '') + '<tr class="st"><td>Total input VAT recoverable</td><td class="r"></td><td class="r">(' + money(B.n13) + ')</td></tr>' +
-      '<tr class="grand"><td>' + (pay ? 'Net VAT payable' : 'Net VAT refundable') + '</td><td class="r"></td><td class="r">' + money(netAbs) + '</td></tr></tbody></table></div>' +
-      // 4. monthly
-      '<div class="keep"><div class="sec"><span class="sn">3</span>Month by month</div><div class="two" style="grid-template-columns:1.1fr 1fr;align-items:start"><table class="t"><thead><tr><th>Month</th><th class="r">Sales</th><th class="r">Output VAT</th><th class="r">Input VAT</th><th class="r">Net VAT</th></tr></thead><tbody>' +
-      M.map(function (m) { return '<tr><td>' + esc(m.key === 'x' ? 'Other periods *' : m.label) + '</td><td class="r">' + A(m.sales) + '</td><td class="r">' + A(m.out) + '</td><td class="r">' + A(m.inp) + '</td><td class="r">' + A(m.net) + '</td></tr>'; }).join('') +
-      '</tbody><tfoot><tr><td>Total</td><td class="r">' + A(M.reduce(function (s, m) { return s + m.sales; }, 0)) + '</td><td class="r">' + A(M.reduce(function (s, m) { return s + m.out; }, 0)) + '</td><td class="r">' + A(M.reduce(function (s, m) { return s + m.inp; }, 0)) + '</td><td class="r">' + A(M.reduce(function (s, m) { return s + m.net; }, 0)) + '</td></tr></tfoot></table><div>' + chart + '</div></div></div>' +
-      // 5. sales mix + emirates
-      '<div class="keep"><div class="sec"><span class="sn">4</span>Sales analysis</div><div class="two"><table class="t"><thead><tr><th>Type of sale</th><th class="r">Value (AED)</th><th class="r">Share</th></tr></thead><tbody>' +
-      '<tr><td>Standard rated (5%)</td><td class="r">' + A(srN) + '</td><td class="r">' + pct(srN) + '</td></tr><tr><td>Zero rated</td><td class="r">' + A(zr) + '</td><td class="r">' + pct(zr) + '</td></tr><tr><td>Exempt</td><td class="r">' + A(ex) + '</td><td class="r">' + pct(ex) + '</td></tr></tbody><tfoot><tr><td>Total sales</td><td class="r">' + A(sales) + '</td><td class="r">' + (sales ? '100%' : '—') + '</td></tr></tfoot></table>' +
-      '<table class="t"><thead><tr><th>Standard rated sales by emirate</th><th class="r">Value (AED)</th><th class="r">VAT (AED)</th></tr></thead><tbody>' + (emRows.map(function (x) { return '<tr><td>' + x.n + '</td><td class="r">' + A(x.a) + '</td><td class="r">' + A(x.v) + '</td></tr>'; }).join('') || '<tr><td colspan="3" style="color:#8a96a3">No standard rated sales</td></tr>') + '</tbody></table></div></div>' +
-      // 6. top customers and suppliers
-      (topC.length || topS.length ? '<div class="keep"><div class="sec"><span class="sn">5</span>Main customers and suppliers</div><div class="two">' +
-        '<table class="t"><thead><tr><th>Top customers</th><th class="r">Sales (AED)</th><th class="r">VAT</th></tr></thead><tbody>' + (topC.map(function (x) { return '<tr><td>' + esc(x.n) + ' <span style="color:#9aa6b2">· ' + x.c + '</span></td><td class="r">' + A(x.a) + '</td><td class="r">' + A(x.v) + '</td></tr>'; }).join('') || '<tr><td colspan="3" style="color:#8a96a3">—</td></tr>') + '</tbody></table>' +
-        '<table class="t"><thead><tr><th>Top suppliers</th><th class="r">Purchases (AED)</th><th class="r">VAT</th></tr></thead><tbody>' + (topS.map(function (x) { return '<tr><td>' + esc(x.n) + ' <span style="color:#9aa6b2">· ' + x.c + '</span></td><td class="r">' + A(x.a) + '</td><td class="r">' + A(x.v) + '</td></tr>'; }).join('') || '<tr><td colspan="3" style="color:#8a96a3">—</td></tr>') + '</tbody></table></div></div>' : '') +
-      // 7. points for attention
-      '<div class="keep"><div class="sec"><span class="sn">' + (topC.length || topS.length ? 6 : 5) + '</span>Points for your attention</div>' + (points.length ? '<ul class="pts">' + points.map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul>' : '<p class="lead">No open points – the records provided are complete for this period.</p>') +
-      (docsGot.length ? '<div class="fn" style="margin-top:6px">Records reviewed: ' + esc(docsGot.join(', ')) + '.</div>' : '') + '</div>' +
-      // 8. approval
-      '<div class="keep"><div class="sec"><span class="sn">' + (topC.length || topS.length ? 7 : 6) + '</span>Client approval</div><div class="appr"><p>We have reviewed this VAT report and the attached registers. We confirm that all sales, purchases and imports of ' + esc(c.name) + ' for ' + esc(per) + ' are included and correct, and we authorise ' + esc(b.name) + ' to file the VAT return on our behalf' + (pay ? '. We will pay AED ' + money(netAbs) + ' to the Federal Tax Authority by ' + fmtDate(due) : '') + '.</p>' +
-      '<div class="sg"><div><div class="lb">Name</div><div class="ln"></div><div class="lb">Designation</div><div class="ln"></div><div class="lb">Signature</div><div class="ln"></div><div class="lb">Date</div><div class="ln"></div></div><div><div class="lb" style="text-align:center">Company stamp</div><div class="stamp">Stamp here</div></div></div>' +
-      '<div class="prep">Prepared by ' + esc(r.updatedBy || meName()) + ', ' + esc(b.name) + ', from the records provided by the client.</div></div></div>' +
-      // appendices
-      reg('sales', ['A', 'Appendix A – Sales register']) + reg('purchases', ['B', 'Appendix B – Purchases and expenses register']) + reg('imports', ['C', 'Appendix C – Imports register']) + reg('rc', ['D', 'Appendix D – Services from abroad (reverse charge)']) + reg('adj', ['E', 'Appendix E – Adjustments']) +
+      '<table class="info"><tr><td class="k">Company name</td><td class="v">' + esc((c.name || '').toUpperCase()) + '</td><td class="k">Filed date</td><td class="v">' + (r.filed ? fmtDate(r.filed.date) : '') + '</td></tr>' +
+      '<tr><td class="k">VAT registration no.</td><td class="v">' + esc(c.trn && c.trn !== '-' ? c.trn : '') + '</td><td class="k">Due date</td><td class="v">' + fmtDate(due) + '</td></tr>' +
+      '<tr><td class="k">VAT period</td><td class="v">' + esc(per) + '</td><td class="k">Next VAT due date</td><td class="v">' + fmtDate(nextDue(r, c)) + '</td></tr></table>' +
+      '<h2>Business Sales</h2><table class="t"><thead><tr><th rowspan="2">Month</th><th colspan="2">Taxable supplies</th><th rowspan="2">VAT 5%</th><th rowspan="2">Exempt supplies</th></tr><tr><th>Standard</th><th>Zero rated</th></tr></thead><tbody>' +
+      M.map(function (m) { return '<tr><td class="m">' + esc(m.label) + '</td><td class="r">' + A(m.std) + '</td><td class="r">' + A(m.zr) + '</td><td class="r">' + A(m.sv) + '</td><td class="r">' + A(m.ex) + '</td></tr>'; }).join('') +
+      '</tbody><tfoot><tr><td>TOTAL</td><td class="r">' + A(T.std) + '</td><td class="r">' + A(T.zr) + '</td><td class="r">' + A(T.sv) + '</td><td class="r">' + A(T.ex) + '</td></tr></tfoot></table>' +
+      '<h2>Business Purchases</h2><table class="t"><thead><tr><th rowspan="2">Month</th><th colspan="2">Taxable purchases</th><th rowspan="2">VAT 5%</th><th rowspan="2">Reverse charge VAT</th></tr><tr><th>Local (registered)</th><th>Import</th></tr></thead><tbody>' +
+      M.map(function (m) { return '<tr><td class="m">' + esc(m.label) + '</td><td class="r">' + A(m.reg) + '</td><td class="r">' + A(m.imp) + '</td><td class="r">' + A(m.pv) + '</td><td class="r">' + A(m.rcv) + '</td></tr>'; }).join('') +
+      '</tbody><tfoot><tr><td>TOTAL</td><td class="r">' + A(T.reg) + '</td><td class="r">' + A(T.imp) + '</td><td class="r">' + A(T.pv) + '</td><td class="r">' + A(T.rcv) + '</td></tr></tfoot></table>' +
+      '<table class="t ca"><thead><tr><th colspan="4" style="text-align:center;font-size:10pt">VAT CONTROL ACCOUNT</th></tr><tr><th>Input tax</th><th style="text-align:right">Amount (AED)</th><th>Output tax</th><th style="text-align:right">Amount (AED)</th></tr></thead><tbody>' +
+      '<tr><td class="lbl">Taxable local purchases &amp; expenses</td><td class="amt">' + A(inLocal) + '</td><td class="lbl">Taxable supplies</td><td class="amt">' + A(outSup) + '</td></tr>' +
+      '<tr><td class="lbl">Import of goods</td><td class="amt">' + A(inImpG) + '</td><td class="lbl">Subject to reverse charge</td><td class="amt">' + A(outRc) + '</td></tr>' +
+      '<tr><td class="lbl">Import of services</td><td class="amt">' + A(inImpS) + '</td><td class="lbl"></td><td class="amt"></td></tr>' +
+      '<tr class="tot"><td>Total deductible input tax</td><td class="amt">' + A(B.n13) + '</td><td>Total output tax</td><td class="amt">' + A(B.n12) + '</td></tr>' +
+      '<tr><td class="blank" colspan="2"></td><td>Less: input tax recoverable</td><td class="amt">' + A(B.n13) + '</td></tr>' +
+      '<tr class="net"><td class="blank" colspan="2" style="background:#fff"></td><td>' + (pay ? 'VAT payable' : 'VAT refundable') + '</td><td class="amt">' + money(Math.abs(B.n14)) + '</td></tr></tbody></table>' +
+      '<div class="note">* Note: this report is based solely on the information provided by the client.' + (late ? ' Rows marked OTHER PERIODS are invoices dated in another tax period and declared in this return.' : '') + (r.notes ? '<br>' + esc(r.notes) : '') + '</div>' +
+      '<div class="sign"><div>Prepared by – ' + esc(b.name) + '</div><div>Approved by client – signature &amp; stamp</div></div>' +
+      (regs ? '<div id="regs" class="regs" style="display:none">' + regs + '</div>' : '') +
       '</div></body></html>';
     var w = window.open('', '_blank'); if (!w) { toast('Allow pop-ups to open the report'); return; } w.document.write(html); w.document.close();
   }
