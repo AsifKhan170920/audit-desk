@@ -384,6 +384,8 @@ tr.late td{background:#fff7f7}
 .rm-set[open] summary{margin-bottom:6px}
 .rm .card{box-shadow:none;border-radius:9px}.rm .card-p{padding:8px 12px}
 @media(max-width:600px){.rm-li,.rm-li.rm-4{grid-template-columns:1fr auto}.rm-li .sub2{display:none}}
+table.tbl.pf td{padding:5px 8px}
+table.tbl.pf tr.pf-tot td{border-top:2px solid var(--line);font-size:13.5px}
 /* only the section titles are bold on the client / lead page */
 .cd-head .btn,.cd-nav button,.cd-wrap,.cd-wrap *{font-weight:400!important}
 .cd-wrap .cd-h h2,.cd-wrap .sv-h b,.cd-wrap .sec-title{font-weight:700!important}
@@ -1013,9 +1015,11 @@ function detailsSection(kind,o,db,gaps){
     <div class="cd-form">${F.inp('name','Company name','text','span2')}${F.inp('email','Email address','email')}
       ${F.inp(contactKey,'Primary contact person')}${F.inp('phone','Primary contact no.','tel')}${F.inp('tradeLicence','Trade licence no.')}
       ${F.inp('contact2','Secondary contact person')}${F.inp('phone2','Secondary contact no.','tel')}${F.inp('address','Address')}</div>
-    <div class="cd-grp">FTA portal &amp; agent</div>
-    <div class="cd-form">${F.inp('portalId','FTA portal email','email')}${F.pw('portalPassword','FTA portal password')}${F.inp('trn','TRN')}
-      ${F.inp('agentName','Agent name')}${F.inp('agentPhone','Agent contact no.','tel')}<div></div></div>
+    <div class="cd-grp">FTA portal</div>
+    <div class="cd-form">${F.inp('portalId','FTA portal email','email')}${F.pw('portalPassword','FTA portal password')}${F.inp('trn','TRN')}</div>
+    <div class="cd-grp">Agent</div>
+    <div class="cd-form">${F.inp('agentName','Agent name')}${F.inp('agentPhone','Agent contact no.','tel')}${F.sel('agentCommType','Commission basis',[['%','% of contract price'],['Fixed','Fixed amount (AED)']])}
+      ${F.inp('agentComm',o.agentCommType==='Fixed'?'Commission amount (AED)':'Commission rate (%)','number')}${F.show('Agent commission (AED) · auto',agentCommOf(o)?money(agentCommOf(o)):'—')}<div></div></div>
     <div class="cd-grp">Contract</div>
     <div class="cd-form">${F.sel('contractType','Contract type',['Period','One time'])}
       ${period?F.inp('contractStart','Period start date','date')+F.inp('contractEnd','Period end date','date'):F.inp('contractStart','Date of engagement','date')+'<div></div>'}
@@ -1214,19 +1218,45 @@ function remindersSection(c,db){
   </div>`);
 }
 
+/* ----- section 6: profit on this client · agent commission released in proportion to what the client has paid ----- */
+function agentCommOf(o){const v=+o.agentComm||0;if(!v)return 0;return o.agentCommType==='Fixed'?v:Math.round((+o.contractPrice||0)*v)/100;}
+function receivedOnContract(c,db){const from=c.contractStart||'';return ledgerRows(c,db).filter(r=>r.credit&&r.type!=='Opening balance'&&(!from||!r.date||r.date>=from)).reduce((s,r)=>s+r.credit,0);}
+function profitSection(c,db){
+  const ca=+c.contractPrice||0,ex=c.directExp||[],de=ex.reduce((s,x)=>s+(+x.amount||0),0),com=agentCommOf(c),pr=ca-de-com;
+  const rec=receivedOnContract(c,db),pct=ca?Math.min(1,rec/ca):0,rel=Math.round(com*pct*100)/100,paid=(c.agentPaid||[]).reduce((s,x)=>s+(+x.amount||0),0),due=Math.max(0,Math.round((rel-paid)*100)/100);
+  const neg=v=>v?'('+money(v)+')':'—';
+  const head=`<input class="hd-in" id="dx_desc" placeholder="Expense – e.g. audit fee, govt. fee" style="width:170px"><input class="hd-in" type="number" step="any" id="dx_amt" placeholder="Amount" style="width:80px"><input class="hd-in" type="date" id="dx_date" value="${ymd(new Date())}" title="Date"><button class="btn btn-sm" data-act="dx-add" data-id="${c.id}">＋ Expense</button>`+
+    (com?`<span class="hd-sep"></span><input class="hd-in" type="number" step="any" id="ap_amt" placeholder="Paid to agent" style="width:95px" value="${due||''}"><input class="hd-in" type="date" id="ap_date" value="${ymd(new Date())}" title="Date paid"><button class="btn btn-sm" data-act="ap-add" data-id="${c.id}">＋ Agent payment</button>`:'');
+  return cdSec(6,'cd-sp','Profit calculator',head,`
+    ${ca?'':'<div class="rm-warn" style="margin-bottom:8px">Enter the contract price under Client details to work out the profit.</div>'}
+    <table class="tbl sm pf"><tbody>
+      <tr><td>Contract amount (CA)</td><td class="r mono">${money(ca)}</td></tr>
+      <tr><td>Less: direct expenses (DE)</td><td class="r mono">${neg(de)}</td></tr>
+      <tr><td>Less: agent commission${com?(c.agentCommType==='Fixed'?' (fixed)':' ('+(+c.agentComm)+'%)')+(c.agentName?' – '+esc(c.agentName):''):''}</td><td class="r mono">${neg(com)}</td></tr>
+      <tr class="pf-tot"><td>Profit (CA − DE − commission)${ca?` <span class="sub2">· margin ${(pr/ca*100).toFixed(1)}%</span>`:''}</td><td class="r mono" style="color:${pr<0?'var(--red)':'var(--green)'}">${pr<0?'('+money(-pr)+')':money(pr)}</td></tr>
+    </tbody></table>
+    ${ex.length?`<div class="cd-grp" style="margin-top:12px">Direct expenses</div><table class="tbl sm"><tbody>${ex.map(x=>`<tr><td style="width:110px">${x.date?fmtDate(x.date):'—'}</td><td>${esc(x.desc||'')}</td><td class="r mono">${money(x.amount)}</td><td class="r" style="width:30px"><span class="link" data-act="dx-del" data-id="${c.id}" data-key="${x.id}" title="Delete">✕</span></td></tr>`).join('')}</tbody></table>`:''}
+    ${com?`<div class="cd-grp" style="margin-top:12px">Agent commission – released as the client pays</div>
+    <table class="tbl sm pf"><tbody>
+      <tr><td>Received from client against the contract</td><td class="r mono">${money(rec)} <span class="sub2">of ${money(ca)} · ${Math.round(pct*100)}%</span></td></tr>
+      <tr><td>Commission released (${Math.round(pct*100)}% of ${money(com)})</td><td class="r mono">${money(rel)}</td></tr>
+      <tr><td>Paid to agent</td><td class="r mono">${neg(paid)}</td></tr>
+      <tr class="pf-tot"><td>Payable to agent now</td><td class="r mono" style="color:${due>0?'var(--amber)':'var(--ink)'}">${money(due)}</td></tr>
+      <tr><td class="sub2">Not yet released (waiting for client payment)</td><td class="r mono sub2">${money(Math.max(0,com-rel))}</td></tr>
+    </tbody></table>
+    ${(c.agentPaid||[]).length?`<div class="sub2" style="margin-top:6px">Payments to agent: ${c.agentPaid.map(x=>`${fmtDate(x.date)} · AED ${money(x.amount)} <span class="link" data-act="ap-del" data-id="${c.id}" data-key="${x.id}" title="Delete">✕</span>`).join(' &nbsp;|&nbsp; ')}</div>`:''}`
+    :'<div class="cd-hint">No agent commission. Add the agent and the commission under Client details if there is one.</div>'}
+    <div class="cd-hint">Received counts receipts and cleared cheques${c.contractStart?' from '+fmtDate(c.contractStart):''}; opening balances are left out.</div>`);
+}
 /* ----- section 5: PDC management ----- */
 const PDC_ST=['In hand','Deposited','Cleared','Bounced','Returned to client'];
 function pdcStatus(r){return r.pdcStatus||(r.cleared?'Cleared':'In hand');}
 function pdcSection(c,db){
   const rows=db.receipts.filter(r=>r.clientId===c.id&&(r.method==='PDC'||r.method==='CDC')).sort((a,b)=>(a.chequeDate||a.date||'').localeCompare(b.chequeDate||b.date||''));
-  const tStr=ymd(new Date()),inHand=rows.filter(r=>['In hand','Deposited'].includes(pdcStatus(r))),nxt=inHand.filter(r=>pdcStatus(r)==='In hand')[0];
+  const tStr=ymd(new Date());
   const sched=db.agreements.filter(a=>(a.clientId===c.id||a.clientName===c.name)&&(a.cheques||[]).length);
   const tone={'In hand':'pending','Deposited':'blue','Cleared':'completed','Bounced':'high','Returned to client':'low'};
   return cdSec(5,'cd-s5','PDC management',`<select class="hd-in" id="pd_type"><option>PDC</option><option>CDC</option></select><input class="hd-in" id="pd_no" placeholder="Cheque no." style="width:90px"><input class="hd-in" id="pd_bank" placeholder="Bank" style="width:90px"><input class="hd-in" type="date" id="pd_date" title="Cheque date"><input class="hd-in" type="number" step="any" id="pd_amt" placeholder="Amount" style="width:90px"><button class="btn btn-sm btn-primary" data-act="pdc-add" data-id="${c.id}">＋ Add cheque</button>`,`
-    <div class="kpis"><div class="kpi"><div class="l">Cheques in hand</div><div class="v">${inHand.length} · AED ${money(inHand.reduce((s,r)=>s+(+r.amount||0),0))}</div></div>
-      <div class="kpi"><div class="l">Next to deposit</div><div class="v">${nxt?fmtDate(nxt.chequeDate)+(nxt.chequeDate<=tStr?' <span class="pill high">due</span>':''):'—'}</div></div>
-      <div class="kpi"><div class="l">Cleared</div><div class="v">${rows.filter(r=>pdcStatus(r)==='Cleared').length}</div></div>
-      <div class="kpi"><div class="l">Bounced</div><div class="v" style="${rows.some(r=>pdcStatus(r)==='Bounced')?'color:var(--red)':''}">${rows.filter(r=>pdcStatus(r)==='Bounced').length}</div></div></div>
     <div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th>Cheque date</th><th>Cheque no.</th><th>Bank</th><th>Type</th><th class="r">Amount</th><th>Receipt</th><th>Status</th></tr></thead><tbody>
     ${rows.map(r=>{const st=pdcStatus(r),late=st==='In hand'&&r.chequeDate&&r.chequeDate<=tStr;return `<tr${late?' class="late"':''}><td>${r.chequeDate?fmtDate(r.chequeDate):'—'}${late?' <span class="pill high">deposit</span>':''}</td><td>${esc(r.chequeNo||'—')}</td><td>${esc(r.bank||'—')}</td><td>${esc(r.method)}</td><td class="r mono">${money(r.amount)}</td>
       <td><span class="link" data-goto="#/receipt/${r.id}">${esc(r.receiptNo)}</span></td><td><select data-pdc="${r.id}" class="pdc-sel ${tone[st]}">${PDC_ST.map(x=>`<option${x===st?' selected':''}>${x}</option>`).join('')}</select></td></tr>`;}).join('')||'<tr><td colspan="7" class="empty" style="padding:16px">No cheques recorded.</td></tr>'}</tbody></table></div>
@@ -1273,14 +1303,15 @@ function renderClientDetail(id){
   <div class="page-head cd-head"><div style="display:flex;gap:10px;align-items:center"><a class="back" href="#/clients">←</a>
     <div><h1 style="font-size:24px">${esc(c.name)}</h1><div style="color:var(--muted);font-size:12.5px"><span class="pill active">${c.status}</span>${privateChip(c)} &nbsp;👤 ${esc((c.staff||[]).join(', ')||(p?p.name:'Unassigned'))}${!blankV(c.trn)?` &nbsp;·&nbsp; TRN ${esc(c.trn)}`:''}${c.tradeLicence?` &nbsp;·&nbsp; Licence ${esc(c.tradeLicence)}`:''}</div></div></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-act="new-invoice-for" data-id="${c.id}">🧾 Invoice</button><button class="btn" data-act="new-receipt-for" data-id="${c.id}">💵 Receipt</button><button class="btn" data-act="new-quote-for" data-type="client" data-id="${c.id}">📝 Quotation</button><button class="btn" data-act="new-agreement-for" data-type="client" data-id="${c.id}">📄 Agreement</button><a class="btn" href="../audit/?client=${encodeURIComponent(c.name)}" title="Open this client in the Audit Desk – financial statements and the audit report" style="text-decoration:none">📊 Audit Desk</a><a class="btn" href="${cloudFolder(c.name)}" target="_blank" rel="noopener" title="The client's folder in Google Drive" style="text-decoration:none">📁 Cloud folder</a><button class="btn" data-act="edit-client" data-id="${c.id}" title="Status, partner and privacy">✎ Edit</button><button class="btn btn-danger" data-act="del-client" data-id="${c.id}">🗑</button></div></div>
-  ${cdNav([['cd-s1','1 · Details'],['cd-s2','2 · Services'],['cd-s3','3 · Ledger'],['cd-s4','4 · Reminders'],['cd-s5','5 · PDC'],['cd-s6','6 · Documents']])}
+  ${cdNav([['cd-s1','1 · Details'],['cd-s2','2 · Services'],['cd-s3','3 · Ledger'],['cd-s4','4 · Reminders'],['cd-s5','5 · PDC'],['cd-sp','6 · Profit'],['cd-s6','7 · Agreements & quotations']])}
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('client',c,db,gaps)}
     ${servicesSection('client',c,db)}
     ${ledgerSection(c,db)}
     ${remindersSection(c,db)}
     ${pdcSection(c,db)}
-    ${cdSec(6,'cd-s6','Documents',`<button class="btn btn-sm" data-act="new-invoice-for" data-id="${c.id}">＋ Invoice</button><button class="btn btn-sm" data-act="new-receipt-for" data-id="${c.id}">＋ Receipt</button><button class="btn btn-sm" data-act="agr-for-client" data-id="${c.id}">＋ Agreement</button><button class="btn btn-sm" data-act="quo-for-client" data-id="${c.id}">＋ Quotation</button>`,clientDocsSection(c,db).replace('margin-top:20px','margin-top:0').replace(/<button class="btn btn-sm" data-act="[^"]+" data-id="[^"]+">＋ New<\/button>/g,''))}
+    ${profitSection(c,db)}
+    ${cdSec(7,'cd-s6','Agreements &amp; quotations',`<button class="btn btn-sm" data-act="agr-for-client" data-id="${c.id}">＋ Agreement</button><button class="btn btn-sm" data-act="quo-for-client" data-id="${c.id}">＋ Quotation</button>`,clientDocsSection(c,db,true).replace('margin-top:20px','margin-top:0').replace(/<button class="btn btn-sm" data-act="[^"]+" data-id="[^"]+">＋ New<\/button>/g,''))}
   </div>${asideHtml('client',c,db)}</div>`;
   setTimeout(cdApplyLocks);   // after the Contact & schedule card is added
 }
@@ -1320,7 +1351,7 @@ document.addEventListener('change',e=>{
     if(f==='contractType'&&v==='One time')o.contractExpiry='';
     if(f==='contactPerson')o.contact=v;
     if(/^svc\..+\.status$/.test(f)){o.svcLog=o.svcLog||[];o.svcLog.unshift({ts:new Date().toISOString(),name:f.split('.')[1],status:v,by:meName()});o.svcLog=o.svcLog.slice(0,60);}
-    if(['name','taxYearEnd','contractStart','contractEnd','turnoverEst','contractPrice','bookkeepingStart'].includes(f))redraw=true;}
+    if(['name','taxYearEnd','contractStart','contractEnd','turnoverEst','contractPrice','bookkeepingStart','agentComm'].includes(f))redraw=true;}
   if(kind==='client'&&CD_REPLAN[f]&&window.CRMPLUS&&CRMPLUS.replanClient){try{const pl=CRMPLUS.replanClient(db,o,[CD_REPLAN[f]]);if(pl&&pl.next)setTimeout(()=>toast('Reminders re-planned'),900);}catch(err){}}
   if(kind==='lead')o.lastActivity=o.lastActivity||ymd(new Date());
   save();toast('Saved');
@@ -1364,6 +1395,12 @@ function cdAct(act,el,db,id){
       if(r.contact!=='No contact needed'){const type=/^Called/.test(r.contact)?'call':r.contact==='Meeting'?'meeting':'message';c.contacts=c.contacts||[];c.contacts.unshift({date:r.date,type,note:'Bookkeeping review – '+r.contact,by:r.by});c.contacts=c.contacts.slice(0,100);if(!c.lastContact||r.date>c.lastContact)c.lastContact=r.date;}
       save();toast('Review logged');route();return true;}
     case'pdc-tab':{pdcFilter=key||'Open';renderPdc();return true;}
+    case'dx-add':{if(!c)return true;const amt=+$('#dx_amt').value||0,d=$('#dx_desc').value.trim();if(!amt){toast('Enter the expense amount');return true;}
+      c.directExp=c.directExp||[];c.directExp.push({id:uid('dx'),desc:d||'Direct expense',amount:amt,date:$('#dx_date').value||ymd(new Date())});save();toast('Expense added');route();return true;}
+    case'dx-del':{if(!c||!confirm('Delete this expense?'))return true;c.directExp=(c.directExp||[]).filter(x=>x.id!==key);save();route();return true;}
+    case'ap-add':{if(!c)return true;const amt=+$('#ap_amt').value||0;if(!amt){toast('Enter the amount paid to the agent');return true;}
+      c.agentPaid=c.agentPaid||[];c.agentPaid.push({id:uid('ap'),amount:amt,date:$('#ap_date').value||ymd(new Date()),by:meName()});save();toast('Agent payment recorded');route();return true;}
+    case'ap-del':{if(!c||!confirm('Delete this agent payment?'))return true;c.agentPaid=(c.agentPaid||[]).filter(x=>x.id!==key);save();route();return true;}
     case'ledger-add':{if(!c)return true;const dr=+$('#lg_dr').value||0,cr=+$('#lg_cr').value||0;if(!dr&&!cr){toast('Enter a debit or a credit');return true;}
       c.ledger=c.ledger||[];c.ledger.push({id:uid('lg'),date:$('#lg_date').value||ymd(new Date()),type:$('#lg_type').value,ref:$('#lg_ref').value.trim(),debit:dr,credit:cr});save();toast('Entry added');route();return true;}
     case'ledger-del':{if(!c)return true;if(!confirm('Delete this ledger entry?'))return true;c.ledger=(c.ledger||[]).filter(r=>r.id!==key);save();route();return true;}
@@ -1782,7 +1819,7 @@ function mkInvoice(db,clientId){const c=db.clients.find(x=>x.id===clientId);cons
 function mkReceipt(db,clientId){const c=db.clients.find(x=>x.id===clientId);const rc={id:uid('rc'),receiptNo:'RCP-'+new Date().getFullYear()+'-'+String(db.receipts.length+1).padStart(3,'0'),clientId,clientName:c?c.name:'',date:ymd(new Date()),amount:0,method:'Online Transfer',reference:'',isPDC:false,chequeNo:'',bank:'',chequeDate:'',notes:''};db.receipts.unshift(rc);return rc;}
 function syncPdcTask(db,rc){if(!rc)return;if(rc.taskId){db.tasks=db.tasks.filter(t=>t.id!==rc.taskId);rc.taskId=null;}
   if(rc.method==='PDC'&&rc.chequeDate){const t={id:uid('t'),title:'PDC Due — '+rc.clientName+' ('+(rc.chequeNo||rc.receiptNo)+')',type:'Reminder',status:'Not Started',dueDate:rc.chequeDate,recurrence:'None',priority:'High',clientId:rc.clientId,assignees:[],source:'pdc',checklist:['Present / deposit cheque on due date','Confirm clearance with bank','Update receipt status'],comments:[],createdBy:'System',createdAt:ymd(new Date())};db.tasks.unshift(t);rc.taskId=t.id;}}
-function clientDocsSection(c,db){
+function clientDocsSection(c,db,noBilling){
   const invs=db.invoices.filter(v=>v.clientId===c.id);
   const rcs=db.receipts.filter(r=>r.clientId===c.id);
   const ags=db.agreements.filter(a=>a.clientId===c.id||a.clientName===c.name);
@@ -1793,8 +1830,7 @@ function clientDocsSection(c,db){
   const agRows=ags.map(a=>`<div class="rel-task" data-goto="#/agreement/${a.id}" style="cursor:pointer"><div class="ic">📄</div><div style="flex:1"><b style="font-size:13px">${esc(a.title)}</b><div style="color:var(--faint);font-size:11px">${fmtDate(a.date)} · AED ${money(a.amount)}</div></div><span class="pill ${a.status==='Draft'?'draft':'final'}">${a.status}</span></div>`).join('');
   const qtRows=qts.map(q=>`<div class="rel-task" data-goto="#/quotation/${q.id}" style="cursor:pointer"><div class="ic">📝</div><div style="flex:1"><b style="font-size:13px">${esc(q.title)}</b><div style="color:var(--faint);font-size:11px">${fmtDate(q.date)} · AED ${money(q.amount)}</div></div><span class="pill ${q.status==='Draft'?'draft':'final'}">${q.status}</span></div>`).join('');
   return `<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
-    ${listCard('Sales Invoices','🧾',invs,'new-invoice-for',invRows)}
-    ${listCard('Receipts','💵',rcs,'new-receipt-for',rcRows)}
+    ${noBilling?'':listCard('Sales Invoices','🧾',invs,'new-invoice-for',invRows)+listCard('Receipts','💵',rcs,'new-receipt-for',rcRows)}
     ${listCard('Agreements','📄',ags,'agr-for-client',agRows)}
     ${listCard('Quotations','📝',qts,'quo-for-client',qtRows)}
   </div>`;
