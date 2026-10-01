@@ -1391,13 +1391,13 @@ function renderClientDetail(id){
   <!--CDNAV-->
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('client',c,db,gaps)}
-    ${companySection('client',c,db)}
     ${servicesSection('client',c,db)}
     ${ledgerSection(c,db)}
     ${remindersSection(c,db)}
     ${pdcSection(c,db)}
     ${profitSection(c,db)}
     ${cdSec(7,'cd-s6','Agreements &amp; quotations',`<button class="btn btn-sm" data-act="agr-for-client" data-id="${c.id}">＋ Agreement</button><button class="btn btn-sm" data-act="quo-for-client" data-id="${c.id}">＋ Quotation</button>`,clientDocsSection(c,db,true).replace('margin-top:20px','margin-top:0').replace(/<button class="btn btn-sm" data-act="[^"]+" data-id="[^"]+">＋ New<\/button>/g,''))}
+    ${companySection('client',c,db)}
   </div>${asideHtml('client',c,db)}</div>`);
   setTimeout(cdApplyLocks);   // after the Contact & schedule card is added
 }
@@ -1415,10 +1415,10 @@ function renderLeadDetail(id){
   <!--CDNAV-->
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('lead',l,db,[])}
-    ${companySection('lead',l,db)}
     ${servicesSection('lead',l,db)}
     ${cdSec(3,'cd-s4','Follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-lead="${l.id}">＋ Task</button>`,'<div id="cp-slot"></div>')}
     ${cdSec(4,'cd-s6','Quotations &amp; agreements',`<button class="btn btn-sm" data-act="new-quote-for" data-type="lead" data-id="${l.id}">＋ Quotation</button><button class="btn btn-sm" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">＋ Agreement</button>`,(qts.map(q=>docRow('📝','#/quotation/'+q.id,q.title,fmtDate(q.date)+' · AED '+money(q.amount),q.status)).join('')+ags.map(a=>docRow('📄','#/agreement/'+a.id,a.title,fmtDate(a.date)+' · AED '+money(a.amount),a.status)).join(''))||'<div class="empty" style="padding:18px">None yet.</div>')}
+    ${companySection('lead',l,db)}
   </div>${asideHtml('lead',l,db)}</div>`);
   setTimeout(cdApplyLocks);
 }
