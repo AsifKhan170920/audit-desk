@@ -2311,7 +2311,7 @@ function renderPayments(){
 }
 
 /* ============================================================= SERVICE FOLLOW-UP ENGINE */
-const SVC_TYPES=['Bookkeeping','VAT Return Filing','Corporate Tax Return Filing','Financial Audit','Preparation of Financial Statements','Anti Money Laundering','Access to Accounting Software'];
+const SVC_TYPES=['Bookkeeping','VAT Return Filing','VAT Registration','VAT Refund','Corporate Tax Return Filing','Financial Audit','Preparation of Financial Statements','Anti Money Laundering','Access to Accounting Software'];
 const SVC_CADENCE={
  'Bookkeeping':{days:7,oneTime:false,label:'Weekly review'},
  'VAT Return Filing':{days:7,oneTime:false,label:'In due month'},
@@ -2320,8 +2320,10 @@ const SVC_CADENCE={
  'Preparation of Financial Statements':{days:7,oneTime:true,label:'Weekly review'},
  'Anti Money Laundering':{days:7,oneTime:false,label:'Weekly review'},
  'Access to Accounting Software':{days:30,oneTime:false,label:'Monthly'},
+ 'VAT Registration':{days:10,oneTime:true,label:'Every 10 days'},
+ 'VAT Refund':{days:10,oneTime:true,label:'Every 10 days'},
 };
-const SVC_ICON={'Corporate Tax Return Filing':'🧮','VAT Return Filing':'🧾','Bookkeeping':'📒','Financial Audit':'🔍','Preparation of Financial Statements':'📊','Anti Money Laundering':'🛡','Access to Accounting Software':'💻'};
+const SVC_ICON={'VAT Registration':'🆕','VAT Refund':'💸','Corporate Tax Return Filing':'🧮','VAT Return Filing':'🧾','Bookkeeping':'📒','Financial Audit':'🔍','Preparation of Financial Statements':'📊','Anti Money Laundering':'🛡','Access to Accounting Software':'💻'};
 function svcCfg(t){return SVC_CADENCE[t]||{days:7,oneTime:false,label:'Weekly'};}
 function addDaysY(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return ymd(x);}
 function addYearsY(d,n){const x=new Date(d);x.setFullYear(x.getFullYear()+n);return ymd(x);}
@@ -2331,7 +2333,7 @@ function createService(db,clientId,type,period,start,deadline){const c=db.client
   const s={id:uid('svc'),clientId,clientName:c?c.name:'',type,period:period||'',cadenceDays:cfg.days,oneTime:cfg.oneTime,nextDate:start||ymd(new Date()),deadline:deadline||'',status:'Active',feedback:[],taskId:null,createdAt:ymd(new Date())};
   db.services.unshift(s);return s;}
 /* a follow-up only runs when the client has that service ticked (the contract) – a client with nothing ticked yet is not blocked */
-const SVC_NEEDS={'VAT Return Filing':['VAT Filing'],'Corporate Tax Return Filing':['CT Filing'],'Bookkeeping':['Bookkeeping'],'Financial Audit':['Audit'],'Preparation of Financial Statements':['Financial Statements','Audit'],'Anti Money Laundering':['AML'],'Access to Accounting Software':['Software']};
+const SVC_NEEDS={'VAT Return Filing':['VAT Filing'],'Corporate Tax Return Filing':['CT Filing'],'Bookkeeping':['Bookkeeping'],'Financial Audit':['Audit'],'Preparation of Financial Statements':['Financial Statements','Audit'],'Anti Money Laundering':['AML'],'Access to Accounting Software':['Software'],'VAT Registration':['VAT Registration'],'VAT Refund':['VAT Refund']};
 const SVC_ONGOING=['Bookkeeping','Anti Money Laundering','Access to Accounting Software'];
 function svcInContract(db,s){const c=db.clients.find(x=>x.id===s.clientId);if(!c)return true;const has=svcList(c),need=SVC_NEEDS[s.type];return !has.length||!need||need.some(n=>has.includes(n));}
 function runServiceEngine(db){
@@ -2416,7 +2418,7 @@ function openAddServiceModal(clientId){
     <div class="field"><label>Service</label><select id="sv_type">${SVC_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
     <div class="field"><label>Period</label><input id="sv_period" placeholder="e.g. FY2025, Q1 2026, FY2026"></div>
     <div class="two-col"><div class="field"><label>First follow-up date</label><input type="date" id="sv_start" value="${ymd(new Date())}"></div><div class="field"><label>Submission deadline</label><input type="date" id="sv_deadline"></div></div>
-    <p style="color:var(--faint);font-size:12px;margin-top:0">Corporate Tax starts every 3 days from the follow-up date; Bookkeeping/Audit weekly; VAT appears in the due month. Near the deadline it becomes sticky.</p>
+    <p style="color:var(--faint);font-size:12px;margin-top:0">Corporate Tax starts every 3 days from the follow-up date; VAT Registration / Refund every 10 days; Bookkeeping/Audit weekly; VAT appears in the due month. Near the deadline it becomes sticky.</p>
     <button class="btn btn-primary" style="width:100%" data-act="save-service" data-id="${clientId}">＋ Add Service</button></div>`);
 }
 function openServiceCompleteModal(id){
