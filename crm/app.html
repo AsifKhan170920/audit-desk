@@ -1505,6 +1505,7 @@ function cdAct(act,el,db,id){
       db.tasks.filter(t=>t.clientId===c.id&&(t.kind==='bookkeeping'||/^Bookkeeping Review/.test(t.title))&&t.status!=='Completed'&&(t.dueDate||'')<=lim).forEach(t=>{t.status='Completed';t.completedAt=r.date;});
       if(r.contact!=='No contact needed'){const type=/^Called/.test(r.contact)?'call':r.contact==='Meeting'?'meeting':'message';c.contacts=c.contacts||[];c.contacts.unshift({date:r.date,type,note:'Bookkeeping review – '+r.contact,by:r.by});c.contacts=c.contacts.slice(0,100);if(!c.lastContact||r.date>c.lastContact)c.lastContact=r.date;}
       save();toast('Review logged');route();return true;}
+    case'task-tab':{taskTab=key||'open';renderTasks();return true;}
     case'pdc-tab':{pdcFilter=key||'Open';renderPdc();return true;}
     case'dx-add':{if(!c)return true;const amt=+$('#dx_amt').value||0,d=$('#dx_desc').value.trim();if(!amt){toast('Enter the expense amount');return true;}
       c.directExp=c.directExp||[];c.directExp.push({id:uid('dx'),desc:d||'Direct expense',amount:amt,date:$('#dx_date').value||ymd(new Date())});save();toast('Expense added');route();return true;}
@@ -1566,14 +1567,20 @@ const TASK_STATUSES=['Not Started','In Progress','Pending to Client','Completed'
 const TS_DOT={'Not Started':'#3b82f6','In Progress':'#f59e0b','Pending to Client':'#a855f7','Completed':'#10b981'};
 let taskFilter='All';
 let taskSearch='';
+/* three tabs: open (not started), in progress / pending to client, completed */
+let taskTab='open';
+const TASK_TABS=[['open','Open tasks',t=>t.status==='Not Started'],['progress','In progress / pending to client',t=>t.status==='In Progress'||t.status==='Pending to Client'],['done','Completed',t=>t.status==='Completed']];
 function renderTasks(){
   undockAI();
   const db=load();
   const q=taskSearch.toLowerCase(), today=ymd(new Date());
-  const list=db.tasks.filter(t=>(taskFilter==='All'||t.type===taskFilter)&&(!q||t.title.toLowerCase().includes(q)))
-    .sort((a,b)=>TASK_STATUSES.indexOf(a.status)-TASK_STATUSES.indexOf(b.status)||String(a.dueDate).localeCompare(String(b.dueDate)));
+  const base=db.tasks.filter(t=>(taskFilter==='All'||t.type===taskFilter)&&(!q||t.title.toLowerCase().includes(q)));
+  const tab=TASK_TABS.find(x=>x[0]===taskTab)||TASK_TABS[0];
+  const list=base.filter(tab[2])
+    .sort((a,b)=>taskTab==='done'?String(b.completedAt||b.dueDate).localeCompare(String(a.completedAt||a.dueDate)):TASK_STATUSES.indexOf(a.status)-TASK_STATUSES.indexOf(b.status)||String(a.dueDate).localeCompare(String(b.dueDate)));
   app.innerHTML=`
   <div class="page-head"><div><h1>Tasks</h1></div></div>
+  <div class="pdc-tabs">${TASK_TABS.map(x=>{const n=base.filter(x[2]).length,late=x[0]!=='done'?base.filter(t=>x[2](t)&&t.dueDate&&t.dueDate<today).length:0;return `<button class="${x[0]===tab[0]?'on':''}" data-act="task-tab" data-key="${x[0]}">${x[1]} (${n})${late?` <span style="color:${x[0]===tab[0]?'#fff':'var(--red)'}">· ${late} late</span>`:''}</button>`;}).join('')}</div>
   <div class="card"><div style="overflow-x:auto"><table class="tbl cl-tbl">
     <thead><tr><th>Task</th><th>Client</th><th>Due</th><th>Status</th><th>Assigned to</th><th>Priority</th><th></th></tr></thead>
     <tbody>${list.map(t=>{const c=db.clients.find(x=>x.id===t.clientId); const late=t.status!=='Completed'&&t.dueDate&&t.dueDate<today;
@@ -1585,7 +1592,7 @@ function renderTasks(){
       <td>${staffSel(db,t,'assignees')}</td>
       <td><select data-cl="priority" data-id="${t.id}" aria-label="Priority">${['High','Medium','Low'].map(p=>`<option${t.priority===p?' selected':''}>${p}</option>`).join('')}</select></td>
       <td class="r"><a class="btn btn-sm" href="#/task/${t.id}">Open</a></td>
-    </tr>`;}).join('')||'<tr><td colspan="7" class="empty">No tasks match.</td></tr>'}</tbody>
+    </tr>`;}).join('')||`<tr><td colspan="7" class="empty">${taskTab==='done'?'No completed tasks yet.':taskTab==='progress'?'Nothing in progress or waiting for clients.':'No open tasks.'}</td></tr>`}</tbody>
   </table></div></div>`;
   setCount(`${list.length} task${list.length!==1?'s':''}`);
   pageTitle();
