@@ -847,8 +847,8 @@
       UI.welcome();
     },
     open: function (on) {
-      UI.root.classList.toggle('open', on); $('#cai-fab').style.display = on ? 'none' : '';
-      if (on) setTimeout(function () { if (!Voice.listening) $('#cai-input').focus(); }, 50); else { Voice.stop(); UI.conv(false); }
+      UI.root.classList.toggle('open', on); var fab = $('#cai-fab'); if (fab) fab.style.display = on ? 'none' : '';
+      if (on) setTimeout(function () { var i = $('#cai-input'); if (!Voice.listening && i) i.focus(); }, 50); else { Voice.stop(); UI.conv(false); }
     },
     welcome: function () {
       var w = document.createElement('div'); w.className = 'm assistant';

@@ -2268,10 +2268,14 @@ function svcSticky(s){return !!s.deadline&&daysUntil(s.deadline)<=7&&daysUntil(s
 function createService(db,clientId,type,period,start,deadline){const c=db.clients.find(x=>x.id===clientId);const cfg=svcCfg(type);
   const s={id:uid('svc'),clientId,clientName:c?c.name:'',type,period:period||'',cadenceDays:cfg.days,oneTime:cfg.oneTime,nextDate:start||ymd(new Date()),deadline:deadline||'',status:'Active',feedback:[],taskId:null,createdAt:ymd(new Date())};
   db.services.unshift(s);return s;}
+/* a follow-up only runs when the client has that service ticked (the contract) – a client with nothing ticked yet is not blocked */
+const SVC_NEEDS={'VAT Return Filing':['VAT Filing'],'Corporate Tax Return Filing':['CT Filing'],'Bookkeeping':['Bookkeeping'],'Financial Audit':['Audit'],'Preparation of Financial Statements':['Financial Statements','Audit'],'Anti Money Laundering':['AML'],'Access to Accounting Software':['Software']};
+function svcInContract(db,s){const c=db.clients.find(x=>x.id===s.clientId);if(!c)return true;const has=svcList(c),need=SVC_NEEDS[s.type];return !has.length||!need||need.some(n=>has.includes(n));}
 function runServiceEngine(db){
   const today=ymd(new Date());let created=0;
   (db.services||[]).forEach(s=>{
     if(s.status!=='Active')return;
+    if(!svcInContract(db,s)){ if(s.taskId){const t=db.tasks.find(x=>x.id===s.taskId);if(t&&t.status!=='Completed')db.tasks=db.tasks.filter(x=>x.id!==s.taskId);s.taskId=null;created++;} return; }   // not contracted: no reminder
     const open=s.taskId&&db.tasks.find(t=>t.id===s.taskId&&t.status!=='Completed');
     if(!open&&s.nextDate&&s.nextDate<=today){
       const sticky=svcSticky(s);
@@ -2299,7 +2303,7 @@ function svcReactivate(db,id){const s=(db.services||[]).find(x=>x.id===id);if(!s
 function clientServicesSection(c,db){
   const act=(db.services||[]).filter(s=>s.clientId===c.id&&s.status==='Active');
   const ret=(db.services||[]).filter(s=>s.clientId===c.id&&s.status==='Completed');
-  const row=s=>{const sticky=svcSticky(s);const du=daysUntil(s.deadline);return `<div class="rel-task" style="cursor:default"><div class="ic">${SVC_ICON[s.type]||'📌'}</div>
+  const row=s=>{if(!svcInContract(db,s))return `<div class="rel-task" style="cursor:default;opacity:.6"><div class="ic">⏸</div><div style="flex:1"><b style="font-size:13px">${esc(s.type)} · ${esc(s.period)}</b><div style="color:var(--amber);font-size:11px">Paused – ${esc((SVC_NEEDS[s.type]||[]).join(' / '))} is not ticked under Client details, so no reminders are sent</div></div><button class="icon-btn" data-act="svc-del" data-id="${s.id}" title="Remove this follow-up">✕</button></div>`;const sticky=svcSticky(s);const du=daysUntil(s.deadline);return `<div class="rel-task" style="cursor:default"><div class="ic">${SVC_ICON[s.type]||'📌'}</div>
     <div style="flex:1"><b style="font-size:13px">${esc(s.type)} <span style="color:var(--faint);font-weight:500">· ${esc(s.period)}</span></b>
     <div style="color:var(--faint);font-size:11px">${svcCfg(s.type).label} · next ${s.nextDate?fmtDate(s.nextDate):'—'}${s.deadline?' · due '+fmtDate(s.deadline):''}${(s.feedback&&s.feedback.length)?' · '+s.feedback.length+' note(s)':''}</div></div>
     ${sticky?`<span class="pill high">Due ≤7d</span>`:''}
