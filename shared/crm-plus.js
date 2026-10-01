@@ -60,6 +60,14 @@
     db.genLog = db.genLog || [];
     // the very first automatic run only creates tasks for deadlines still ahead (past periods may already be filed)
     var cutoff = db.engineRunOn ? ymd(new Date(Date.now() - 45 * 864e5)) : TODAY();
+    // deadline tasks that were opened before their time and not worked on yet go back until their date
+    db.tasks = db.tasks.filter(function (t) {
+      if (t.source !== 'auto_reminder' || !t.code || t.status !== 'Not Started' || (t.comments || []).length || (t.checklistDone || []).length) return true;
+      var c = db.clients.find(function (x) { return x.id === t.clientId; }); if (!c) return true;
+      var d = clientDeadlines(c, today).find(function (x) { return x.code === t.code; });
+      if (d && d.createOn > TODAY()) { db.genLog = db.genLog.filter(function (g) { return g !== t.code; }); return false; }
+      return true;
+    });
     db.clients.filter(function (c) { return c.status === 'Active'; }).forEach(function (c) {
       clientDeadlines(c, today).forEach(function (d) {
         if (db.genLog.indexOf(d.code) >= 0) return;
@@ -88,6 +96,7 @@
       return d.kind === kind && d.due > task.dueDate && !db.tasks.some(function (t) { return t.code === d.code || (t.title === d.title && String(t.dueDate).slice(0, 7) === d.due.slice(0, 7)); });
     })[0];
     if (!next) { toast('Completed – no further ' + kind.replace('_', ' ') + ' deadline found for this client'); return; }
+    if (next.createOn > TODAY()) { toast('Next one opens on ' + fmtDate(next.createOn) + ' (due ' + fmtDate(next.due) + ')'); return; }   // the engine creates it on that date
     db.genLog = db.genLog || [];
     var t = makeDeadlineTask(db, c, next);
     if (!t.assignees.length) t.assignees = (task.assignees || []).slice();

@@ -476,7 +476,7 @@ function load(){
 }
 function migrate(m){
   m=m||{};
-  ['team','partners','clients','leads','tasks','quotations','agreements','invoices','receipts','services','genLog'].forEach(k=>{if(!Array.isArray(m[k]))m[k]=[];});
+  ['team','partners','clients','leads','tasks','quotations','agreements','invoices','receipts','services','genLog','upcoming'].forEach(k=>{if(!Array.isArray(m[k]))m[k]=[];});
   m.business=Object.assign({},BIZ_DEFAULT,(m.business||{}));
   m.clients.concat(m.leads).forEach(o=>{if(o&&Array.isArray(o.services))o.services=svcList(o);});   // VAT → VAT Filing, Corporate Tax → CT Filing
   return m;
@@ -2282,6 +2282,8 @@ const SVC_ONGOING=['Bookkeeping','Anti Money Laundering','Access to Accounting S
 function svcInContract(db,s){const c=db.clients.find(x=>x.id===s.clientId);if(!c)return true;const has=svcList(c),need=SVC_NEEDS[s.type];return !has.length||!need||need.some(n=>has.includes(n));}
 function runServiceEngine(db){
   const today=ymd(new Date());let created=0;
+  // recurring tasks waiting for their window
+  if((db.upcoming||[]).length){const due=db.upcoming.filter(u=>u.showFrom<=today);if(due.length){due.forEach(u=>db.tasks.unshift(u.task));db.upcoming=db.upcoming.filter(u=>u.showFrom>today);created+=due.length;}}
   (db.services||[]).forEach(s=>{
     if(s.status!=='Active')return;
     // its follow-up task was ticked off: a period / one-off job is finished, an ongoing one moves to its next round
@@ -2588,7 +2590,12 @@ document.addEventListener('change',e=>{
   if(t.hasAttribute&&t.hasAttribute('data-qi')){const q=db.quotations.find(x=>x.id===id);const i=+t.getAttribute('data-i');const f=t.getAttribute('data-qi');q.items[i][f]=(f==='desc'||f==='period'||f==='vat')?t.value:(+t.value||0);save();renderQuotationBuilder(id);return;}
   if(t.hasAttribute&&t.hasAttribute('data-ai')){const a=db.agreements.find(x=>x.id===id);const i=+t.getAttribute('data-i');const f=t.getAttribute('data-ai');a.items[i][f]=(f==='desc'||f==='period'||f==='vat')?t.value:(+t.value||0);save();renderAgreementBuilder(id);return;}
 });
-function nextRecurring(db,task){const add={'Weekly':7,'Monthly':30,'Quarterly':91,'Annual':365}[task.recurrence]||0;if(!add)return;const nd=ymd(new Date(new Date(task.dueDate+'T00:00:00').getTime()+add*864e5));db.tasks.unshift({...task,id:uid('t'),status:'Not Started',dueDate:nd,comments:[],createdBy:'System',createdAt:ymd(new Date())});toast('Recurring task auto-created for '+fmtDate(nd));}
+/* the next occurrence of a recurring task only appears shortly before it is due (2 days for weekly, 7 monthly, 14 quarterly, 30 annual) */
+const RECUR_LEAD={'Weekly':2,'Monthly':7,'Quarterly':14,'Annual':30};
+function nextRecurring(db,task){const add={'Weekly':7,'Monthly':30,'Quarterly':91,'Annual':365}[task.recurrence]||0;if(!add)return;const nd=ymd(new Date(new Date(task.dueDate+'T00:00:00').getTime()+add*864e5));
+  const t={...task,id:uid('t'),status:'Not Started',dueDate:nd,comments:[],checklistDone:[],completedAt:undefined,createdBy:'System',createdAt:ymd(new Date())},show=ymd(new Date(new Date(nd+'T00:00:00').getTime()-(RECUR_LEAD[task.recurrence]||7)*864e5));
+  if(show<=ymd(new Date())){db.tasks.unshift(t);toast('Next one created – due '+fmtDate(nd));}
+  else{(db.upcoming=db.upcoming||[]).push({showFrom:show,task:t});toast('Next one will appear on '+fmtDate(show)+' (due '+fmtDate(nd)+')');}}
 
 /* ============================================================= DRAG & DROP */
 let dragId=null,dragType=null;
