@@ -358,6 +358,11 @@ tr.late td{background:#fff7f7}
 .pdc-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 10px}
 .pdc-tabs button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 11px;font-weight:600;font-size:12px;color:var(--muted)}
 .pdc-tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+/* custom fields editor */
+.cf-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}
+.cf-row input[data-k=label]{flex:1;min-width:180px}
+.cf-row .cf-opts{flex-basis:100%}
+.cf-row .cf-btns{display:flex;gap:4px}
 /* reminders & follow-up: plain blocks a beginner can read top to bottom */
 .rm{display:flex;flex-direction:column;gap:8px}
 .rm-blk{border:1px solid var(--line);border-radius:9px;padding:8px 12px}
@@ -1059,7 +1064,7 @@ function cdF(kind,o,gaps){
 let CD_CUR='';const cdEditOn={};
 const cdIsEdit=sec=>!!cdEditOn[CD_CUR+'|'+sec];
 let CD_N=0,CD_SECS=[];
-const CD_SHORT={'Client details':'Details','Lead details':'Details','Company information (MOA)':'Company','Client ledger':'Ledger','Reminders &amp; follow-up':'Reminders','PDC management':'PDC','Profit calculator':'Profit'};
+const CD_SHORT={'Client details':'Details','Lead details':'Details','Company information (MOA)':'Company','Client ledger':'Ledger','Reminders &amp; follow-up':'Reminders','PDC management':'PDC','Profit calculator':'Profit','Additional information':'More info'};
 function cdFinish(html){return html.replace('<!--CDNAV-->',cdNav(CD_SECS.map(([id,no,t])=>[id,no+' · '+(CD_SHORT[t]||t.replace(/&amp;/g,'&'))])));}
 function cdSec(n,id,title,actions,body){const on=cdIsEdit(id),no=++CD_N;CD_SECS.push([id,no,title]);return `<section class="cd-sec ${on?'editing':'locked'}" id="${id}"><div class="cd-h"><span class="no">${no}</span><h2>${title}</h2><div class="act">${actions||''}<button class="ed-tg" data-act="cd-edit" data-key="${id}" title="${on?'Lock this section – changes are already saved':'Unlock this section to change it'}">${on?'✓ Done':'✎ Edit'}</button></div></div><div class="cd-b">${body}</div></section>`;}
 function cdApplyLocks(){
@@ -1101,6 +1106,37 @@ function detailsSection(kind,o,db,gaps){
     <div class="cd-grp">Services opted</div>
     <div class="svc-chk">${SVC_LIST.map(s=>`<label class="${has.includes(s)?'on':''}"><input type="checkbox" data-cf="services" data-kind="${kind}" data-id="${o.id}" value="${esc(s)}"${has.includes(s)?' checked':''}>${esc(s)}</label>`).join('')}</div>`);
 }
+
+/* ----- additional information: the business's own custom fields (db.customFields), values in o.custom ----- */
+const CF_TYPES=[['text','Text'],['textarea','Long text'],['number','Number'],['date','Date'],['select','Drop-down list'],['yesno','Yes / No'],['email','Email'],['phone','Phone']];
+function customSection(kind,o,db){
+  const defs=db.customFields||[],F=cdF(kind,o,[]);
+  const fld=d=>{const k='custom.'+d.id,l=esc(d.label);
+    if(d.type==='textarea')return F.area(k,l,'span2');
+    if(d.type==='select')return F.sel(k,l,[['','—']].concat((d.options||[]).map(x=>[x,x])));
+    if(d.type==='yesno')return F.sel(k,l,[['','—'],['Yes','Yes'],['No','No']]);
+    return F.inp(k,l,{number:'number',date:'date',email:'email',phone:'tel'}[d.type]||'text');};
+  return cdSec(0,'cd-cf','Additional information',`<button class="btn btn-sm" data-act="cf-manage">⚙ Fields</button>`,
+    defs.length?`<div class="cd-form">${defs.map(fld).join('')}</div>`
+      :`<div class="empty" style="padding:18px">No custom fields yet. Click <b>✎ Edit</b> and then <b>⚙ Fields</b> to add your own – for example “Referred by”, “Main bank”, “Emirates ID expiry”.</div>`);
+}
+let CF_DRAFT=[];
+function cfSync(){document.querySelectorAll('[data-cfrow]').forEach(r=>{const d=CF_DRAFT[+r.dataset.cfrow];if(!d)return;
+  d.label=r.querySelector('[data-k=label]').value.trim();d.type=r.querySelector('[data-k=type]').value;
+  const op=r.querySelector('[data-k=options]');if(op)d.options=op.value.split(',').map(s=>s.trim()).filter(Boolean);});}
+function cfModal(){
+  modal(`<div class="modal" style="max-width:680px"><div class="modal-head"><h3>Client custom fields</h3><button class="x" data-act="close">×</button></div>
+    <p style="color:var(--muted);font-size:13px;margin-top:0">These fields appear on every client and lead page under <b>Additional information</b>. Values are saved per client.</p>
+    ${CF_DRAFT.map((d,i)=>`<div class="cf-row" data-cfrow="${i}">
+      <input data-k="label" value="${esc(d.label)}" placeholder="Field name">
+      <select data-k="type">${CF_TYPES.map(([v,t])=>`<option value="${v}"${d.type===v?' selected':''}>${t}</option>`).join('')}</select>
+      ${d.type==='select'?`<input data-k="options" value="${esc((d.options||[]).join(', '))}" placeholder="Choices, separated by commas" class="cf-opts">`:''}
+      <span class="cf-btns"><button class="icon-btn" data-act="cf-up" data-key="${i}" title="Move up">↑</button><button class="icon-btn" data-act="cf-down" data-key="${i}" title="Move down">↓</button><button class="icon-btn" data-act="cf-del" data-key="${i}" title="Remove this field">✕</button></span></div>`).join('')||'<div class="empty" style="padding:14px">No fields yet.</div>'}
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn" data-act="cf-add">＋ Add field</button><div style="flex:1"></div><button class="btn btn-primary" data-act="cf-save">Save fields</button></div></div>`);
+  const first=document.querySelector('[data-cfrow]:last-of-type [data-k=label]');if(first&&!first.value)first.focus();
+}
+// switching a field to "Drop-down list" shows the choices box
+document.addEventListener('change',e=>{if(e.target.matches&&e.target.matches('[data-cfrow] [data-k=type]')){cfSync();cfModal();}});
 
 /* ----- company information from the MOA / trade licence (Claude reads the document, you check and apply) ----- */
 const LIC_AUTH=['Dubai Department of Economy and Tourism (DET)','Abu Dhabi Department of Economic Development (ADDED)','Sharjah Economic Development Department (SEDD)','Ajman Department of Economic Development','RAK Department of Economic Development','Umm Al Quwain Department of Economic Development','Fujairah Department of Industry and Economy','Jebel Ali Free Zone Authority (JAFZA)','Dubai Multi Commodities Centre (DMCC)','Dubai Airport Free Zone (DAFZA)','Dubai Silicon Oasis (DSO)','IFZA','Meydan Free Zone','Sharjah Media City (SHAMS)','SAIF Zone','Hamriyah Free Zone','Ajman Free Zone','RAK Economic Zone (RAKEZ)','KEZAD','ADGM','DIFC'];
@@ -1459,6 +1495,7 @@ function renderClientDetail(id){
   <!--CDNAV-->
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('client',c,db,gaps)}
+    ${customSection('client',c,db)}
     ${servicesSection('client',c,db)}
     ${ledgerSection(c,db)}
     ${remindersSection(c,db)}
@@ -1483,6 +1520,7 @@ function renderLeadDetail(id){
   <!--CDNAV-->
   <div class="cd-wrap"><div class="cd-main">
     ${detailsSection('lead',l,db,[])}
+    ${customSection('lead',l,db)}
     ${servicesSection('lead',l,db)}
     ${cdSec(3,'cd-s4','Follow-up',`<button class="btn btn-sm" data-act="new-task-for" data-lead="${l.id}">＋ Task</button>`,'<div id="cp-slot"></div>')}
     ${cdSec(4,'cd-s6','Quotations &amp; agreements',`<button class="btn btn-sm" data-act="new-quote-for" data-type="lead" data-id="${l.id}">＋ Quotation</button><button class="btn btn-sm" data-act="new-agreement-for" data-type="lead" data-id="${l.id}">＋ Agreement</button>`,(qts.map(q=>docRow('📝','#/quotation/'+q.id,q.title,fmtDate(q.date)+' · AED '+money(q.amount),q.status)).join('')+ags.map(a=>docRow('📄','#/agreement/'+a.id,a.title,fmtDate(a.date)+' · AED '+money(a.amount),a.status)).join(''))||'<div class="empty" style="padding:18px">None yet.</div>')}
@@ -1537,6 +1575,17 @@ function cdAct(act,el,db,id){
   const c=db.clients.find(x=>x.id===id),key=el.getAttribute('data-key'),ko=(el.getAttribute('data-kind')==='lead'?db.leads:db.clients).find(x=>x.id===id);
   switch(act){
     case'cd-edit':{const k=CD_CUR+'|'+key;cdEditOn[k]=!cdEditOn[k];if(!cdEditOn[k])toast('Saved – section locked');const m=document.querySelector('.main'),mt=m?m.scrollTop:0,sc=document.scrollingElement,top=sc?sc.scrollTop:0;route();if(m)m.scrollTop=mt;if(sc)sc.scrollTop=top;return true;}
+    case'cf-manage':{CF_DRAFT=(db.customFields||[]).map(d=>({...d,options:(d.options||[]).slice()}));cfModal();return true;}
+    case'cf-add':{cfSync();CF_DRAFT.push({id:uid('cf'),label:'',type:'text',options:[]});cfModal();return true;}
+    case'cf-up':case'cf-down':{cfSync();const i=+key,j=act==='cf-up'?i-1:i+1;if(j>=0&&j<CF_DRAFT.length)[CF_DRAFT[i],CF_DRAFT[j]]=[CF_DRAFT[j],CF_DRAFT[i]];cfModal();return true;}
+    case'cf-del':{cfSync();const d=CF_DRAFT[+key];if(!d)return true;
+      const used=db.clients.concat(db.leads).filter(o=>o.custom&&!blankV(o.custom[d.id])).length;
+      if(used&&!confirm(`“${d.label||'This field'}” has a value on ${used} client(s)/lead(s). Remove the field? The values stay stored and come back if you undo before saving.`))return true;
+      CF_DRAFT.splice(+key,1);cfModal();return true;}
+    case'cf-save':{cfSync();const list=CF_DRAFT.filter(d=>d.label);
+      const bad=list.find(d=>d.type==='select'&&!(d.options||[]).length);if(bad){toast(`Add the choices for “${bad.label}”`);return true;}
+      db.customFields=list.map(d=>({id:d.id,label:d.label,type:d.type,options:d.type==='select'?d.options:[]}));
+      save();closeModal();toast('Custom fields saved');route();return true;}
     case'cd-jump':{const t=document.getElementById(el.getAttribute('data-to'));if(t)t.scrollIntoView({behavior:'smooth',block:'start'});return true;}
     case'pw-eye':{const i=el.parentElement.querySelector('input');const sh=i.type==='password';i.type=sh?'text':'password';el.textContent=sh?'hide':'show';return true;}
     case'vat-file':case'ct-file':if(c)cdFileModal(act.slice(0,act.indexOf('-')),c,key,el.getAttribute('data-label'));return true;
@@ -2445,6 +2494,9 @@ function renderSettings(){
       <div class="card card-p"><div class="sec-title">🏦 Bank Details</div>
         <div class="field"><label>Bank Details (one item per line)</label><textarea data-biz="bank" style="min-height:100px">${esc(b.bank)}</textarea></div>
         <p style="color:var(--faint);font-size:12px;margin:0">Shown on invoices in the Payment Details section.</p></div>
+      <div class="card card-p" style="margin-top:18px"><div class="sec-title">🧩 Client custom fields</div>
+        <p style="color:var(--muted);font-size:13px;margin-top:0">${(db.customFields||[]).length?`${(db.customFields||[]).length} field(s): ${esc((db.customFields||[]).map(d=>d.label).join(', '))}`:'No custom fields yet.'} They appear on every client and lead page under <b>Additional information</b>.</p>
+        <button class="btn" data-act="cf-manage">⚙ Manage fields</button></div>
     </div>
     <div>
       <div class="card card-p" style="margin-bottom:18px"><div class="sec-title">🖼 Logo</div>
@@ -2544,7 +2596,7 @@ function handleAct(act,el){
     case'new-agreement-for':{const type=el.getAttribute('data-type');const src=(type==='lead'?db.leads:db.clients).find(x=>x.id===id);const a={id:uid('a'),title:'Service Agreement',clientId:type==='client'?id:null,clientName:src?src.name:'',clientLicence:src?(src.tradeLicence||''):'',reference:'',amount:0,status:'Draft',date:ymd(new Date()),...agTemplate(0)};a.items=[{desc:'',qty:1,unit:0}];db.agreements.unshift(a);save();toast('Agreement created');location.hash='#/agreement/'+a.id;break;}
     case'save-lead':{const name=$('#m_name').value.trim();if(!name){toast('Enter a name');return;}db.leads.unshift({id:uid('l'),name,stage:$('#m_stage').value,source:$('#m_source').value,phone:$('#m_phone').value||'-',email:$('#m_email').value||'-',contact:'-',address:'-',tradeLicence:$('#m_licence').value||'',services:[],date:ymd(new Date()),assignedTo:'Waseem',notes:[]});save();closeModal();toast('Lead added');route();break;}
     case'del-lead':db.leads=db.leads.filter(l=>l.id!==id);save();location.hash='#/leads';toast('Lead deleted');break;
-    case'convert-lead':{const l=db.leads.find(x=>x.id===id);if(l){db.clients.unshift({id:uid('c'),name:l.name,status:'Active',partnerId:'p_un',email:l.email,phone:l.phone,services:l.services||[],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:l.contractEnd||'',address:l.address,staff:[],invoiced:0,received:0,ledger:[],notes:(l.notes||[]).slice(),contactPerson:l.contact&&l.contact!=='-'?l.contact:'',contact2:l.contact2||'',phone2:l.phone2||'',portalId:l.portalId||'',portalPassword:l.portalPassword||'',agentName:l.agentName||'',agentPhone:l.agentPhone||'',contractType:l.contractType||'Period',contractStart:l.contractStart||'',contractEnd:l.contractEnd||'',contractPrice:l.contractPrice||'',tradeLicence:l.tradeLicence||'',trn:l.trn||'-',vatCycle:l.vatCycle||'Stagger 3',taxYearEnd:l.taxYearEnd||'2025-12-31',turnoverEst:l.turnoverEst||'',svc:l.svc||{},createdAt:ymd(new Date())});l.stage='Closed';save();toast('Converted to client');location.hash='#/clients';}break;}
+    case'convert-lead':{const l=db.leads.find(x=>x.id===id);if(l){db.clients.unshift({id:uid('c'),name:l.name,custom:Object.assign({},l.custom||{}),status:'Active',partnerId:'p_un',email:l.email,phone:l.phone,services:l.services||[],vatCycle:'Stagger 3',taxYearEnd:'2025-12-31',trn:'-',portalId:'',portalPassword:'',contractExpiry:l.contractEnd||'',address:l.address,staff:[],invoiced:0,received:0,ledger:[],notes:(l.notes||[]).slice(),contactPerson:l.contact&&l.contact!=='-'?l.contact:'',contact2:l.contact2||'',phone2:l.phone2||'',portalId:l.portalId||'',portalPassword:l.portalPassword||'',agentName:l.agentName||'',agentPhone:l.agentPhone||'',contractType:l.contractType||'Period',contractStart:l.contractStart||'',contractEnd:l.contractEnd||'',contractPrice:l.contractPrice||'',tradeLicence:l.tradeLicence||'',trn:l.trn||'-',vatCycle:l.vatCycle||'Stagger 3',taxYearEnd:l.taxYearEnd||'2025-12-31',turnoverEst:l.turnoverEst||'',svc:l.svc||{},createdAt:ymd(new Date())});l.stage='Closed';save();toast('Converted to client');location.hash='#/clients';}break;}
     case'post-lead-note':{const l=db.leads.find(x=>x.id===id);const v=$('#leadNote').value.trim();if(v){l.notes=l.notes||[];l.notes.unshift({by:meName(),at:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'}),ts:new Date().toISOString(),text:v});l.lastActivity=ymd(new Date());save();route();}break;}
     case'post-client-note':{const c=db.clients.find(x=>x.id===id);const v=$('#clientNote').value.trim();if(v){c.notes=c.notes||[];c.notes.unshift({by:meName(),ts:new Date().toISOString(),text:v});save();route();}break;}
     case'del-client':db.clients=db.clients.filter(c=>c.id!==id);save();location.hash='#/clients';toast('Client deleted');break;
