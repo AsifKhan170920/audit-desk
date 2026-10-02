@@ -218,6 +218,7 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
     show('<h1>Welcome, ' + esc(me.name) + '</h1><p class="sub">Pick a client below, or open a whole app.</p>' + ask + clientsCard() + '<div class="tiles">' +
       tile('crm', '#0f9d6b', 'CRM', 'CRM', 'Leads, clients, tasks, quotations, invoices and receipts – with an AI assistant you can talk to.') +
       tile('audit', '#14284b', 'FS', 'Audit Desk', 'Financial statements, audit reports, policies and proof documents.') +
+      (FT.canOpen(me, 'fleet') ? '<a class="tile" href="../royal-rides-fleet/" style="text-decoration:none;color:inherit"><div class="ic" style="background:#a87a2a">RR</div><b>Royal Rides Fleet</b><span>Uber trips, drivers, cars, investors, driver settlement, ledger and VAT.</span><span class="go">Open →</span></a>' : '') +
       (me.role === 'admin' ? '<button class="tile" data-go="users"><div class="ic" style="background:#c9973a">👥</div><b>Users &amp; access</b><span>Add users, choose CRM / Audit access, expertise, block users.</span><span class="go">Manage →</span></button>' : '') +
       '</div>' + phoneCard());
     var q = document.getElementById('cl-q');
@@ -257,7 +258,7 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
       '<div><label for="u-name">Name</label><input type="text" id="u-name" required placeholder="e.g. Waseem"></div>' +
       '<div><label for="u-id">User ID (or email)</label><input type="text" id="u-id" required autocapitalize="off" spellcheck="false" placeholder="e.g. waseem"></div>' +
       '<div><label for="u-pw">Password (at least 8 characters)</label><input type="text" id="u-pw" required minlength="8" autocomplete="off"></div></div>' +
-      '<div class="checks"><span class="note">May open:</span><label><input type="checkbox" id="u-crm" checked> CRM</label><label><input type="checkbox" id="u-audit"> Audit Desk</label></div>' +
+      '<div class="checks"><span class="note">May open:</span><label><input type="checkbox" id="u-crm" checked> CRM</label><label><input type="checkbox" id="u-audit"> Audit Desk</label><label><input type="checkbox" id="u-fleet"> Royal Rides Fleet</label></div>' +
       '<div class="checks"><span class="note">Expertise (for automatic client assignment):</span>' + FTReminders.EXPERTISE.map(function(x, i){ return '<label><input type="checkbox" class="u-exp" value="' + x + '"> ' + x + '</label>'; }).join('') + '</div>' +
       '<div class="row" style="margin-top:14px"><button class="btn primary" id="u-go">Add user</button><span class="note">Then share the user ID and password with the person. Google may ask you to confirm your admin account the first time.</span></div><div class="msg" id="u-msg"></div></form>' +
       '<div class="card" style="margin-top:18px"><h2>All users</h2><div class="table-wrap" id="u-list"><p class="sub">Loading…</p></div><div class="msg" id="l-msg2"></div></div>' +
@@ -272,7 +273,7 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
       e.preventDefault();
       var b = document.getElementById('u-go'); b.disabled = true; b.textContent = 'Adding…'; msg('u-msg', '');
       var u = {name: document.getElementById('u-name').value.trim(), id: document.getElementById('u-id').value.trim(), password: document.getElementById('u-pw').value,
-        crm: document.getElementById('u-crm').checked, audit: document.getElementById('u-audit').checked,
+        crm: document.getElementById('u-crm').checked, audit: document.getElementById('u-audit').checked, fleet: document.getElementById('u-fleet').checked,
         expertise: [].slice.call(document.querySelectorAll('.u-exp')).filter(function(x){ return x.checked; }).map(function(x){ return x.value; })};
       var shareText = 'Fair Tax Portal: https://asifkhan170920.github.io/audit-desk/  User ID: ' + FT.idFromEmail(FT.emailFor(u.id)) + '  Password: ' + u.password;
       try { await FT.addUser(u); await refreshTeam(); msg('u-msg', 'User added. Share this with ' + (u.name || u.id) + ': ' + shareText + (FT.lastAddFallback ? '  (Created with the standard method – to set passwords later, allow “manage users” when Google asks.)' : ''), 'ok'); this.reset(); document.getElementById('u-crm').checked = true; await list(); }
@@ -302,13 +303,14 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
       var all = await FT.listUsers();
       var expBoxes = function(u){ var ex = u.expertise || []; return '<div class="exp">' + FTReminders.EXPERTISE.map(function(x){ return '<label><input type="checkbox" data-exp="' + x + '" data-uid="' + u.uid + '"' + (ex.indexOf(x) >= 0 ? ' checked' : '') + '>' + x + '</label>'; }).join('') + '</div>'; };
       var mine = all.filter(function(u){ return u.uid === me.uid; })[0] || {uid: me.uid, expertise: me.expertise || []};
-      box.innerHTML = '<table><thead><tr><th>Name</th><th>User ID</th><th>CRM</th><th>Audit</th><th>Expertise</th><th>Status</th><th></th></tr></thead><tbody>' +
-        '<tr><td>' + esc(me.name) + ' <span class="tag admin">Admin</span></td><td>' + esc(FT.OWNER_EMAIL) + '</td><td>✓</td><td>✓</td><td>' + expBoxes(mine) + '</td><td><span class="tag ok">Google sign-in</span></td><td><span class="note">you</span></td></tr>' +
+      box.innerHTML = '<table><thead><tr><th>Name</th><th>User ID</th><th>CRM</th><th>Audit</th><th>Fleet</th><th>Expertise</th><th>Status</th><th></th></tr></thead><tbody>' +
+        '<tr><td>' + esc(me.name) + ' <span class="tag admin">Admin</span></td><td>' + esc(FT.OWNER_EMAIL) + '</td><td>✓</td><td>✓</td><td>✓</td><td>' + expBoxes(mine) + '</td><td><span class="tag ok">Google sign-in</span></td><td><span class="note">you</span></td></tr>' +
         all.filter(function(u){ return u.uid !== me.uid; }).map(function(u){
           var apps = u.apps || {};
           return '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.id) + '</td>' +
             '<td><input type="checkbox" data-uid="' + u.uid + '" data-f="crm"' + (apps.crm ? ' checked' : '') + ' aria-label="CRM access"></td>' +
             '<td><input type="checkbox" data-uid="' + u.uid + '" data-f="audit"' + (apps.audit ? ' checked' : '') + ' aria-label="Audit access"></td>' +
+            '<td><input type="checkbox" data-uid="' + u.uid + '" data-f="fleet"' + (apps.fleet ? ' checked' : '') + ' aria-label="Royal Rides Fleet access"></td>' +
             '<td>' + expBoxes(u) + '</td>' +
             '<td>' + (u.active ? '<span class="tag ok">Active</span>' : '<span class="tag bad">Blocked</span>') + '</td>' +
             '<td class="row"><button class="btn small" data-pw="' + u.uid + '" data-name="' + esc(u.name || u.id) + '" data-id="' + esc(u.id) + '">Set new password</button>' +
