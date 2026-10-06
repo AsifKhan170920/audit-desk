@@ -1,0 +1,5 @@
+/* status badge for customers / suppliers who paid more than they owe (its own colour, light + dark) */
+:root{ --overpaid:#6D28D9; --overpaid-tint:#EDE9FE; --overpaid-line:#DDD6FE; }
+body.theme-dark{ --overpaid:#C4B5FD; --overpaid-tint:#2E1065; --overpaid-line:#4C1D95; }
+.st-overpaid{background:var(--overpaid-tint);color:var(--overpaid);border:1px solid var(--overpaid-line)}
+.data-guard{margin:8px 0}

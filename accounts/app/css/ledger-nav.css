@@ -1,0 +1,19 @@
+/* Ledger navigation (js/ledger-nav.js): origin breadcrumb, ledger pager,
+   Transaction Journal section. Tokens only, so dark mode follows app.css. */
+.ln-crumb .left{flex-wrap:wrap;row-gap:2px}
+.ln-crumb-sep{color:var(--line-strong)}
+.ln-crumb-cur{color:var(--ink-2);font-weight:600}
+
+.ln-pager .ln-pos{white-space:nowrap;padding:0 4px;color:var(--muted)}
+
+.ln-tj{margin-top:14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+.ln-tj-h{padding:10px 14px;font-weight:700;color:var(--ink);background:var(--surface-2);border-bottom:1px solid var(--line)}
+.ln-tj-tbl{margin:0;width:100%}
+.ln-tj-tbl th,.ln-tj-tbl td{padding:8px 14px}
+.ln-tj-tbl td.r,.ln-tj-tbl th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ln-tj-sub{color:var(--muted);font-weight:400}
+.ln-tj-tot td{font-weight:700;border-top:2px solid var(--line-strong)}
+.ln-tj-tot.bad td{color:var(--danger)}
+.ln-tj-warn{margin:10px 14px 4px;padding:9px 12px;border:1px solid var(--danger-line);background:var(--danger-tint);color:var(--danger-dark);border-radius:var(--radius);font-weight:600;font-size:13px}
+.ln-tj-empty{color:var(--muted);padding:12px 14px}
+body.theme-dark .ln-tj-warn{color:var(--danger)}

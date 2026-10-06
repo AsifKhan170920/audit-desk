@@ -1,0 +1,100 @@
+/* Pending purchases (js/pending-stock.js) — themed off the app tokens, so light / dark need no rules of their own. */
+.ps-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.ps-badge{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px;max-width:100%;font-size:11px;font-weight:600;line-height:1.35;
+  padding:2px 8px;border-radius:10px;border:1px solid var(--warn-line);background:var(--warn-tint);color:var(--warn);white-space:normal}
+.ps-badge.ps-ok{border-color:var(--success-line);background:var(--success-tint);color:var(--success)}
+.ps-badge.ps-rcv{border-color:var(--info-line);background:var(--info-tint);color:var(--info)}
+.ps-badge.ps-info{border-color:var(--line);background:var(--surface-3);color:var(--ink-2)}
+.ps-meta{font-size:11.5px;color:var(--muted);line-height:1.35;align-self:center}
+.ps-badge .ps-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.ps-link{color:var(--link);cursor:pointer}
+.ps-link:hover{text-decoration:underline}
+.ps-sub{font-size:12px;color:var(--muted)}
+.ps-nw{white-space:nowrap}
+.ps-flag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--warn)}
+.ps-dn-info{margin:4px 0 8px}
+
+/* dialogs (UIModal look: .uim / .uim-h / .uim-b / .uim-f from css/lists.css) */
+.ps-ov .ps-dlg{width:480px}
+.ps-ov .ps-dlg.ps-wide{width:860px}
+.ps-b{max-height:min(70vh,640px);overflow:auto}
+.ps-short{border:1px solid var(--warn-line);background:var(--warn-tint);border-radius:var(--radius);padding:10px 12px;margin:2px 0 12px}
+.ps-item{font-weight:700;color:var(--ink);margin-bottom:4px}
+.ps-nums{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink-2)}
+.ps-nums b{color:var(--ink)}
+.ps-neg,.ps-neg b{color:var(--danger)!important}
+.ps-q{font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:4px 0 6px}
+.ps-opts{display:flex;flex-direction:column;gap:6px}
+.ps-opt{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);cursor:pointer;background:var(--surface)}
+.ps-opt:hover{background:var(--surface-2)}
+.ps-opt input{margin-top:3px;flex:none;width:auto}
+.ps-opt:has(input:checked){border-color:var(--accent);background:var(--primary-tint)}
+.ps-opt small{display:block;color:var(--muted);font-size:12px;font-weight:400;margin-top:2px}
+.ps-more{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;padding:4px 2px 4px 26px}
+.ps-more[hidden]{display:none}
+.ps-f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);font-weight:600}
+.ps-f input,.ps-f select{width:100%;box-sizing:border-box}
+.ps-f-w{grid-column:1/-1;margin-top:8px}
+.ps-note,.ps-lead{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+.ps-lead{margin:0 0 10px}
+.ps-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font-size:13px;margin:0 0 8px}
+.ps-chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.ps-chk input{width:auto}
+.ps-warnline{color:var(--warn);font-size:12.5px;margin-top:8px}
+.ps-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:var(--radius)}
+.ps-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.ps-tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:var(--surface-3);padding:7px 8px;white-space:nowrap}
+.ps-tbl td{padding:7px 8px;border-top:1px solid var(--line-soft);vertical-align:top;color:var(--ink-2)}
+.ps-tbl .r{text-align:right}
+.ps-tbl tr[hidden]{display:none}
+.ps-tbl tfoot td{font-weight:700;border-top:2px solid var(--line);color:var(--ink)}
+.ps-tbl .ps-ck{width:28px}
+.ps-tbl .ps-ck input{width:auto}
+.ps-qty{width:76px;text-align:right}
+.ps-empty{text-align:left;color:var(--muted);padding:14px 10px!important}
+
+/* view panel */
+.ps-panel{margin:14px 0 4px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface-2);padding:10px 14px}
+.ps-panel-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+.ps-panel ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.ps-panel li{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.ps-ln{font-size:13px;color:var(--ink-2);margin-right:4px}
+.ps-hint{font-size:12px;color:var(--muted)}
+
+/* report + list bar + settings */
+.ps-rep-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.ps-rep-h h2{margin:0}
+.ps-rep-tools{display:flex;gap:8px;align-items:center}
+.ps-seg{display:inline-flex}
+.ps-seg .btn{border-radius:0}
+.ps-seg .btn:first-child{border-radius:var(--radius) 0 0 var(--radius)}
+.ps-seg .btn:last-child{border-radius:0 var(--radius) var(--radius) 0;margin-left:-1px}
+.ps-seg .btn.on{background:var(--primary-tint);border-color:var(--accent);color:var(--primary-dark)}
+.ps-h3{font-size:13px;font-weight:700;color:var(--ink);margin:16px 0 8px}
+.ps-listbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 10px;font-size:13px}
+.ps-settings{max-width:640px}
+.ps-set span{display:block}
+.ps-set-chk{margin-top:14px}
+
+/* the native Sales Invoice shows the popup + badges; the older inline banner would repeat them */
+#sfbStock{display:none!important}
+
+@media (max-width:600px){
+  .ps-more{grid-template-columns:1fr;padding-left:0}
+  .ps-ov .ps-dlg,.ps-ov .ps-dlg.ps-wide{width:100%}
+  .ps-nums{gap:4px 12px}
+}
+@media print{ [data-noprint].ps-panel,.ps-listbar,.ps-rep-tools{display:none!important} }
+/* the report sits on the app's white report "paper" (#repDoc, css/app.css) in light and dark alike */
+#repDoc .ps-lead,#repDoc .ps-empty,#repDoc .ps-sub{color:#5b6576}
+#repDoc .ps-h3{color:#1f2733}
+#repDoc .ps-tw{border-color:#e7e9ee}
+#repDoc .ps-tbl th{background:#f4f6f9;color:#5b6576;padding:7px 8px;border-bottom:1px solid #d6dae1}
+#repDoc .ps-tbl td{color:#1f2733;border-top:1px solid #eceef2;padding:7px 8px}
+#repDoc .ps-tbl tfoot td{border-top:2px solid #0f172a}
+#repDoc .ps-link{color:#1d4ed8}
+#repDoc .ps-flag{color:#b45309}
+@media (max-width:600px){ .ps-rep #repDoc{padding:16px 14px} }
+.ps-tbl{min-width:560px}
+.ps-tbl .ps-link{white-space:nowrap}
+.ps-tbl td.ps-term{white-space:nowrap}

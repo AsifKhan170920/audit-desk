@@ -1,0 +1,124 @@
+/* ===================== Native Receipt / Payment / Sales Invoice forms =====================
+   Layout ported from the Bookkeeping Desk voucher engine (.row2 rows, prefixed
+   input groups, searchable combos, compact line grid, totals footer). Every
+   colour comes from the app tokens in css/app.css, so the dark theme follows. */
+.card.tf-card{padding:22px 24px;max-width:none}
+.tf-card-h{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+.tf-card-h h2{margin:0}
+.tf-uid{font-size:11px;color:var(--muted-2);font-family:var(--font-mono)}
+
+/* compact controls inside the form (the app default is a roomy 10px/13px) */
+#txHost input[type=text],#txHost input[type=date],#txHost select,#txHost textarea{padding:7px 10px;min-height:36px;max-width:none}
+#txHost select{padding-right:28px}
+#txHost textarea{min-height:36px}
+
+/* header */
+.tf-f{margin-bottom:12px;max-width:640px;min-width:0}
+.tf-l{display:block;font-weight:650;margin-bottom:5px;font-size:12px;color:var(--ink-2)}
+.tf-hint{color:var(--muted);font-size:12px;margin-top:4px}
+.tf-row2{display:flex;gap:6px 18px;flex-wrap:wrap;align-items:flex-start}
+.tf-ig{display:flex;align-items:stretch;max-width:100%;min-width:0}
+.tf-ig>input,.tf-ig>select{min-width:0;flex:0 1 auto;width:auto}
+.tf-ig>span:not(.party-bal){flex:none;display:flex;align-items:center;background:var(--surface-3);border:1px solid var(--field-line);border-right:0;
+  border-radius:var(--radius) 0 0 var(--radius);padding:0 10px;color:var(--muted);font-size:12.5px;white-space:nowrap}
+.tf-ig>span.suf{border-right:1px solid var(--field-line);border-left:0;border-radius:0 var(--radius) var(--radius) 0}
+#txHost .tf-ig>input,#txHost .tf-ig>select,#txHost .tf-ig>.cb .cb-btn{border-radius:0}
+#txHost .tf-ig>:last-child,#txHost .tf-ig>:last-child .cb-btn,#txHost .tf-ig>.cb:nth-last-child(3) .cb-btn{border-radius:0 var(--radius) var(--radius) 0}
+#txHost .tf-ig>span:first-child+*:last-child{border-radius:0 var(--radius) var(--radius) 0}
+.tf-ig span input[type=checkbox]{margin:0;width:15px;height:15px}
+.tf-ig.wide{max-width:none;flex-wrap:nowrap}
+.tf-ig.wide .party-type{width:120px;flex:none}
+.tf-ig.wide .cb .cb-btn{min-width:240px}
+.tf-f>.tf-ig>.cb.grow:first-child .cb-btn{border-radius:var(--radius)}
+.tf-ig .party-bal{margin-left:10px}
+
+/* searchable combo box */
+.cb{display:inline-block;position:relative;vertical-align:middle;min-width:0}
+.cb.grow{flex:1;max-width:340px}
+.cb-btn{display:flex;align-items:center;gap:6px;width:100%;min-width:110px;min-height:36px;background:var(--field-bg);
+  border:1px solid var(--field-line);border-radius:var(--radius);padding:6px 9px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer;text-align:left}
+.cb-btn:hover{border-color:var(--muted-2)}
+.cb-btn:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)}
+.cb-btn span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-btn .ph{color:var(--muted-2)}
+.cb-x{font-style:normal;color:var(--muted-2);padding:0 3px}.cb-x:hover{color:var(--danger)}
+.cb-car{font-style:normal;color:var(--muted);font-size:11px}
+.cb.need .cb-btn{border-color:var(--warn);background:var(--warn-tint)}
+.cb-panel{position:absolute;z-index:1200;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius);
+  box-shadow:var(--shadow-3);padding:8px;max-width:calc(100vw - 16px)}
+.cb-panel .cb-q{width:100%;max-width:none;margin-bottom:6px;padding:7px 10px}
+.cb-list{max-height:260px;overflow:auto}
+.cb-o{display:flex;justify-content:space-between;gap:18px;padding:7px 9px;border-radius:calc(var(--radius) - 4px);cursor:pointer;color:var(--ink);font-size:13px}
+.cb-o small{color:var(--muted);white-space:nowrap}
+.cb-o.hi,.cb-o:hover{background:var(--accent-solid);color:var(--on-accent)}.cb-o.hi small,.cb-o:hover small{color:var(--on-accent);opacity:.8}
+.cb-none{padding:8px;color:var(--muted);font-size:13px}
+.cb-add{border-top:1px solid var(--line);margin-top:4px;color:var(--link);font-weight:600}
+
+/* line grid */
+.tf-lines{margin-top:6px}
+.lines-wrap{overflow-x:auto;margin:6px 0 8px;-webkit-overflow-scrolling:touch}
+table.tx-ln{border-collapse:collapse;width:auto}
+.tx-ln th{text-align:left;font-weight:650;font-size:12px;color:var(--ink-2);padding:6px 4px;white-space:nowrap}
+.tx-ln td{padding:4px;vertical-align:top}
+.tx-ln .num,.tx-ln td.amtc{text-align:right}
+.tx-ln input.n{width:95px;text-align:right}.tx-ln input.n.sm{width:64px}
+.tx-ln td.itm{min-width:130px}.tx-ln td.itm .cb{width:100%}
+.tx-ln td .cb .cb-btn{min-width:0}
+.tx-ln td.tot{padding:12px 8px 0;min-width:84px;background:var(--surface-2);border-radius:calc(var(--radius) - 4px);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tx-ln td.lno{padding-top:12px;color:var(--muted)}
+#txHost .tx-ln textarea.ld{min-height:36px;width:180px;resize:vertical}
+.tx-ln select{width:auto;min-width:96px}
+.tx-ln tfoot td{padding-top:8px;font-variant-numeric:tabular-nums}
+.tx-ln tfoot .grand td{font-weight:700;border-top:1px solid var(--line)}
+.tx-ln tfoot input.n{width:110px}
+.tx-ln .act{white-space:nowrap;padding-top:9px}
+.tx-ln .act button{border:0;background:none;color:var(--muted-2);cursor:pointer;padding:2px 4px;font-size:14px;line-height:1}
+.tx-ln .act button:hover{color:var(--ink)}
+.acc-cell{display:flex;align-items:center;flex-wrap:nowrap}
+.acc-cell>.cb:first-child .cb-btn{min-width:180px}
+.ctl-l{background:var(--surface-3);border:1px solid var(--field-line);border-right:0;margin-left:6px;border-radius:var(--radius) 0 0 var(--radius);
+  padding:0 10px;color:var(--ink-2);white-space:nowrap;align-self:stretch;display:flex;align-items:center;font-size:12.5px}
+.acc-cell .cb.ctl .cb-btn{min-width:160px;border-radius:0 var(--radius) var(--radius) 0}
+.acc-lock{display:inline-block;min-width:180px;padding:8px 10px;background:var(--surface-3);border:1px solid var(--line);
+  border-radius:var(--radius);color:var(--ink-2);white-space:nowrap}
+.tf-neg{color:var(--danger);font-weight:700}
+.tf-add{margin-top:2px}
+
+/* options, errors, footer */
+.tf-opts{margin-top:18px}
+.tf-chk{display:flex;align-items:center;gap:8px;margin:5px 0;cursor:pointer;font-weight:400;font-size:13px;color:var(--ink)}
+.tf-chk input{width:16px;height:16px;margin:0}
+.tf-reveal{margin:2px 0 8px 24px}
+.tf-reveal select,.tf-reveal input{width:auto;min-width:200px}
+.tf-errbox{background:var(--danger-tint);border:1px solid var(--danger-line);color:var(--danger);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;line-height:1.55}
+.tx-actions .tf-engine{margin-left:auto;font-size:12px;color:var(--link);cursor:pointer;text-decoration:underline}
+
+/* phones: wrapping input groups, full-width fields, sideways-scrolling line grid */
+@media (max-width:700px){
+  .tf-card{padding:16px}
+  .tf-ig.wide{flex-wrap:wrap}.tf-ig.wide>*{flex:1 1 auto}
+  .tf-ig.wide>span:first-child{flex:none}
+  .tf-ig.wide .party-type{flex:1 1 0;width:auto}
+  .tf-ig.wide .party-type~.cb,.tf-ig.wide .party-type~input[type=text]{flex:1 1 100%;margin-top:6px}
+  #txHost .tf-ig.wide .party-type~.cb .cb-btn,#txHost .tf-ig.wide .party-type~input[type=text]{border-radius:var(--radius)}
+  .tf-ig .party-bal{margin:6px 0 0}
+  .cb.grow{max-width:none}
+  .tf-ig.wide .cb .cb-btn,.acc-cell>.cb:first-child .cb-btn{min-width:0}
+  .acc-cell{flex-wrap:wrap;gap:4px}
+  .ctl-l{margin-left:0}
+  .tf-row2>.tf-f{flex:1 1 140px}
+  #txHost input[type=date]{width:100% !important}
+  .tx-actions .tf-engine{margin-left:0;flex-basis:100%}
+}
+
+/* totals box under the line grid (FIX_SPEC 86): never clipped by the grid's horizontal scroll */
+.tf-under{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:2px 0 10px}
+.tf-totals{margin-left:auto;min-width:280px;display:flex;flex-direction:column;gap:4px;font-variant-numeric:tabular-nums}
+.tf-tr{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:3px 0}
+.tf-tr .tf-tl{color:var(--ink-2);display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;text-align:right}
+.tf-tr .tf-tv{min-width:110px;text-align:right;display:inline-flex;justify-content:flex-end}
+.tf-tr.grand{font-weight:700;border-top:1px solid var(--line);padding-top:6px}
+.tf-tr input.n{width:110px;text-align:right}
+.tf-tr select{width:auto}
+.tx-ln .act button[title="Duplicate line"]{font-size:13px}
+.cb-panel.cb-up{box-shadow:0 -8px 24px rgba(16,24,40,.12)}

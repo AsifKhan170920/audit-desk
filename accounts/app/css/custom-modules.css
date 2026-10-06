@@ -1,0 +1,26 @@
+/* ===================== Settings -> Customisation (js/custom-modules.js) =====================
+   Theme tokens only, so light and dark both follow. */
+.cm-list{display:flex;flex-direction:column;gap:10px}
+.cm-card{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface-2);min-width:0}
+.cm-card.on{border-color:var(--success-line);background:var(--surface)}
+.cm-body{flex:1;min-width:0}
+.cm-name{font-weight:700;color:var(--ink);font-size:14.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cm-state{font-size:11px;font-weight:700;color:var(--success);background:var(--success-tint);border:1px solid var(--success-line);border-radius:var(--radius-pill);padding:1px 8px}
+.cm-desc{color:var(--muted);font-size:12.5px;margin-top:3px;line-height:1.5}
+.cm-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:9px}
+.cm-tabs-l{font-size:12px;color:var(--muted);margin-right:2px}
+.cm-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--ink-2);background:var(--surface-3);border:1px solid var(--line);border-radius:var(--radius-pill);padding:2px 9px}
+.cm-chip .ico{flex:0 0 auto}
+.cm-actions{margin-top:10px}
+.cm-switch{position:relative;flex:0 0 auto;width:40px;height:22px;margin-top:2px;cursor:pointer}
+.cm-switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
+.cm-knob{position:absolute;inset:0;border-radius:999px;background:var(--line-strong);transition:background var(--t-fast)}
+.cm-knob::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform var(--t-fast)}
+.cm-switch input:checked + .cm-knob{background:var(--accent-solid)}
+.cm-switch input:checked + .cm-knob::after{transform:translateX(18px)}
+.cm-switch input:focus-visible + .cm-knob{box-shadow:0 0 0 3px var(--ring)}
+/* the tag on custom tabs in the User Permissions editor */
+.perm-custom{font-size:10.5px;font-weight:700;color:var(--violet);background:var(--violet-tint);border:1px solid var(--violet-line);border-radius:var(--radius-pill);padding:0 7px;margin-left:4px;vertical-align:1px}
+@media (max-width:600px){
+  .cm-card{padding:12px;gap:12px}
+}

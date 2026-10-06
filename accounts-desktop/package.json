@@ -1,0 +1,40 @@
+{
+  "name": "fair-tax-accounting",
+  "productName": "Fair Tax Accounting",
+  "version": "1.0.0",
+  "description": "Fair Tax Accounting for Windows – the accounting software for Fair Tax clients (books saved in the Fair Tax cloud)",
+  "author": "Fair Tax International FZC",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "icon": "node make-icon.js",
+    "start": "electron .",
+    "dist": "node make-icon.js && electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.fairtax.accounting",
+    "productName": "Fair Tax Accounting",
+    "copyright": "Fair Tax International FZC",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "preload.js", "offline.html", "assets/**/*"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.png",
+      "artifactName": "FairTaxAccounting-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Fair Tax Accounting",
+      "runAfterFinish": true
+    }
+  }
+}

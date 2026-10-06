@@ -1,0 +1,76 @@
+/* ===================== Forms fixes (js/forms-fixes.js, js/ui-modal.js) ===================== */
+
+/* ---- app modal (alert / confirm / prompt) ---- */
+.ui-modal .app-modal-b{font-size:14px;color:var(--ink);line-height:1.5}
+.ui-modal .ui-modal-text{white-space:normal;word-break:break-word}
+.ui-modal .ui-modal-in{padding:9px 11px;border:1px solid var(--field-line);border-radius:var(--radius);background:var(--field-bg);color:var(--ink);font:inherit;box-sizing:border-box}
+
+/* ---- Bank & Cash account form (and the "+ Add new" bank dialog) ---- */
+.ff-bank{max-width:640px}
+.ff-row{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+.ff-row>.ff-f{flex:1 1 240px;min-width:0}
+.ff-row>.ff-f.ff-small{flex:0 0 150px}
+.ff-row>.ff-f.ff-small input{width:100% !important}
+.ff-f input[type=text]{width:100%;box-sizing:border-box}
+.ff-chk{display:flex;align-items:center;gap:9px;margin:12px 0 4px;font-size:13.5px;color:var(--ink-2);cursor:pointer;font-weight:400}
+.ff-chk input{width:16px;height:16px;cursor:pointer;accent-color:var(--accent-solid)}
+.ff-reveal{margin:4px 0 6px 25px;max-width:360px}
+.ff-reveal input{width:100%;box-sizing:border-box}
+.ff-reveal .chk-row{display:none}
+.ff-cf{margin-top:8px;border-top:1px solid var(--line-soft);padding-top:2px}
+#appOverlay .ff-row label.fld{margin-top:12px}
+
+/* ---- designer forms: line grid laid out like the Sales Invoice ---- */
+#deHost .line-items.ff-lines{table-layout:auto;width:100%;min-width:max-content}
+#deHost .ff-scroll{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
+#deHost .ff-lines th{white-space:nowrap}
+#deHost .ff-lines td .li-combo{width:190px;min-width:150px}
+#deHost .ff-lines td .li-combo-val{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal}
+#deHost .ff-lines td .li-combo:has([data-account-col]){width:200px}
+#deHost .ff-lines td .li-combo:has([data-var="taxRate"]){width:130px;min-width:110px}
+#deHost .ff-lines td textarea{width:220px;min-width:160px}
+#deHost .ff-lines td input[type=number],#deHost .ff-lines td input[type=text]{width:104px;min-width:84px}
+#deHost .ff-lines td input[data-var="qty"]{width:76px;min-width:64px}
+#deHost .ff-lines td input[type=date]{width:150px}
+#deHost .ff-lines th.ff-actc,#deHost .ff-lines td.ff-actc{width:auto;min-width:112px;white-space:nowrap;background:transparent}
+#deHost .ff-lines td.ff-actc .li-btn,#deHost .ff-lines td.ff-actc .li-del{width:24px;height:26px;border:0;background:none;color:var(--muted-2);cursor:pointer;font-size:14px;line-height:1;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:6px}
+#deHost .ff-lines td.ff-actc .li-btn:hover{color:var(--ink);background:var(--surface-3)}
+#deHost .ff-lines td.ff-actc .li-del:hover{color:var(--danger);background:var(--danger-tint)}
+@media print{ #deHost .ff-lines td.ff-actc,#deHost .ff-lines th.ff-actc{display:none !important} }
+
+/* ---- global search results ---- */
+.gs-pop{position:fixed;z-index:1250;max-height:min(70vh,560px);overflow:auto;background:var(--surface);color:var(--ink);
+  border:1px solid var(--line-strong);border-radius:var(--radius-lg);box-shadow:var(--shadow-3);padding:6px 0;max-width:calc(100vw - 16px)}
+.gs-g{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:9px 14px 4px}
+.gs-g span{font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted-2);margin-left:6px}
+.gs-i{padding:7px 14px;cursor:pointer;border-left:3px solid transparent}
+.gs-i.hi,.gs-i:hover{background:var(--row-sel);border-left-color:var(--primary)}
+.gs-t{font-size:13.5px;font-weight:600;color:var(--ink)}
+.gs-s{font-size:12px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs-none{padding:12px 14px;color:var(--muted);font-size:13px}
+
+/* ---- History: old -> new ---- */
+.hist-chg{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5}
+.hist-chg b{color:var(--ink-2);font-weight:600}
+.hist-old{color:var(--muted-2);text-decoration:line-through}
+.hist-arrow{color:var(--muted-2);margin:0 5px}
+.hist-new{color:var(--ink);font-weight:600}
+
+/* ---- designer forms in dark mode: the template's white card and fields follow the theme ---- */
+body.theme-dark #deHost .app-form{background:var(--surface) !important;color:var(--ink) !important;border-color:var(--line) !important}
+body.theme-dark #deHost .app-form label,body.theme-dark #deHost .app-form h2{color:var(--ink)}
+body.theme-dark #deHost .app-form input,body.theme-dark #deHost .app-form textarea,body.theme-dark #deHost .app-form select,
+body.theme-dark #deHost .app-form .li-combo-val{background:var(--field-bg);color:var(--ink);border-color:var(--field-line) !important}
+body.theme-dark #deHost .app-form input[readonly]:not(.line-items input){background:var(--surface-3);color:var(--muted)}
+body.theme-dark #deHost .app-form .li-combo-val.placeholder{color:var(--muted-2)}
+body.theme-dark #deHost .app-form .li-wrap{border-color:var(--line)}
+body.theme-dark #deHost .app-form .line-items th,body.theme-dark #deHost .app-form .line-items td{border-color:var(--line)}
+body.theme-dark #deHost .app-form .line-items thead th{background:var(--surface-2);color:var(--muted)}
+body.theme-dark #deHost .app-form .line-items tbody tr:hover{background:var(--row-hover)}
+body.theme-dark #deHost .app-form .line-items tfoot .li-tot td,body.theme-dark #deHost .app-form .li-addc,body.theme-dark #deHost .app-form .li-actc{background:var(--surface-2);color:var(--ink);border-color:var(--line)}
+body.theme-dark #deHost .app-form .li-add{background:var(--surface);color:var(--success);border-color:var(--line)}
+body.theme-dark #deHost .app-form .print-opts{background:var(--surface-2);border-color:var(--line)}
+body.theme-dark #deHost .app-form .print-opts .po-h,body.theme-dark #deHost .app-form .print-opts .po-item{color:var(--ink-2)}
+body.theme-dark #deHost .app-form .input-prefix>span{background:var(--surface-3);color:var(--ink-2);border-color:var(--field-line)}
+#deHost .ff-opts{margin:8px 2px 4px}
+#deHost .ff-opts .ff-chk{margin:4px 0;font-size:13px}

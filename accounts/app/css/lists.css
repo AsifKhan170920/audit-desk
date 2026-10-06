@@ -1,0 +1,149 @@
+/* ===================== top bar, lists, Edit columns, app modals =====================
+   Companion to js/topbar.js, js/list-tools.js and js/ui-modal.js. Colours come
+   from the tokens in css/app.css, so light and dark themes both work. */
+
+/* ---------- single top bar ---------- */
+.toolbar{flex-wrap:nowrap}
+.tb-left{flex:1 1 auto;min-width:0;gap:12px}
+.tb-tools{gap:8px;flex:0 1 auto}
+.tb-tools .hd-search input{width:200px}
+.tb-tools .hd-search input:focus{width:240px}
+.tb-tools .hd-icon{width:38px;height:36px}
+.tb-right{flex:none;margin-left:6px}
+.tb-user{position:relative;flex:none}
+.tb-avatar{display:grid;place-items:center;padding:0;border:2px solid transparent;border-radius:50%;
+  background:transparent;cursor:pointer;line-height:0;transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.tb-avatar .hd-avatar{width:34px;height:34px;font-size:14px;background:var(--accent-solid);color:var(--on-accent)}
+.tb-avatar:hover,.tb-avatar[aria-expanded="true"]{border-color:var(--primary-tint-2);box-shadow:0 0 0 3px var(--ring)}
+.tb-avatar:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring);border-color:var(--accent)}
+
+.tb-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:1100;min-width:230px;max-width:calc(100vw - 16px);
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-3);
+  padding:6px;display:flex;flex-direction:column}
+.tb-menu.hide{display:none}
+.tb-menu-who{display:flex;flex-direction:column;gap:2px;padding:8px 10px 8px}
+.tb-menu-name{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-menu-role{font-size:12px;color:var(--muted)}
+.tb-menu-sep{height:1px;background:var(--line);margin:5px 2px}
+.tb-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:8px;
+  background:transparent;color:var(--ink-2);font:inherit;font-size:13.5px;font-weight:550;text-align:left;cursor:pointer}
+.tb-menu button:hover,.tb-menu button:focus-visible{background:var(--surface-3);color:var(--ink);outline:none}
+.tb-menu button[disabled]{opacity:.45;cursor:not-allowed}
+.tb-menu button[disabled]:hover{background:transparent;color:var(--ink-2)}
+.tb-mi{display:inline-grid;place-items:center;line-height:0;color:var(--muted);flex:none;width:18px}
+.tb-menu button:hover .tb-mi{color:var(--ink)}
+.tb-menu .tb-menu-danger,.tb-menu .tb-menu-danger .tb-mi{color:var(--danger)}
+.tb-menu .tb-menu-danger:hover{background:var(--danger-tint);color:var(--danger)}
+.tb-switch{margin-left:auto;width:34px;height:20px;border-radius:999px;background:var(--line-strong);position:relative;flex:none;
+  transition:background-color var(--t-fast)}
+.tb-switch::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--surface);
+  box-shadow:var(--shadow-1);transition:transform var(--t-fast)}
+#tbDarkItem.on .tb-switch{background:var(--accent-solid)}
+#tbDarkItem.on .tb-switch::after{transform:translateX(14px);background:#fff}
+
+@media (max-width:1024px){
+  .tb-tools .hd-search input{width:150px}
+  .tb-tools .hd-search input:focus{width:180px}
+}
+@media (max-width:760px){
+  .toolbar{flex-wrap:wrap;padding:8px 12px;gap:8px}
+  .tb-left{flex:1 1 0;order:1;flex-wrap:wrap;row-gap:8px}
+  .tb-left .tb-tools{flex:1 1 100%;order:5}
+  .tb-tools .hd-search{flex:1}
+  .tb-tools .hd-search input,.tb-tools .hd-search input:focus{width:100%}
+  /* avatar stays in the top-right corner; the tabs take their own row */
+  .tb-right{order:2;width:auto;margin-left:auto;align-self:flex-start}
+  .tb-nav{order:3;flex:1 1 100%;min-width:0;overflow-x:auto}
+  .tb-menu{position:fixed;right:8px;left:auto}
+}
+@media (max-width:420px){
+  .tb-btn{padding:6px 7px;font-size:12.5px;gap:5px}
+}
+
+/* ---------- list header (Title + New | Advanced Queries + Search) ---------- */
+.lt-head{justify-content:space-between}
+.lt-head-l{display:flex;align-items:center;gap:12px;min-width:0}
+.reg-adv{cursor:pointer;white-space:nowrap}
+.reg-adv:hover{color:var(--primary)}
+@media (max-width:760px){
+  .reg-search{margin-left:0;width:100%}
+  .reg-search input{flex:1;width:auto;min-width:0}
+}
+
+/* ---------- list table ---------- */
+.tbl-scroll{max-width:100%}
+.lt-tbl{min-width:0}
+.tbl-scroll .lt-tbl{min-width:640px}
+.reg-tbl th.nw,.reg-tbl td.nw{white-space:nowrap}
+.reg-tbl td.c-name,.reg-tbl th.c-name{min-width:150px}
+.reg-tbl th.ico-h{color:var(--muted-2);font-size:13px;text-align:center;font-weight:400;text-transform:none;cursor:help}
+.reg-tbl th.chk,.reg-tbl td.chk{width:1%;text-align:center;padding-left:12px;padding-right:6px}
+.reg-tbl th.chk input,.reg-tbl td.chk input{width:16px;height:16px;cursor:pointer;accent-color:var(--accent-solid)}
+.reg-tbl tbody tr.row-sel{background:var(--row-sel)}
+/* one amount style; links only where the amount opens something */
+.reg-tbl td.m,.reg-tbl td.m.blue,.reg-tbl td.m.bold{color:var(--ink);font-weight:500}
+.reg-tbl td.m a.led-link{color:var(--link);font-weight:600}
+.reg-tbl td.neg,.reg-tbl td.m.neg,.reg-tbl td.neg a.led-link,.reg-tbl tfoot td.neg,
+#wsMain td.neg,#wsMain .num.neg,#wsMain .total.neg{color:var(--danger)}
+/* sortable headers */
+.reg-tbl th.sortable{cursor:pointer;user-select:none;transition:color var(--t-fast)}
+.reg-tbl th.sortable:hover{color:var(--ink-2)}
+.reg-tbl th.sortable:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.reg-tbl th .sort-ind{display:inline-block;margin-left:5px;font-size:10px;opacity:0;transition:opacity var(--t-fast)}
+.reg-tbl th.sortable:hover .sort-ind,.reg-tbl th.sortable:focus-visible .sort-ind{opacity:.7}
+.reg-tbl th.sorted{color:var(--primary)}
+.reg-tbl th.sorted .sort-ind{opacity:1}
+/* footer total row, aligned to the table's own columns */
+.reg-tbl tfoot td{padding:12px 14px;border-top:2px solid var(--line);font-weight:700;color:var(--ink);background:var(--surface-2)}
+.reg-tbl tfoot td.tot-lbl{text-align:left}
+.reg-tbl tfoot td.m{white-space:nowrap}
+
+/* bulk delete bar */
+.batch-bar{gap:10px;flex-wrap:wrap;color:var(--ink)}
+.batch-bar b{color:var(--danger)}
+.batch-bar .bb-sep{color:var(--muted-2)}
+.batch-bar .btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* Batch Operations dialog */
+.bo-list{display:flex;flex-direction:column;gap:8px}
+.bo-item{justify-content:flex-start;gap:12px;padding:12px 14px;text-align:left;height:auto}
+.bo-item span{display:flex;flex-direction:column;gap:2px}
+.bo-item small{font-weight:400;color:var(--muted);font-size:12px}
+.bo-steps{margin:0 0 6px 18px;padding:0;font-size:13px;color:var(--ink-2);line-height:1.7}
+.bo-ta{width:100%;min-height:150px;padding:8px;border:1px solid var(--field-line);border-radius:8px;box-sizing:border-box;
+  font-family:var(--font-mono);font-size:12px;background:var(--field-bg);color:var(--ink)}
+.bo-msg{font-size:12.5px;color:var(--muted);margin-top:8px}
+.bo-err{color:var(--danger)}
+
+/* ---------- Edit columns page ---------- */
+.ec-card{max-width:620px}
+.ec-h{font-size:20px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.ec-note{color:var(--muted);font-size:13px;margin:0 0 12px}
+.ec-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ec-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--line-soft);background:var(--surface)}
+.ec-row:last-child{border-bottom:0}
+.ec-row.off .ec-lbl span{color:var(--muted)}
+.ec-row.dragging{opacity:.45}
+.ec-row.drop-on{box-shadow:inset 0 2px 0 var(--accent)}
+.ec-handle{cursor:grab;color:var(--muted-2);font-size:15px;width:18px;text-align:center;user-select:none}
+.ec-lbl{display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer;font-size:14px;color:var(--ink)}
+.ec-lbl input{width:16px;height:16px;accent-color:var(--accent-solid)}
+.ec-tag{font-size:11px;color:var(--muted);background:var(--surface-3);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.ec-move{display:flex;gap:4px}
+.ec-move .btn{min-width:30px;justify-content:center}
+.ec-actions{display:flex;gap:8px;align-items:center;margin-top:14px}
+
+/* ---------- app modals (js/ui-modal.js) ---------- */
+.uim-ov{position:fixed;inset:0;z-index:1300;background:rgba(17,24,39,.45);display:flex;align-items:flex-start;justify-content:center;
+  padding:80px 16px 16px;overflow:auto;animation:fadeIn var(--t-med) both}
+.uim{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-3);width:440px;max-width:100%;overflow:hidden}
+.uim-h{font-weight:800;font-size:17px;color:var(--ink);padding:16px 20px 10px}
+.uim-b{padding:4px 20px 16px;font-size:14px;color:var(--ink-2);line-height:1.5;word-break:break-word}
+.uim-in{display:block;width:100%;margin-top:10px;box-sizing:border-box}
+.uim-f{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--line);background:var(--surface-2)}
+.uim-toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:1400;background:var(--ink);color:var(--surface);
+  padding:10px 16px;border-radius:10px;font-size:13.5px;box-shadow:var(--shadow-3);opacity:0;pointer-events:none;
+  transition:opacity var(--t-med),transform var(--t-med);max-width:calc(100vw - 32px)}
+.uim-toast.on{opacity:1;transform:translate(-50%,0)}
+
+.st-badge.st-overpaid{background:var(--violet-tint);color:var(--violet)}

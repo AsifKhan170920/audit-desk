@@ -1,0 +1,94 @@
+/* PDC — post-dated cheques (js/pdc.js). Theme tokens only, so light and dark follow css/app.css. */
+
+/* list: filter tabs, type toggle, status totals */
+.pdc-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 10px}
+.pdc-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:3px;background:var(--surface-3);border:1px solid var(--line);border-radius:var(--radius)}
+.pdc-tab{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;font-weight:600;
+  padding:5px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background var(--t-fast),color var(--t-fast)}
+.pdc-tab:hover{background:var(--surface);color:var(--ink)}
+.pdc-tab.on{background:var(--surface);color:var(--primary-dark);box-shadow:0 1px 2px rgba(16,24,40,.08)}
+.pdc-tab:focus-visible,.pdc-seg:focus-visible{outline:2px solid var(--ring);outline-offset:1px}
+.pdc-n{min-width:18px;padding:0 6px;border-radius:var(--radius-pill);background:var(--line-soft);color:var(--muted);font-size:11px;font-weight:700;text-align:center;line-height:18px}
+.pdc-tab.on .pdc-n{background:var(--primary-tint);color:var(--primary-dark)}
+.pdc-tab.warn .pdc-n{background:var(--danger-tint);color:var(--danger)}
+.pdc-segs{display:inline-flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.pdc-seg{border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer}
+.pdc-seg+.pdc-seg{border-left:1px solid var(--line)}
+.pdc-seg.on{background:var(--primary-tint);color:var(--primary-dark)}
+.pdc-sum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.pdc-chip{display:inline-flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--ink-2);font-size:12.5px;font-variant-numeric:tabular-nums}
+.pdc-chip-n{font-weight:700;color:var(--ink)}
+.pdc-in{color:var(--success);font-weight:600}
+.pdc-out{color:var(--warn);font-weight:600}
+.pdc-spacer{flex:1}
+.pdc-remind{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.pdc-remind input[type=number]{width:62px;padding:4px 6px;text-align:right}
+
+/* list cells */
+.pdc-type{font-size:12px;font-weight:600}
+.pdc-type-received{color:var(--success)}
+.pdc-type-issued{color:var(--warn)}
+.pdc-due{font-size:12px;font-weight:600;white-space:nowrap}
+.pdc-due-over{color:var(--danger)}
+.pdc-due-soon{color:var(--warn)}
+.pdc-due-later{color:var(--muted)}
+.pdc-clear-btn{border-color:var(--primary);color:var(--primary-dark)}
+.pdc-clear-btn:hover{background:var(--primary-tint)}
+
+/* party ledger + statement: information-only rows */
+tr.pdc-info-row td{color:var(--muted);font-style:italic;background:var(--surface-2)}
+tr.pdc-info-row td:first-child{box-shadow:inset 3px 0 0 var(--info)}
+.stmt-tbl tr.pdc-info-row td{color:#6b7280;background:#f8fafc}
+
+/* form */
+.pdc-form{max-width:880px}
+.pdc-typesw{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 4px}
+.pdc-tsw{position:relative;display:flex;flex-direction:column;gap:2px;min-width:170px;padding:10px 14px 10px 38px;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);color:var(--ink-2);cursor:pointer;transition:border-color var(--t-fast),background var(--t-fast)}
+.pdc-tsw input{position:absolute;left:14px;top:13px;margin:0}
+.pdc-tsw b{font-size:14px;color:var(--ink)}
+.pdc-tsw small{font-size:12px;color:var(--muted)}
+.pdc-tsw.on{border-color:var(--primary);background:var(--primary-tint)}
+.pdc-tsw:has(input:disabled){cursor:default;opacity:.75}
+.pdc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:22px}
+.pdc-f.wide{grid-column:1 / -1}
+.pdc-f input,.pdc-f select{width:100%;max-width:none}
+.pdc-f.wide input,.pdc-f.wide select{max-width:440px}
+.pdc-hint{text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted-2)}
+
+/* view */
+.pdc-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;padding:4px 0 16px;border-bottom:1px solid var(--line-soft)}
+.pdc-hero-t{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.pdc-hero-p{font-size:20px;font-weight:750;color:var(--ink);margin:3px 0 8px}
+.pdc-hero-s{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pdc-hero-a{text-align:right}
+.pdc-hero-a small{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.pdc-hero-a b{font-size:24px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.pdc-kvs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px;margin-top:8px}
+.pdc-kv{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px}
+.pdc-kv span{color:var(--muted)}
+.pdc-kv b{font-weight:600;color:var(--ink);text-align:right;overflow-wrap:anywhere}
+.pdc-note{margin-top:16px;padding:10px 12px;border:1px solid var(--info-line);background:var(--info-tint);color:var(--ink-2);border-radius:var(--radius);font-size:13px}
+
+/* dialogs */
+.pdc-dlg{min-width:min(520px,82vw)}
+.pdc-dlg-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;font-size:13.5px;color:var(--ink-2)}
+.pdc-dlg-amt{font-size:18px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.pdc-dlg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:16px}
+.pdc-dlg-grid input,.pdc-dlg-grid select{width:100%;max-width:none}
+.pdc-dlg-muted{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+.pdc-dlg-sub{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 6px;font-weight:700;font-size:13px;color:var(--ink)}
+.pdc-dlg-sub small{font-weight:500;color:var(--muted)}
+.pdc-alloc-tbl input{width:110px;max-width:110px;padding:4px 6px}
+.pdc-alloc-sum{text-align:right;font-size:12.5px;color:var(--muted);margin-top:6px;min-height:16px;font-variant-numeric:tabular-nums}
+.pdc-alloc-sum.neg{color:var(--danger)}
+.pdc-dlg-err{margin-top:12px;padding:8px 10px;border:1px solid var(--danger-line);background:var(--danger-tint);color:var(--danger);border-radius:8px;font-size:13px}
+
+@media (max-width:640px){
+  .pdc-grid,.pdc-kvs,.pdc-dlg-grid{grid-template-columns:minmax(0,1fr)}
+  .pdc-tabs{width:100%;overflow-x:auto;flex-wrap:nowrap}
+  .pdc-tsw{flex:1;min-width:0}
+  .pdc-hero-a{text-align:left}
+  .pdc-dlg{min-width:0}
+  .pdc-sum .pdc-spacer{display:none}
+}

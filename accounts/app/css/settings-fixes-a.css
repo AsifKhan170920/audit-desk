@@ -1,0 +1,73 @@
+/* Settings fixes A (js/settings-fixes-a.js): custom fields + footers on forms, payslip form,
+   starting balance notice, billable expenses, recurring due notice. Theme variables only, so
+   light and dark mode both follow css/app.css. */
+
+/* ---- custom fields / footers block on every form ---- */
+.sfa-extras{margin:12px 0 4px}
+.sfa-cf{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:flex-start}
+.sfa-cf .sfa-f{min-width:200px;max-width:100%}
+.sfa-cf .sfa-f label.fld{margin:10px 0 5px}
+.sfa-cf .sfa-f-checkbox{align-self:flex-end;padding-bottom:6px}
+.sfa-cf input[type=text],.sfa-cf input[type=date],.sfa-cf select,.sfa-cf textarea{max-width:100%}
+.sfa-cf textarea{min-width:260px}
+.sfa-cf .sfa-num{text-align:right;width:160px}
+.sfa-hint{font-size:12px;color:var(--muted);margin-top:3px}
+.sfa-lock{font-size:11px;opacity:.75}
+.sfa-chk{display:inline-flex;align-items:center;gap:6px;margin:0 14px 4px 0;font-size:13px;color:var(--ink-2);cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0}
+.sfa-chk input{margin:0}
+.sfa-multi{display:flex;flex-wrap:wrap}
+.sfa-img{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sfa-img img{max-height:60px;max-width:140px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.sfa-ft{margin-top:6px}
+.sfa-ft label.fld{margin:8px 0 5px}
+.sfa-ft-list{display:flex;flex-wrap:wrap}
+.sfa-reveal{margin:4px 0 8px 24px}
+.sfa-af{margin-top:12px}
+.sfa-af .chk-row{display:flex;align-items:center;gap:6px;margin:8px 0 0}
+.sfa-note{margin-top:10px;font-size:12px;color:var(--muted)}
+
+/* ---- printed custom fields and footers ---- */
+.sfa-cfprint{display:flex;flex-wrap:wrap;gap:6px 22px;margin:10px 0 4px}
+.sfa-cfprint .iv-cblock{display:flex;flex-direction:column}
+.sfa-pimg{display:block;margin-top:4px}
+.sfa-footers{margin-top:12px}
+.sfa-footer p{margin:0 0 4px}
+
+/* ---- payslip form ---- */
+.sfa-psf .tf-ig.wide{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sfa-code{font-size:12px;color:var(--muted)}
+.sfa-ps-secs{display:grid;grid-template-columns:1fr;gap:14px;margin-top:14px}
+.sfa-ps-sec{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.sfa-ps-h{font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);margin-bottom:6px}
+.sfa-ps-wrap{overflow-x:auto}
+.sfa-ps-t{width:100%;border-collapse:collapse;min-width:520px}
+.sfa-ps-t th{font-size:12px;color:var(--muted);text-align:left;font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
+.sfa-ps-t th.r,.sfa-ps-t td.r{text-align:right}
+.sfa-ps-t td{padding:4px 6px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+.sfa-ps-t td:first-child{min-width:200px}
+.sfa-ps-t td select,.sfa-ps-t td input{width:100%;box-sizing:border-box}
+.sfa-ps-t td.r input{max-width:150px;text-align:right}
+.sfa-ps-t td.act{white-space:nowrap;width:1%}
+.sfa-ps-t td.act button{border:0;background:none;color:var(--muted);cursor:pointer;padding:2px 4px;font-size:14px}
+.sfa-ps-t td.act button:hover{color:var(--primary)}
+.sfa-ps-t tfoot td{font-weight:600;border-bottom:0;padding-top:6px}
+.sfa-ps-sec>.btn{margin-top:8px}
+.sfa-ps-sum{margin:14px 0 0 auto;max-width:340px;border-top:1px solid var(--line);padding-top:8px}
+.sfa-ps-sum>div{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:var(--ink-2)}
+.sfa-ps-sum>div.grand{font-size:15px;color:var(--ink);border-top:1px solid var(--line);margin-top:4px;padding-top:6px}
+.sfa-ps-sum>div.muted{color:var(--muted)}
+.sfa-ps-view{margin-bottom:10px}
+
+/* ---- notices ---- */
+.sfa-sb.warn{background:var(--warn-tint);border-color:var(--warn-line);color:var(--warn)}
+.sfa-due,.sfa-bill{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sfa-bill{flex-direction:column;align-items:flex-start;margin:8px 0}
+.sfa-bill-l{display:flex;flex-direction:column;gap:2px}
+.sfa-billsel{min-width:150px;max-width:220px}
+.tf-ext select,.tf-ext input{width:100%;min-width:120px;box-sizing:border-box}
+
+@media (max-width:640px){
+  .sfa-cf .sfa-f{min-width:0;width:100%}
+  .sfa-cf textarea{min-width:0;width:100%}
+  .sfa-ps-sum{max-width:none}
+}

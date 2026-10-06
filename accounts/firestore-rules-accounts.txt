@@ -1,0 +1,35 @@
+// ===== Fair Tax Portal – Accounts (accounting software) =====
+// Paste these lines INSIDE the existing block
+//     match /databases/{database}/documents { ... }
+// in Firebase console → Firestore Database → Rules, next to the other "match" lines, then Publish.
+//
+// - The admin (ask.asif93@gmail.com, signed in with Google) reads and writes every business.
+// - A client user reads and saves only the businesses ticked for them (users/{uid}.acctBiz)
+//   and only while Accounts is ticked and the user is not blocked.
+// - Only the admin adds or removes a business.
+
+    function acctOwner() {
+      return request.auth != null
+        && request.auth.token.email == 'ask.asif93@gmail.com'
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    function acctMember(biz) {
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return request.auth != null && u.active == true && u.get('apps', {}).get('accounts', false) == true && biz in u.get('acctBiz', []);
+    }
+    match /acct/{biz} {
+      allow read: if acctOwner() || acctMember(biz);
+      allow create, delete: if acctOwner();
+      allow update: if acctOwner() || (acctMember(biz) && !request.resource.data.get('deleted', false));
+      match /parts/{part} {
+        allow read, write: if acctOwner() || acctMember(biz);
+      }
+    }
+
+// IMPORTANT: a client must not be able to give themselves more businesses. Check the existing
+// "match /users/{uid}" rule: staff may write their own users document only if the change does
+// not touch apps / acctBiz / active / role. If it currently allows "allow write: if request.auth.uid == uid",
+// change that line to:
+//
+//      allow update: if acctOwner() || (request.auth.uid == uid
+//        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['apps', 'acctBiz', 'active', 'role']));

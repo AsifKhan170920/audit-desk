@@ -1,0 +1,94 @@
+/* Qty in hand + Stock query (js/stock-query.js) — app tokens only, so light / dark need no rules of their own. */
+
+/* "In hand: 25.00" under the Item control: the party Outstanding pill (.party-bal), smaller */
+.sq-hand{display:inline-flex;align-items:baseline;flex-wrap:wrap;gap:0 4px;max-width:100%;margin-top:4px;
+  padding:1px 8px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface-2);
+  font-size:11px;line-height:1.45;white-space:normal;font-weight:400;text-transform:none;letter-spacing:0}
+.sq-hand .sq-l{color:var(--muted);font-weight:550}
+.sq-hand .sq-v{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
+.sq-hand.sq-short{border-color:var(--danger-line);background:var(--danger-tint)}
+.sq-hand.sq-short .sq-l,.sq-hand.sq-short .sq-v,.sq-hand .sq-sh{color:var(--danger)}
+.sq-hand .sq-sh{font-weight:650;font-variant-numeric:tabular-nums}
+td.itm>.sq-hand{display:flex;width:max-content}
+
+/* the line button, before ↑ ↓ ⧉ × */
+.sq-btn{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;cursor:pointer;color:var(--primary)}
+.sq-btn svg{display:block}
+.sq-btn:hover{color:var(--primary);background:var(--primary-tint)}
+.sq-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.tx-ln .act button.sq-btn,#deHost .ff-lines td.ff-actc .li-btn.sq-btn{color:var(--primary);border-radius:6px;padding:2px 4px}
+.tx-ln .act button.sq-btn:hover,#deHost .ff-lines td.ff-actc .li-btn.sq-btn:hover{color:var(--primary);background:var(--primary-tint)}
+#deHost .ff-lines th.ff-actc,#deHost .ff-lines td.ff-actc{min-width:138px}
+
+/* the modal (UIModal look: .uim / .uim-h / .uim-b / .uim-f from css/lists.css) */
+.sq-ov{padding-top:48px}
+.sq-ov .sq-dlg{width:1100px;max-width:100%;display:flex;flex-direction:column;max-height:calc(100vh - 64px)}
+.sq-ov.sq-docov .sq-dlg{width:960px}
+.sq-h{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.sq-h>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sq-x{flex:none;width:32px;height:32px;border:1px solid transparent;border-radius:var(--radius);background:transparent;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
+.sq-x:hover{background:var(--surface-2);color:var(--ink);border-color:var(--line)}
+.sq-b{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;padding-bottom:16px}
+.sq-b>*{flex-shrink:0}
+.sq-docb{display:block}
+.sq-doc{margin:0;max-width:none;box-shadow:none}
+.sq-err{color:var(--danger)}
+
+.sq-sum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.sq-sum-c{display:flex;flex-direction:column;gap:2px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface-2);min-width:0}
+.sq-sum-c span{font-size:11px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.sq-sum-c b{font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.sq-sum-c.sq-key{border-color:var(--primary-tint-2,var(--line));background:var(--primary-tint)}
+.sq-sum-c.sq-key b{color:var(--primary)}
+.sq-sum-c.sq-neg{border-color:var(--danger-line);background:var(--danger-tint)}
+.sq-sum-c.sq-neg b{color:var(--danger)}
+
+.sq-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 10px}
+.sq-f{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.sq-f input{width:160px;box-sizing:border-box;text-transform:none;letter-spacing:0}
+.sq-search{flex:1 1 220px;margin-left:auto}
+.sq-search input{width:100%;max-width:none}
+.sq-all{align-self:flex-end}
+
+.sq-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;min-height:0}
+.sq-sec{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface)}
+.sq-sec h3{margin:0;padding:9px 12px;font-size:13px;font-weight:750;color:var(--ink);background:var(--surface-2);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:baseline}
+.sq-sec h3 small{font-size:11px;font-weight:600;color:var(--muted)}
+.sq-scroll{overflow:auto;max-height:min(46vh,440px);min-height:120px}
+.sq-tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+.sq-tbl th{position:sticky;top:0;z-index:1;background:var(--surface);text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+  padding:7px 8px;border-bottom:1px solid var(--line-strong,var(--line));white-space:nowrap}
+.sq-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+.sq-tbl .r{text-align:right}
+.sq-tbl .m{font-variant-numeric:tabular-nums;white-space:nowrap}
+.sq-tbl .sq-nw{white-space:nowrap}
+.sq-tbl tbody tr:hover td{background:var(--surface-2)}
+.sq-tbl tfoot td{position:sticky;bottom:0;background:var(--surface-2);font-weight:700;color:var(--ink);border-top:1px solid var(--line-strong,var(--line));border-bottom:0}
+.sq-tbl tr.sq-empty td{text-align:center;color:var(--muted);padding:26px 8px;border-bottom:0}
+.sq-tbl tr.sq-empty:hover td{background:transparent}
+.sq-ref{color:var(--link);cursor:pointer;font-weight:600}
+.sq-ref:hover,.sq-ref:focus-visible{text-decoration:underline}
+.sq-foot{flex:none}
+
+@media (max-width:860px){
+  .sq-sum{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .sq-cols{grid-template-columns:minmax(0,1fr)}
+  .sq-scroll{max-height:none}
+}
+@media (max-width:600px){
+  .sq-ov{padding:0}
+  .sq-ov .sq-dlg,.sq-ov.sq-docov .sq-dlg{width:100%;height:100%;max-height:none;border-radius:0;border:0}
+  .sq-sum{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sq-f input{width:100%}
+  .sq-bar>.sq-f{flex:1 1 130px}
+  .sq-search{flex-basis:100%}
+  .sq-foot{flex-wrap:wrap}
+  .sq-foot .btn{flex:1 1 auto}
+}
+
+/* screen only */
+@media print{
+  .sq-hand,.sq-btn,.sq-ov{display:none !important}
+  #printRegion .sq-print .sq-ph{font-size:12px;font-weight:800;margin:14px 0 6px;color:#111}
+  #printRegion .sq-print .sq-psum{margin-bottom:6px}
+}

@@ -23,7 +23,8 @@
   FT.ADMIN_SCOPE = 'https://www.googleapis.com/auth/identitytoolkit';   // lets the admin create staff accounts (public sign-up stays closed)
   FT.APPS = {
     audit: {name: 'Audit Desk', key: 'fairtax-audit-desk-v1'},
-    crm: {name: 'CRM', key: 'fairtax_crm_v1'}
+    crm: {name: 'CRM', key: 'fairtax_crm_v1'},
+    accounts: {name: 'Accounts', key: 'mgr_businesses'}   // stored per business – see shared/acct-cloud.js
   };
   var PART = 300000;                                // characters per stored part (Firestore limit is 1 MB per document)
 
@@ -87,7 +88,7 @@
           off();
           if (!u) return res(null);
           if (FT.isOwner(u)) {
-            FT.me = {uid: u.uid, email: u.email, id: u.email, name: u.displayName || 'Admin', role: 'admin', apps: {audit: true, crm: true, fleet: true}, active: true, owner: true, expertise: []};
+            FT.me = {uid: u.uid, email: u.email, id: u.email, name: u.displayName || 'Admin', role: 'admin', apps: {audit: true, crm: true, fleet: true, accounts: true}, active: true, owner: true, expertise: []};
             try { var own = await FT.db.collection('users').doc(u.uid).get(); if (own.exists) { var od = own.data(); FT.me.expertise = od.expertise || []; if (od.name) FT.me.name = od.name; } } catch (e) {}
             return res(FT.me);
           }
@@ -279,7 +280,7 @@
       fallback = true; FT.lastAddNote = err.message;
     }
     try {
-      await FT.db.collection('users').doc(uid).set({id: FT.idFromEmail(email), name: u.name || u.id, role: 'staff', apps: {audit: !!u.audit, crm: !!u.crm, fleet: !!u.fleet}, active: true, expertise: u.expertise || [],
+      await FT.db.collection('users').doc(uid).set({id: FT.idFromEmail(email), name: u.name || u.id, role: 'staff', apps: {audit: !!u.audit, crm: !!u.crm, fleet: !!u.fleet, accounts: !!u.accounts}, acctBiz: u.acctBiz || [], active: true, expertise: u.expertise || [],
         createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: (FT.me && FT.me.name) || ''});
     } catch (e) {
       if (!fallback) { try { await FT.adminApi('accounts:delete', {localId: uid}); } catch (e2) {} }

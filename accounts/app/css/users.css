@@ -1,0 +1,143 @@
+/* ===================== Users & access =====================
+   Login / setup / MFA, the Users list and user form, Profile, impersonation
+   banner and the shared permission editor (js/users.js). Built only from the
+   tokens in css/app.css, so the dark theme needs no rules of its own. */
+
+/* ---- messages ---- */
+.ua-err{background:var(--danger-tint);border:1px solid var(--danger-line);color:var(--danger);
+  padding:10px 13px;border-radius:var(--radius);font-size:12.5px;margin:0 0 14px}
+.ua-ok{background:var(--success-tint);border:1px solid var(--success-line);color:var(--success);
+  padding:10px 13px;border-radius:var(--radius);font-size:12.5px;margin:0 0 14px}
+.ua-hint{color:var(--muted);font-size:12px;margin:6px 0 0}
+
+/* ---- login / first-run setup / MFA ---- */
+.ua-auth-t{font-size:16px;font-weight:650;margin:22px 0 6px;padding-bottom:12px;border-bottom:1px solid var(--line);color:var(--ink)}
+.auth-card .ua-err,.auth-card .ua-ok{margin:12px 0 0}
+.ua-auth input[type=text],.ua-auth input[type=password],.ua-auth input[type=email],.ua-auth select{max-width:none}
+.ua-auth .auth-foot a,.auth-foot a{color:var(--link);font-weight:600;cursor:pointer;text-decoration:none}
+.ua-auth .auth-foot a:hover,.auth-foot a:hover{text-decoration:underline}
+
+/* ---- Users page: "Allow sign up" switch ---- */
+.mu-opt{display:flex;align-items:flex-start;gap:14px;margin-top:18px;padding:14px 12px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--surface)}
+.mu-opt-txt{flex:1;min-width:0}
+.mu-opt-txt label{font-size:13px;font-weight:650;color:var(--ink);cursor:pointer}
+.mu-switch{position:relative;flex:0 0 auto;width:40px;height:22px;margin-top:2px;cursor:pointer}
+.mu-switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
+.mu-knob{position:absolute;inset:0;border-radius:999px;background:var(--line-strong);transition:background var(--t-fast)}
+.mu-knob::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform var(--t-fast)}
+.mu-switch input:checked + .mu-knob{background:var(--accent-solid)}
+.mu-switch input:checked + .mu-knob::after{transform:translateX(18px)}
+.mu-switch input:focus-visible + .mu-knob{box-shadow:0 0 0 3px var(--ring)}
+.ua-auth .ua-code{max-width:170px;letter-spacing:.2em;font-family:var(--font-mono)}
+.ua-token{font:12px/1.5 var(--font-mono);background:var(--surface-3);border:1px solid var(--line);color:var(--ink);
+  padding:9px 11px;border-radius:var(--radius);word-break:break-all;margin:10px 0 4px;user-select:all}
+.ua-uri{word-break:break-all;font-size:11px}
+
+/* ---- impersonation banner ---- */
+.imp-bar{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;
+  background:var(--warn-tint);border-bottom:1px solid var(--warn-line);color:var(--warn);
+  padding:7px 16px;font-size:12.5px;flex:none}
+.imp-bar b{color:var(--ink)}
+.imp-bar.hide{display:none}
+
+/* header: the profile chip opens Profile */
+.hd-user[role=button]{cursor:pointer}
+.hd-user[role=button]:hover{border-color:var(--line-strong);box-shadow:var(--shadow-1)}
+
+/* ---- Users page (Manager-style list) ---- */
+.mu{max-width:520px;margin:28px auto 30px}
+.mu-h{display:flex;align-items:center;gap:14px;padding:0 12px 12px;border-bottom:1px solid var(--line-strong)}
+.mu-t{flex:1;font-size:18px;font-weight:650;color:var(--muted)}
+.mu-tbl{width:100%;border-collapse:collapse}
+.mu-tbl td{padding:11px 10px;vertical-align:top;border-bottom:1px solid var(--line)}
+.mu-tbl .mu-ic{width:30px;padding-right:0;color:var(--muted-2)}
+.mu-tbl .adm .mu-ic{color:var(--ink-2)}
+.mu-nm{font-weight:650;color:var(--link);cursor:pointer}
+.mu-nm:hover{text-decoration:underline}
+.mu-un{font-size:12px;font-weight:600;color:var(--muted);margin-left:10px}
+.mu-r{text-align:right;width:1%;white-space:nowrap}
+.mu-role{font-size:12px;font-weight:600;color:var(--muted)}
+.mu-btn{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-pill);padding:3px 12px;
+  color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+.mu-btn:hover{color:var(--ink);border-color:var(--line-strong)}
+.mu-btn[disabled]{opacity:.4;cursor:default}
+.mu-tree{margin:5px 0 0 4px;font-size:12px}
+.mu-tree div{position:relative;padding-left:12px;line-height:19px}
+.mu-tree div:before{content:'';position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--line-strong)}
+.mu-tree div:last-child:before{bottom:50%}
+.mu-tree div:after{content:'';position:absolute;left:0;top:50%;width:7px;border-top:1px solid var(--line-strong)}
+.mu-tree a{color:var(--link);cursor:pointer}
+.mu-tree span{color:var(--muted)}
+#pageUsers .ua-err,#pageUsers .ua-ok{margin:0 0 14px}
+
+/* ---- user form ---- */
+.uf-card{max-width:460px;margin:0 auto}
+.uf-card.wide{max-width:660px}
+.uf-card input[type=text],.uf-card input[type=email],.uf-card input[type=password],.uf-card select#uf_role{max-width:none}
+.uf-reveal{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 0 24px}
+.uf-reveal .ua-hint{margin:0}
+
+/* tag box (businesses, bank accounts) */
+.ua-tagbox{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--field-line);border-radius:var(--radius);
+  padding:6px;min-height:42px;background:var(--field-bg)}
+.ua-tag{display:inline-flex;align-items:center;gap:4px;background:var(--surface-3);border:1px solid var(--line);
+  border-radius:var(--radius-pill);padding:2px 4px 2px 10px;font-size:12.5px;color:var(--ink)}
+.ua-tag button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 4px;border-radius:50%}
+.ua-tag button:hover{color:var(--danger)}
+.ua-tagbox select.ua-tag-add{border:0;box-shadow:none;width:auto;min-width:150px;flex:1;max-width:none;padding:4px 28px 4px 6px;background-color:transparent}
+.ua-tagbox select.ua-tag-add:focus{box-shadow:none}
+
+/* ---- permission editor (user form + Settings > User Permissions) ---- */
+fieldset.perm-biz{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface-2);padding:6px 18px 14px;margin:16px 0 0;min-width:0}
+fieldset.perm-biz legend{font-weight:650;padding:0 6px;color:var(--ink)}
+.perm-ed .perm-access{max-width:220px}
+.perm-list{margin-top:8px}
+.perm-list .chk-row{margin:7px 0}
+.perm-reveal{margin:2px 0 8px 25px}
+.perm-reveal select.perm-lvl{max-width:280px;padding-top:7px;padding-bottom:7px}
+.perm-sub{columns:2;column-gap:22px;max-width:640px;border-left:2px solid var(--line);padding-left:12px}
+.perm-sub-item{break-inside:avoid}
+.perm-sub .chk-row{margin:4px 0}
+.perm-sub .perm-reveal{margin:0 0 6px 25px}
+.perm-sub select.perm-lvl{max-width:100%;font-size:12px}
+.perm-bankbox{max-width:440px;margin-bottom:6px}
+.perm-card{max-width:760px}
+.perm-card input[disabled]{max-width:340px}
+.perm-tbl td{vertical-align:middle}
+.perm-warn{color:var(--warn);font-size:12px}
+
+/* view-only settings page and the "no access" card */
+.perm-ro-note{background:var(--info-tint);border:1px solid var(--info-line);color:var(--info);border-radius:var(--radius);
+  padding:9px 13px;font-size:12.5px;margin:0 0 14px}
+fieldset.perm-ro{border:0;padding:0;margin:0;min-width:0}
+.perm-denied{display:flex;align-items:center;gap:12px;color:var(--muted);margin-top:18px}
+.perm-denied-ico{color:var(--warn);display:inline-flex}
+
+/* backstop: controls a restricted user may not use, wherever they render */
+#wsMain.perm-nocreate [onclick^="App.newRecord"],#wsMain.perm-nocreate [onclick^="App.cloneRecord"],
+#wsMain.perm-noedit [onclick^="App.editRecord"],
+#wsMain.perm-nodelete [onclick^="App.deleteRecord"],#wsMain.perm-nodelete [onclick^="App.batchMenu"],
+#wsMain.perm-nodelete [onclick^="App.batchDelete"]{display:none !important}
+
+/* ---- Profile ---- */
+.prof-card{max-width:460px;margin:0 auto}
+.prof-card input[type=text],.prof-card input[type=password]{max-width:none}
+.prof-h{font-size:14px;font-weight:650;margin:26px 0 10px;color:var(--ink)}
+.prof-sessions td{vertical-align:middle}
+.prof-sessions td.r{text-align:right;width:1%;white-space:nowrap}
+.prof-others{margin-top:12px}
+
+/* ---- responsive (source breakpoint 700px) ---- */
+@media (max-width:700px){
+  .mu{margin:12px auto 24px}
+  .mu-h{padding:0 4px 10px}
+  .mu-un{display:block;margin:2px 0 0}
+  .uf-card,.uf-card.wide,.prof-card{max-width:none}
+  .perm-sub{columns:1}
+  .perm-reveal{margin-left:12px}
+  fieldset.perm-biz{padding:6px 12px 12px}
+  .imp-bar{justify-content:flex-start}
+}
+@media print{ .imp-bar{display:none !important} }

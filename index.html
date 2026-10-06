@@ -79,7 +79,8 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
 @media(max-width:520px){.askrow button.talk{display:none}}.phone b{display:block;font-size:16px;margin-bottom:4px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.who{display:none}}
 </style>
-<script src="shared/cloud.js?v=9"></script>
+<script src="shared/cloud.js?v=10"></script>
+<script src="shared/acct-cloud.js?v=1"></script>
 <script src="shared/reminders.js?v=7"></script>
 <script src="shared/notify.js?v=6"></script>
 <script src="shared/ai-launcher.js?v=6"></script>
@@ -96,6 +97,8 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
   var esc = function(s){ return FT.esc(s); };
   var params = new URLSearchParams(location.search);
   var me = null;
+  /* the Windows app Fair Tax Accounting (clients only): no admin sign-in there */
+  var ACCT_DESKTOP = (window.FTAcct && FTAcct.isDesktop()) || params.get('desktop') === '1';
 
   function show(html){ main.innerHTML = html; }
   function msg(id, text, cls){ var el = document.getElementById(id); if (el){ el.textContent = text || ''; el.className = 'msg ' + (cls || 'bad'); } }
@@ -113,10 +116,11 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
       '<label for="l-id">User ID</label><input type="text" id="l-id" autocomplete="username" autocapitalize="off" spellcheck="false" required>' +
       '<label for="l-pw">Password</label><input type="password" id="l-pw" autocomplete="current-password" required>' +
       '<button class="btn primary full" id="l-go">Sign in</button>' +
-      '<div class="or"><span>Admin</span></div>' +
+      (ACCT_DESKTOP ? '' : '<div class="or"><span>Admin</span></div>') +
       '<button type="button" class="btn gbtn" id="l-google"><svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v8.7h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-16.7z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Sign in with Google</button>' +
       '<p class="note" style="text-align:center;margin:8px 0 0">Only the registered admin Gmail can use this.</p><div class="msg" id="l-msg"></div></form>');
-    document.getElementById('l-google').onclick = async function(){
+    if (ACCT_DESKTOP){ var gb = document.getElementById('l-google'); if (gb.nextElementSibling) gb.nextElementSibling.remove(); gb.remove(); var h1 = document.querySelector('#f-login h1'); if (h1) h1.textContent = 'Fair Tax Accounting'; }
+    else document.getElementById('l-google').onclick = async function(){
       var b = this; b.disabled = true; msg('l-msg', '');
       try { me = await FT.signInAdmin(); afterLogin(); }
       catch (err) { if (!/popup-closed|cancelled-popup/.test(err && err.code || '')) msg('l-msg', /popup-blocked/.test(err && err.code || '') ? 'The browser blocked the Google window – allow pop-ups for this site and try again.' : FT.friendlyError(err)); b.disabled = false; }
@@ -133,10 +137,16 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
   function afterLogin(){
     header();
     if (window.FTAI) FTAI.mount();
+    if (ACCT_DESKTOP){
+      if (me.role === 'admin'){ FT.signOut().then(function(){ login('The admin account opens Accounts on the website only. Sign in here with a client user ID.'); }); return; }
+      location.href = 'accounts/'; return;
+    }
     var next = params.get('next');
     if (next && FT.canOpen(me, next)){ location.href = next + '/'; return; }
     /* the software opens straight in the CRM; the portal page is only the login and the admin screens */
     if (params.get('go') !== 'users' && FT.canOpen(me, 'crm')){ location.href = 'crm/'; return; }
+    /* a client with access to Accounts only goes straight to their books */
+    if (me.role !== 'admin' && FT.canOpen(me, 'accounts') && !FT.canOpen(me, 'audit') && !FT.canOpen(me, 'fleet')){ location.href = 'accounts/'; return; }
     if (params.get('go') === 'users' && me.role === 'admin'){ users(); return; }
     dashboard();
   }
@@ -218,8 +228,9 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
     show('<h1>Welcome, ' + esc(me.name) + '</h1><p class="sub">Pick a client below, or open a whole app.</p>' + ask + clientsCard() + '<div class="tiles">' +
       tile('crm', '#0f9d6b', 'CRM', 'CRM', 'Leads, clients, tasks, quotations, invoices and receipts – with an AI assistant you can talk to.') +
       tile('audit', '#14284b', 'FS', 'Audit Desk', 'Financial statements, audit reports, policies and proof documents.') +
+      (FT.canOpen(me, 'accounts') ? tile('accounts', '#2563eb', 'AC', 'Accounts', 'Bookkeeping for clients: sales, purchases, banks, payroll, Trips / Diesel and financial statements – saved in the cloud.') : '') +
       (FT.canOpen(me, 'fleet') ? '<a class="tile" href="../royal-rides-fleet/" style="text-decoration:none;color:inherit"><div class="ic" style="background:#a87a2a">RR</div><b>Royal Rides Fleet</b><span>Uber trips, drivers, cars, investors, driver settlement, ledger and VAT.</span><span class="go">Open →</span></a>' : '') +
-      (me.role === 'admin' ? '<button class="tile" data-go="users"><div class="ic" style="background:#c9973a">👥</div><b>Users &amp; access</b><span>Add users, choose CRM / Audit access, expertise, block users.</span><span class="go">Manage →</span></button>' : '') +
+      (me.role === 'admin' ? '<button class="tile" data-go="users"><div class="ic" style="background:#c9973a">👥</div><b>Users &amp; access</b><span>Add users (staff and clients), choose CRM / Audit / Accounts access, expertise, block users.</span><span class="go">Manage →</span></button>' : '') +
       '</div>' + phoneCard());
     var q = document.getElementById('cl-q');
     if (q){
@@ -232,6 +243,7 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
     if (FTNotify.native() && FT.canOpen(me, 'crm')) FTNotify.scheduleFromCloud().then(function(){ var pc = document.getElementById('phone-state'); if (pc) pc.outerHTML = phoneState(); });
   }
   var APK_URL = 'https://github.com/AsifKhan170920/audit-desk/releases/latest/download/FairTaxPortal.apk';
+  var ACCT_WIN_URL = 'https://github.com/AsifKhan170920/audit-desk/releases/download/accounting-windows/FairTaxAccounting-Setup.exe';
   var WIN_URL = 'https://github.com/AsifKhan170920/audit-desk/releases/download/windows-app/FairTaxPortal-Setup.exe';
   function phoneState(){
     var st = FTNotify.status();
@@ -248,7 +260,9 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
     if (FTNotify.native()) return '<div class="card phone"><b>📱 Reminders on this phone</b>' + (FT.canOpen(me, 'crm') ? phoneState() : noCrm) + '</div>';
     var winCard = /Windows NT/.test(navigator.userAgent) ? '<div class="card phone"><b>💻 Windows app with reminders</b><p class="note" style="margin:0 0 10px">Its own window, starts with Windows, stays in the tray and pops up reminders with sound even when closed. The AI microphone uses Windows speech.</p>' +
       '<div class="row"><a class="btn primary" href="' + WIN_URL + '">Download for Windows</a><span class="note">Run FairTaxPortal-Setup.exe. If Windows says “Windows protected your PC”, click <span style="font-weight:700">More info → Run anyway</span>.</span></div></div>' : '';
-    return winCard + '<div class="card phone"><b>📱 Android app with reminders</b><p class="note" style="margin:0 0 10px">Lead follow-ups, client check-ins, meetings, VAT / Corporate Tax / audit deadlines, contract expiry and cheque reminders as phone notifications.</p>' +
+    var acctCard = FT.canOpen(me, 'accounts') && /Windows NT/.test(navigator.userAgent) ? '<div class="card phone"><b>💻 Fair Tax Accounting for Windows</b><p class="note" style="margin:0 0 10px">The accounting software as a Windows app for clients. Clients sign in with their user ID; the admin uses this website.</p>' +
+      '<div class="row"><a class="btn primary" href="' + ACCT_WIN_URL + '">Download Fair Tax Accounting</a><span class="note">Send clients this link. Run FairTaxAccounting-Setup.exe; if Windows says “Windows protected your PC”, click <b>More info → Run anyway</b>.</span></div></div>' : '';
+    return acctCard + winCard + '<div class="card phone"><b>📱 Android app with reminders</b><p class="note" style="margin:0 0 10px">Lead follow-ups, client check-ins, meetings, VAT / Corporate Tax / audit deadlines, contract expiry and cheque reminders as phone notifications.</p>' +
       '<div class="row"><a class="btn primary" href="' + APK_URL + '">Download the app (APK)</a><span class="note">On the phone: open this page, download, then allow “Install unknown apps” for your browser when Android asks.</span></div></div>';
   }
   async function users(){
@@ -258,7 +272,8 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
       '<div><label for="u-name">Name</label><input type="text" id="u-name" required placeholder="e.g. Waseem"></div>' +
       '<div><label for="u-id">User ID (or email)</label><input type="text" id="u-id" required autocapitalize="off" spellcheck="false" placeholder="e.g. waseem"></div>' +
       '<div><label for="u-pw">Password (at least 8 characters)</label><input type="text" id="u-pw" required minlength="8" autocomplete="off"></div></div>' +
-      '<div class="checks"><span class="note">May open:</span><label><input type="checkbox" id="u-crm" checked> CRM</label><label><input type="checkbox" id="u-audit"> Audit Desk</label><label><input type="checkbox" id="u-fleet"> Royal Rides Fleet</label></div>' +
+      '<div class="checks"><span class="note">May open:</span><label><input type="checkbox" id="u-crm" checked> CRM</label><label><input type="checkbox" id="u-audit"> Audit Desk</label><label><input type="checkbox" id="u-fleet"> Royal Rides Fleet</label><label><input type="checkbox" id="u-accounts"> Accounts</label></div>' +
+      '<div class="checks" id="u-books"><span class="note">Accounts – businesses this user may open:</span><span class="note">Loading…</span></div>' +
       '<div class="checks"><span class="note">Expertise (for automatic client assignment):</span>' + FTReminders.EXPERTISE.map(function(x, i){ return '<label><input type="checkbox" class="u-exp" value="' + x + '"> ' + x + '</label>'; }).join('') + '</div>' +
       '<div class="row" style="margin-top:14px"><button class="btn primary" id="u-go">Add user</button><span class="note">Then share the user ID and password with the person. Google may ask you to confirm your admin account the first time.</span></div><div class="msg" id="u-msg"></div></form>' +
       '<div class="card" style="margin-top:18px"><h2>All users</h2><div class="table-wrap" id="u-list"><p class="sub">Loading…</p></div><div class="msg" id="l-msg2"></div></div>' +
@@ -273,14 +288,22 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
       e.preventDefault();
       var b = document.getElementById('u-go'); b.disabled = true; b.textContent = 'Adding…'; msg('u-msg', '');
       var u = {name: document.getElementById('u-name').value.trim(), id: document.getElementById('u-id').value.trim(), password: document.getElementById('u-pw').value,
-        crm: document.getElementById('u-crm').checked, audit: document.getElementById('u-audit').checked, fleet: document.getElementById('u-fleet').checked,
+        crm: document.getElementById('u-crm').checked, audit: document.getElementById('u-audit').checked, fleet: document.getElementById('u-fleet').checked, accounts: document.getElementById('u-accounts').checked,
+        acctBiz: [].slice.call(document.querySelectorAll('.u-book')).filter(function(x){ return x.checked; }).map(function(x){ return x.value; }),
         expertise: [].slice.call(document.querySelectorAll('.u-exp')).filter(function(x){ return x.checked; }).map(function(x){ return x.value; })};
       var shareText = 'Fair Tax Portal: https://asifkhan170920.github.io/audit-desk/  User ID: ' + FT.idFromEmail(FT.emailFor(u.id)) + '  Password: ' + u.password;
       try { await FT.addUser(u); await refreshTeam(); msg('u-msg', 'User added. Share this with ' + (u.name || u.id) + ': ' + shareText + (FT.lastAddFallback ? '  (Created with the standard method – to set passwords later, allow “manage users” when Google asks.)' : ''), 'ok'); this.reset(); document.getElementById('u-crm').checked = true; await list(); }
       catch (err) { msg('u-msg', FT.friendlyError(err)); }
       b.disabled = false; b.textContent = 'Add user';
     };
+    bookTicks();
     await list();
+  }
+  var BOOKS = null;
+  async function books(){ if (!BOOKS) { try { BOOKS = await FTAcct.allNames(); } catch (e) { BOOKS = []; } } return BOOKS; }
+  async function bookTicks(){
+    var box = document.getElementById('u-books'); if (!box) return; var bs = await books();
+    box.innerHTML = '<span class="note">Accounts – businesses this user may open (for a client, tick only their own business):</span>' + (bs.length ? bs.map(function(b){ return '<label><input type="checkbox" class="u-book" value="' + esc(b.doc) + '"> ' + esc(b.name) + '</label>'; }).join('') : '<span class="note">No businesses in the cloud yet – open Accounts once as admin to upload them.</span>');
   }
   async function refreshTeam(){ try { await FT.saveTeam(await FT.listUsers()); } catch (e) { console.warn('team', e); } }
   async function aiCard(){
@@ -303,14 +326,15 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
       var all = await FT.listUsers();
       var expBoxes = function(u){ var ex = u.expertise || []; return '<div class="exp">' + FTReminders.EXPERTISE.map(function(x){ return '<label><input type="checkbox" data-exp="' + x + '" data-uid="' + u.uid + '"' + (ex.indexOf(x) >= 0 ? ' checked' : '') + '>' + x + '</label>'; }).join('') + '</div>'; };
       var mine = all.filter(function(u){ return u.uid === me.uid; })[0] || {uid: me.uid, expertise: me.expertise || []};
-      box.innerHTML = '<table><thead><tr><th>Name</th><th>User ID</th><th>CRM</th><th>Audit</th><th>Fleet</th><th>Expertise</th><th>Status</th><th></th></tr></thead><tbody>' +
-        '<tr><td>' + esc(me.name) + ' <span class="tag admin">Admin</span></td><td>' + esc(FT.OWNER_EMAIL) + '</td><td>✓</td><td>✓</td><td>✓</td><td>' + expBoxes(mine) + '</td><td><span class="tag ok">Google sign-in</span></td><td><span class="note">you</span></td></tr>' +
+      box.innerHTML = '<table><thead><tr><th>Name</th><th>User ID</th><th>CRM</th><th>Audit</th><th>Fleet</th><th>Accounts</th><th>Expertise</th><th>Status</th><th></th></tr></thead><tbody>' +
+        '<tr><td>' + esc(me.name) + ' <span class="tag admin">Admin</span></td><td>' + esc(FT.OWNER_EMAIL) + '</td><td>✓</td><td>✓</td><td>✓</td><td>✓ all</td><td>' + expBoxes(mine) + '</td><td><span class="tag ok">Google sign-in</span></td><td><span class="note">you</span></td></tr>' +
         all.filter(function(u){ return u.uid !== me.uid; }).map(function(u){
           var apps = u.apps || {};
           return '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.id) + '</td>' +
             '<td><input type="checkbox" data-uid="' + u.uid + '" data-f="crm"' + (apps.crm ? ' checked' : '') + ' aria-label="CRM access"></td>' +
             '<td><input type="checkbox" data-uid="' + u.uid + '" data-f="audit"' + (apps.audit ? ' checked' : '') + ' aria-label="Audit access"></td>' +
             '<td><input type="checkbox" data-uid="' + u.uid + '" data-f="fleet"' + (apps.fleet ? ' checked' : '') + ' aria-label="Royal Rides Fleet access"></td>' +
+            '<td class="nowrap"><input type="checkbox" data-uid="' + u.uid + '" data-f="accounts"' + (apps.accounts ? ' checked' : '') + ' aria-label="Accounts access"> <button class="btn small" data-books="' + u.uid + '" data-name="' + esc(u.name || u.id) + '" data-sel="' + esc((u.acctBiz || []).join(',')) + '">' + ((u.acctBiz || []).length ? (u.acctBiz || []).length + ' business' + ((u.acctBiz || []).length === 1 ? '' : 'es') : 'Businesses…') + '</button></td>' +
             '<td>' + expBoxes(u) + '</td>' +
             '<td>' + (u.active ? '<span class="tag ok">Active</span>' : '<span class="tag bad">Blocked</span>') + '</td>' +
             '<td class="row"><button class="btn small" data-pw="' + u.uid + '" data-name="' + esc(u.name || u.id) + '" data-id="' + esc(u.id) + '">Set new password</button>' +
@@ -339,7 +363,22 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
   document.addEventListener('click', async function(e){
     var a = e.target.closest('[data-ask]');
     if (a){ var kind = a.dataset.ask; if (kind === 'chip') FTAI.open(a.textContent); else FTAI.open(null, {voice: true, talk: kind === 'talk'}); return; }
-    var t = e.target.closest('[data-go],[data-open],[data-block],[data-pw],[data-del],[data-pwsave]'); if (!t) return;
+    var t = e.target.closest('[data-go],[data-open],[data-block],[data-pw],[data-del],[data-pwsave],[data-books],[data-bookssave]'); if (!t) return;
+    if (t.dataset.books){
+      var brow = t.closest('tr'), bold = document.getElementById('bk-row'); if (bold) bold.remove();
+      var sel = (t.dataset.sel || '').split(',').filter(Boolean), bs = await books();
+      var btr = document.createElement('tr'); btr.id = 'bk-row';
+      btr.innerHTML = '<td colspan="9"><div class="checks"><b>Businesses ' + esc(t.dataset.name) + ' may open in Accounts:</b>' + (bs.length ? bs.map(function(b){ return '<label><input type="checkbox" class="bk" value="' + esc(b.doc) + '"' + (sel.indexOf(b.doc) >= 0 ? ' checked' : '') + '> ' + esc(b.name) + '</label>'; }).join('') : '<span class="note">No businesses in the cloud yet.</span>') +
+        '</div><div class="row"><button class="btn small primary" data-bookssave="' + t.dataset.books + '">Save</button><button class="btn small" data-go="cancel-bk">Cancel</button></div></td>';
+      brow.after(btr); return;
+    }
+    if (t.dataset.bookssave){
+      var picked = [].slice.call(document.querySelectorAll('#bk-row .bk')).filter(function(x){ return x.checked; }).map(function(x){ return x.value; });
+      t.disabled = true;
+      try { await FT.updateUser(t.dataset.bookssave, {acctBiz: picked}); msg('l-msg2', 'Saved – ' + picked.length + ' business(es).', 'ok'); await list(); } catch (err) { msg('l-msg2', FT.friendlyError(err)); t.disabled = false; }
+      return;
+    }
+    if (t.dataset.go === 'cancel-bk'){ var bk = document.getElementById('bk-row'); if (bk) bk.remove(); return; }
     if (t.dataset.open){ location.href = t.dataset.open + '/'; return; }
     if (t.dataset.go === 'home') return dashboard();
     if (t.dataset.go === 'users') return users();
@@ -350,7 +389,7 @@ table.cl .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
     if (t.dataset.pw){
       var row = t.closest('tr'), old = document.getElementById('pw-row'); if (old) old.remove();
       var tr = document.createElement('tr'); tr.id = 'pw-row';
-      tr.innerHTML = '<td colspan="7"><div class="row"><b>New password for ' + esc(t.dataset.name) + ':</b><input type="text" id="pw-new" minlength="8" autocomplete="off" style="max-width:240px" placeholder="at least 8 characters">' +
+      tr.innerHTML = '<td colspan="9"><div class="row"><b>New password for ' + esc(t.dataset.name) + ':</b><input type="text" id="pw-new" minlength="8" autocomplete="off" style="max-width:240px" placeholder="at least 8 characters">' +
         '<button class="btn small primary" data-pwsave="' + t.dataset.pw + '" data-id="' + t.dataset.id + '">Save password</button><button class="btn small" data-go="cancel-pw">Cancel</button></div></td>';
       row.after(tr); document.getElementById('pw-new').focus(); return;
     }

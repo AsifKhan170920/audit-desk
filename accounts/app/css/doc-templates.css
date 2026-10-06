@@ -1,0 +1,308 @@
+/* ===================== Document templates (js/doc-templates.js) =====================
+   The default View / Print / PDF layout of transaction vouchers, modelled on the Fair Tax CRM
+   invoice. The document is paper: it keeps these colours in light and dark mode (only the
+   screen chrome around it follows the theme tokens) and always prints on white.
+   Selectors start with .iv-card.dt-doc so they out-rank app.css (including its
+   body.theme-dark .iv-card * rule).
+   ===================================================================================== */
+.iv-card.dt-doc{
+  --dt-ink:#17324c; --dt-acc:#c1922b; --dt-text:#2b3440; --dt-body:#3f4a57; --dt-muted:#54687c; --dt-faint:#7b8794;
+  --dt-line:#e3e8ee; --dt-grid:#cfd6de; --dt-soft:#f5f7fa; --dt-grand:#eef2f6;
+  max-width:860px; padding:44px 48px 30px; border-radius:6px; background:#fff; color:var(--dt-text);
+  font:10pt/1.5 Georgia,'Times New Roman',serif; overflow:visible
+}
+.iv-card.dt-doc .dt-sans,.iv-card.dt-doc .dt-co,.iv-card.dt-doc .dt-tag,.iv-card.dt-doc .iv-title,.iv-card.dt-doc .iv-thr th,
+.iv-card.dt-doc .iv-party-lbl,.iv-card.dt-doc .dt-amt-l,.iv-card.dt-doc .dt-amt-n,.iv-card.dt-doc .iv-bb-lbl,.iv-card.dt-doc .dt-sec-h,
+.iv-card.dt-doc .dt-foot,.iv-card.dt-doc .dt-lh-r strong,.iv-card.dt-doc .iv-rinfo strong{font-family:Arial,'Helvetica Neue',Helvetica,sans-serif}
+
+/* letterhead */
+.iv-card.dt-doc .dt-lh{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:0;margin:0;border:none;background:transparent}
+.iv-card.dt-doc .dt-lh-l{display:flex;gap:11px;align-items:center;min-width:0;flex:1 1 auto}
+.iv-card.dt-doc .dt-logo img{height:52px;width:auto;max-width:220px;object-fit:contain;display:block}
+.iv-card.dt-doc .dt-co{font-weight:800;font-size:16pt;color:var(--dt-ink);line-height:1.05}
+.iv-card.dt-doc .dt-tag{font-weight:700;font-size:8pt;color:var(--dt-acc);letter-spacing:4px;margin-top:3px;text-transform:uppercase}
+.iv-card.dt-doc .dt-lh-r{flex:0 1 auto;max-width:48%;font-style:normal;font-size:8.5pt;line-height:1.5;color:var(--dt-faint);text-align:right}
+.iv-card.dt-doc .dt-lh-r strong{display:block;margin:0;font-weight:700;font-size:9pt;letter-spacing:0;text-transform:none;color:var(--dt-ink)}
+.iv-card.dt-doc .dt-rule{margin:10px 0 0}
+.iv-card.dt-doc .dt-rule i{display:block;height:2.5px;background:var(--dt-ink)}
+.iv-card.dt-doc .dt-rule i + i{height:2px;margin-top:2px;background:var(--dt-acc)}
+
+/* title band + meta */
+.iv-card.dt-doc .dt-band{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin:18px 0 16px}
+.iv-card.dt-doc .dt-band .iv-title{margin:0;padding:0;border:none;font-weight:800;font-size:24pt;line-height:1.05;letter-spacing:1px;text-transform:uppercase;color:var(--dt-ink)}
+.iv-card.dt-doc .dt-meta{display:grid;grid-template-columns:auto auto;gap:0 8px;margin:0;min-width:0;font-size:9pt;line-height:1.7;color:var(--dt-muted)}
+.iv-card.dt-doc .dt-meta dt{margin:0;font:inherit;letter-spacing:0;text-transform:none;color:var(--dt-muted);text-align:right}
+.iv-card.dt-doc .dt-meta dt::after{content:':'}
+.iv-card.dt-doc .dt-meta dd{margin:0;font-size:9pt;font-weight:700;color:var(--dt-ink);text-align:left}
+
+/* bill to */
+.iv-card.dt-doc .dt-billto{display:block;margin:0 0 16px;padding:12px 14px;border:1px solid var(--dt-line);border-left:4px solid var(--dt-acc);border-radius:6px;background:var(--dt-soft)}
+.iv-card.dt-doc .dt-billto .iv-rinfo{padding:0;font-style:normal;font-size:9.5pt;line-height:1.55;color:var(--dt-body)}
+.iv-card.dt-doc .iv-party-lbl{margin-bottom:3px;font-weight:700;font-size:7.5pt;letter-spacing:2px;text-transform:uppercase;color:var(--dt-acc)}
+.iv-card.dt-doc .iv-rinfo strong{display:block;margin:0 0 2px;font-weight:700;font-size:12pt;letter-spacing:0;text-transform:none;color:var(--dt-ink)}
+
+/* custom fields printed on the document */
+.iv-card.dt-doc .sfa-cfprint{display:flex;flex-wrap:wrap;gap:4px 22px;margin:-4px 0 14px}
+.iv-card.dt-doc .iv-cblock .iv-clbl{font-family:Arial,sans-serif;font-size:7.5pt;letter-spacing:1px;color:var(--dt-faint)}
+.iv-card.dt-doc .iv-cblock .iv-cval{font-size:9.5pt;color:var(--dt-text)}
+
+/* description / notes */
+.iv-card.dt-doc .iv-desc{margin:0 0 12px;padding:0;font-size:9.5pt;font-weight:400;color:var(--dt-body)}
+
+/* amount box (receipts, payments, transfers, claims, payslips) */
+.iv-card.dt-doc .dt-amt{margin:0 0 16px;padding:14px 18px;border:1px solid var(--dt-line);border-radius:8px;background:var(--dt-soft);text-align:center}
+.iv-card.dt-doc .dt-amt-l{font-weight:700;font-size:7.5pt;letter-spacing:2px;text-transform:uppercase;color:var(--dt-acc)}
+.iv-card.dt-doc .dt-amt-n{font-weight:800;font-size:24pt;line-height:1.2;color:var(--dt-ink);font-variant-numeric:tabular-nums}
+.iv-card.dt-doc .dt-amt-n small{font-size:.55em;font-weight:700;color:var(--dt-muted);letter-spacing:1px}
+.iv-card.dt-doc .dt-amt-w{margin-top:3px;font-size:9.5pt;font-style:italic;color:var(--dt-body)}
+
+/* tables */
+.iv-card.dt-doc .iv-twrap{padding:0;margin:0}
+.iv-card.dt-doc .iv-twrap + .iv-twrap,.iv-card.dt-doc .pr-ps-vdays + .iv-twrap{margin-top:14px}
+.iv-card.dt-doc .iv-table{width:100%;border-collapse:collapse;border:1px solid var(--dt-grid);font-size:9.5pt}
+.iv-card.dt-doc .iv-thr th{padding:9px 11px;border:none;border-right:1px solid rgba(255,255,255,.14);background:var(--dt-ink);color:#fff;font-weight:700;font-size:8.6pt;letter-spacing:0;text-transform:none;vertical-align:bottom}
+.iv-card.dt-doc .iv-thr th:last-child{border-right:none}
+.iv-card.dt-doc .iv-row td{padding:8px 11px;border:none;border-top:1px solid var(--dt-line);border-right:1px solid var(--dt-line);background:#fff;color:var(--dt-text);font-size:9.5pt;vertical-align:top}
+.iv-card.dt-doc .iv-row td:last-child{border-right:none}
+.iv-card.dt-doc .iv-row:nth-child(even) td{background:var(--dt-soft)}
+.iv-card.dt-doc .iv-lastrow td{border-bottom:none !important}
+.iv-card.dt-doc .iv-sub{color:var(--dt-faint);font-size:8.5pt}
+.iv-card.dt-doc .iv-coltot td{padding:8px 11px;border:none;border-top:2px solid var(--dt-ink);background:var(--dt-grand);font-weight:700;color:var(--dt-ink);font-size:9.5pt}
+.iv-card.dt-doc .iv-tot td{padding:6px 11px;border:none;border-top:1px solid var(--dt-line);background:#fff;color:var(--dt-muted);font-size:9.5pt}
+.iv-card.dt-doc .iv-tot td:first-child{text-align:right;font-weight:400}
+.iv-card.dt-doc .iv-totbox{border:none;border-radius:0;background:transparent;font-family:inherit;font-weight:700;font-size:10pt;color:var(--dt-ink);text-align:right}
+.iv-card.dt-doc .iv-table,.iv-card.dt-doc .iv-totbox2,.iv-card.dt-doc .dt-meta,.iv-card.dt-doc .dt-amt-n,.iv-card.dt-doc .dt-lh-r{font-variant-numeric:lining-nums tabular-nums}
+.iv-card.dt-doc .dt-sec-h{margin:18px 0 6px;font-weight:700;font-size:8pt;letter-spacing:1px;text-transform:uppercase;color:var(--dt-ink)}
+.iv-card.dt-doc .pr-ps-vdays{margin:0 0 12px;border-color:var(--dt-line);color:var(--dt-muted);font-size:9pt}
+.iv-card.dt-doc .pr-ps-vdays b{color:var(--dt-ink)}
+
+/* totals + amount in words */
+.iv-card.dt-doc .iv-belowtbl{display:flex;flex-direction:column;align-items:stretch;gap:10px;margin-top:14px;padding:0}
+.iv-card.dt-doc .iv-bl-right{order:-1;align-self:flex-end;width:auto;min-width:280px;max-width:100%}
+.iv-card.dt-doc .iv-bl-left{padding:0}
+.iv-card.dt-doc .iv-bl-left:empty{display:none}
+.iv-card.dt-doc .iv-totbox2{border:none;border-radius:0;overflow:visible}
+.iv-card.dt-doc .iv-totrow{display:flex;justify-content:space-between;gap:34px;padding:6px 11px;border:none;background:transparent;font-size:10pt;color:var(--dt-muted)}
+.iv-card.dt-doc .iv-totrow span:first-child{flex:1;text-align:right}
+.iv-card.dt-doc .iv-totrow span:last-child{min-width:110px;text-align:right;font-weight:700;color:var(--dt-ink);font-variant-numeric:tabular-nums}
+.iv-card.dt-doc .iv-totrow + .iv-totrow{border-top:none}
+.iv-card.dt-doc .iv-totrow.iv-totrow-g{border-top:2px solid var(--dt-ink);background:var(--dt-grand)}
+.iv-card.dt-doc .iv-totrow.iv-totrow-g span{font-size:11.5pt;color:var(--dt-ink)}
+.iv-card.dt-doc .iv-totrow.iv-totrow-g span:first-child{font-weight:400;color:var(--dt-muted)}
+.iv-card.dt-doc .iv-totrow.iv-totrow-g + .iv-totrow.iv-totrow-g{border-top:1px solid var(--dt-grid)}
+.iv-card.dt-doc .dt-cur{font-size:.78em;font-weight:700;color:var(--dt-muted)}
+.iv-card.dt-doc .iv-aw2{font-size:9pt;font-style:italic;line-height:1.5;color:var(--dt-body)}
+.iv-card.dt-doc .iv-aw2 .iv-aw-lbl::after{content:': '}
+
+/* payment (bank) details, footers, signature lines */
+.iv-card.dt-doc .iv-bankbox{margin-top:18px;padding:0;font-size:9pt;color:var(--dt-body)}
+.iv-card.dt-doc .iv-bb-lbl{margin-bottom:3px;font-weight:700;font-size:8pt;letter-spacing:1px;text-transform:uppercase;color:var(--dt-ink)}
+.iv-card.dt-doc .iv-bb-area{min-height:0;padding:0;border:none;font-size:9pt;line-height:1.55;color:var(--dt-body)}
+.iv-card.dt-doc .iv-cf{margin-top:14px;padding:0}
+.iv-card.dt-doc .iv-cfblock{margin:0 0 8px;padding:0 0 0 10px;border:none;border-left:3px solid var(--dt-line);border-radius:0;background:transparent;font-size:9pt;color:var(--dt-body)}
+.iv-card.dt-doc .iv-cfblock strong{font-family:Arial,sans-serif;font-size:8pt;letter-spacing:1px;color:var(--dt-ink)}
+.iv-card.dt-doc .iv-sign,.iv-card.dt-doc .dt-sign{display:flex;justify-content:space-between;gap:40px;margin-top:38px;padding:0}
+.iv-card.dt-doc .iv-sign-box,.iv-card.dt-doc .dt-sig{flex:0 1 230px;min-height:0;padding:0;border:none;display:flex;flex-direction:column;text-align:center}
+.iv-card.dt-doc .iv-sign-box + .iv-sign-box{border-left:none}
+.iv-card.dt-doc .dt-sig:only-child{margin-left:auto}
+.iv-card.dt-doc .iv-sign-top,.iv-card.dt-doc .dt-sig-s{margin-bottom:40px;font-weight:400;font-size:8.5pt;color:var(--dt-muted)}
+.iv-card.dt-doc .iv-sign-bot,.iv-card.dt-doc .dt-sig-t{padding-top:4px;border-top:1px solid var(--dt-ink);font-weight:400;font-size:8.5pt;color:var(--dt-muted)}
+.iv-card.dt-doc .dt-sig-l{display:none}
+.iv-card.dt-doc .iv-status{padding:16px 0 0}
+.iv-card.dt-doc .dt-foot{margin-top:26px;padding-top:8px;border-top:1px solid var(--dt-line);text-align:center;font-size:7.5pt;letter-spacing:.3px;color:#aab3bd}
+
+/* small screens: the page stacks, wide tables scroll inside the card */
+@media (max-width:640px){
+  .iv-card.dt-doc{padding:20px 16px 18px;border-radius:4px}
+  .iv-card.dt-doc .dt-lh{flex-direction:column;align-items:flex-start;gap:8px}
+  .iv-card.dt-doc .dt-lh-r{max-width:none;text-align:left}
+  .iv-card.dt-doc .dt-band{flex-direction:column;align-items:flex-start;gap:8px;margin:14px 0 12px}
+  .iv-card.dt-doc .dt-band .iv-title{font-size:19pt}
+  .iv-card.dt-doc .dt-meta dt{text-align:left}
+  .iv-card.dt-doc .iv-twrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .iv-card.dt-doc .iv-table{min-width:460px}
+  .iv-card.dt-doc .iv-bl-right{align-self:stretch;min-width:0}
+  .iv-card.dt-doc .iv-totrow span:last-child{min-width:0}
+  .iv-card.dt-doc .iv-sign,.iv-card.dt-doc .dt-sign{flex-direction:column;gap:22px}
+  .iv-card.dt-doc .iv-sign-box,.iv-card.dt-doc .dt-sig{flex-basis:auto;width:100%}
+  .iv-card.dt-doc .dt-amt-n{font-size:19pt}
+}
+
+/* print / PDF: A4 paper, its own margins, repeating table header, no breaks inside rows or boxes */
+@page dtdoc{size:A4;margin:14mm 15mm 16mm;@bottom-right{content:"Page " counter(page) " of " counter(pages);font:7.5pt Arial,sans-serif;color:#aab3bd}}
+@media print{
+  #printRegion .card:has(> .dt-doc){padding:0 !important}
+  #printRegion .iv-card.dt-doc{page:dtdoc;padding:0 !important;max-width:none !important;width:100% !important;box-shadow:none !important;border:none !important;border-radius:0 !important}
+  .iv-card.dt-doc,.iv-card.dt-doc *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .iv-card.dt-doc .iv-twrap{overflow:visible !important}
+  .iv-card.dt-doc .iv-table{min-width:0 !important}
+  .iv-card.dt-doc .iv-table thead{display:table-header-group}
+  .iv-card.dt-doc .iv-table tr{break-inside:avoid;page-break-inside:avoid}
+  .iv-card.dt-doc .dt-band,.iv-card.dt-doc .dt-billto,.iv-card.dt-doc .dt-amt,.iv-card.dt-doc .iv-belowtbl,.iv-card.dt-doc .iv-bankbox,
+  .iv-card.dt-doc .iv-sign,.iv-card.dt-doc .dt-sign,.iv-card.dt-doc .iv-cfblock{break-inside:avoid;page-break-inside:avoid}
+  .iv-card.dt-doc .dt-sec-h{break-after:avoid;page-break-after:avoid}
+  .iv-card.dt-doc .dt-lh{flex-direction:row !important}
+  /* app.css whitens every printed node in dark mode; the document keeps its own colours */
+  #printRegion .iv-card.dt-doc,#printRegion .iv-card.dt-doc *{color:var(--dt-text) !important;border-color:var(--dt-line) !important}
+  #printRegion .iv-card.dt-doc *{background:transparent !important}
+  #printRegion .iv-card.dt-doc{background:#fff !important}
+  #printRegion .iv-card.dt-doc .dt-co,#printRegion .iv-card.dt-doc .dt-lh-r strong,#printRegion .iv-card.dt-doc .iv-title,#printRegion .iv-card.dt-doc .dt-meta dd,
+  #printRegion .iv-card.dt-doc .iv-rinfo strong,#printRegion .iv-card.dt-doc .dt-amt-n,#printRegion .iv-card.dt-doc .iv-coltot td,#printRegion .iv-card.dt-doc .iv-totbox,
+  #printRegion .iv-card.dt-doc .iv-totrow span:last-child,#printRegion .iv-card.dt-doc .iv-bb-lbl,#printRegion .iv-card.dt-doc .dt-sec-h,
+  #printRegion .iv-card.dt-doc .iv-cfblock strong{color:var(--dt-ink) !important}
+  #printRegion .iv-card.dt-doc .dt-tag,#printRegion .iv-card.dt-doc .iv-party-lbl,#printRegion .iv-card.dt-doc .dt-amt-l{color:var(--dt-acc) !important}
+  #printRegion .iv-card.dt-doc .dt-lh-r,#printRegion .iv-card.dt-doc .dt-meta dt,#printRegion .iv-card.dt-doc .iv-totrow span:first-child,
+  #printRegion .iv-card.dt-doc .iv-sign-top,#printRegion .iv-card.dt-doc .iv-sign-bot,#printRegion .iv-card.dt-doc .dt-sig-s,#printRegion .iv-card.dt-doc .dt-sig-t,
+  #printRegion .iv-card.dt-doc .dt-cur,#printRegion .iv-card.dt-doc .dt-amt-n small{color:var(--dt-muted) !important}
+  #printRegion .iv-card.dt-doc .dt-foot{color:#aab3bd !important}
+  #printRegion .iv-card.dt-doc .dt-rule i{background:var(--dt-ink) !important}
+  #printRegion .iv-card.dt-doc .dt-rule i + i{background:var(--dt-acc) !important}
+  #printRegion .iv-card.dt-doc .iv-thr th{background:var(--dt-ink) !important;color:#fff !important;border-color:rgba(255,255,255,.14) !important}
+  #printRegion .iv-card.dt-doc .iv-row:nth-child(even) td,#printRegion .iv-card.dt-doc .dt-billto,#printRegion .iv-card.dt-doc .dt-amt{background:var(--dt-soft) !important}
+  #printRegion .iv-card.dt-doc .iv-table{border-color:var(--dt-grid) !important}
+  #printRegion .iv-card.dt-doc .dt-billto{border-left-color:var(--dt-acc) !important}
+  #printRegion .iv-card.dt-doc .iv-coltot td,#printRegion .iv-card.dt-doc .iv-totrow.iv-totrow-g{background:var(--dt-grand) !important;border-top-color:var(--dt-ink) !important}
+  #printRegion .iv-card.dt-doc .iv-sign-bot,#printRegion .iv-card.dt-doc .dt-sig-t{border-top-color:var(--dt-ink) !important}
+}
+
+/* ===================== "Fair Tax invoice" layout (sales quotes, orders, invoices, credit notes) =====================
+   Modelled on the Fair Tax International tax invoices: Calibri, navy #17324c / gold #b8892a (Main / Accent colour),
+   ink #22303c, muted #5b6b7b, rules #e2e6eb, panels #f6f8fa; body 8.4pt / 11pt on an A4 sheet (190 mm of text).
+   Selectors start with :is(#printRegion,body) (an id-level specificity on screen and on paper) and the paper
+   colours are !important, so neither app.css's dark-mode / print whitening nor the Letterhead print rules
+   above repaint the document. */
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft{
+  --ft-ink:#22303c; --ft-muted:#5b6b7b; --ft-line:#e2e6eb; --ft-band:#f6f8fa; --ft-zebra:#fafbfc;
+  position:relative; max-width:210mm; margin:0 auto; padding:10mm; border:none; border-radius:2px; box-shadow:0 2px 10px rgba(0,0,0,.13); overflow:visible;
+  background:#fff !important; color:var(--ft-ink) !important;
+  font-family:Calibri,Carlito,Lato,'Segoe UI',Arial,sans-serif; font-size:8.4pt; line-height:11pt
+}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft *{font-family:inherit}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page{width:100% !important; height:277mm; margin:0; border:none !important; border-collapse:collapse; table-layout:fixed !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page > * > tr > td{padding:0; border:none !important; vertical-align:top; background:transparent !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page > thead{display:table-header-group}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page > tfoot{display:table-footer-group}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page > tfoot > tr > td{vertical-align:bottom}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page > thead > tr,:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page > tfoot > tr{height:1px}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-gap-t{height:4.5mm}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-gap-b{height:7mm}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-content{position:relative; z-index:1}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-wm{position:absolute; top:50%; left:50%; z-index:0; width:105mm; max-width:80%; height:105mm; transform:translate(-50%,-50%); display:flex; align-items:center; justify-content:center; opacity:.045; pointer-events:none}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-wm img{max-width:100%; max-height:100%; object-fit:contain}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-fixfoot{display:none}
+
+/* letterhead: logo + tagline left, business identity right, gold rule, navy title bar */
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-lh{display:flex; justify-content:space-between; align-items:center; gap:12px; margin:0; padding:0; border:none !important; background:transparent !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-lh-l{flex:0 1 70mm; min-width:0}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-logo img{display:block; height:38pt; width:auto; max-width:62mm; object-fit:contain}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-brand{font-size:13pt; line-height:15pt; font-weight:700; color:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tag{margin-top:3.5pt; font-size:6.4pt; line-height:8pt; font-weight:700; letter-spacing:.28em; text-transform:uppercase; white-space:nowrap; color:var(--dt-acc) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-firm{flex:1 1 auto; min-width:0; max-width:none; padding:0; font-style:normal; text-align:right; font-size:7.2pt; line-height:10pt; color:var(--ft-muted) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-firm > strong{display:block; margin:0; font-size:7.8pt; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-firm > span{display:block}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-firm .ft-trn{font-weight:700; color:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-firm .ft-dot{padding:0 1px; color:var(--ft-muted) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-rule{height:1.2pt; margin:6pt 0 0; border:none !important;
+  background:linear-gradient(90deg,var(--dt-acc),color-mix(in srgb,var(--dt-acc) 62%,#fff) 60%,rgba(255,255,255,0)) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-band{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:8pt 0 0; padding:5.5pt 10pt;
+  border:none !important; border-left:3pt solid var(--dt-acc) !important; background:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-band .iv-title{margin:0; padding:0; border:none !important; font-size:9.6pt; line-height:12pt; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:#fff !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sub{font-size:6.4pt; line-height:8pt; letter-spacing:.2em; text-transform:uppercase; text-align:right; color:#c8d2de !important}
+
+/* panels: Invoice To / Invoice Details, Reference Details, Amount in Words, Bank Details, Terms & Notes */
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:start}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row-top .ft-panel{min-height:27mm}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row-tot{grid-template-columns:minmax(0,56fr) minmax(0,44fr); gap:6px; margin-top:7pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row-bt{margin-top:7pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row-bt .ft-panel{min-height:26mm}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-panel{overflow:hidden; border:.75pt solid var(--ft-line) !important; border-radius:2pt; background:transparent !important; break-inside:avoid; page-break-inside:avoid}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-ph{padding:3.5pt 8pt; border:none !important; border-bottom:.75pt solid var(--ft-line) !important; background:var(--ft-band) !important;
+  font-size:6.8pt; line-height:9pt; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-ph::before{content:""; display:inline-block; width:5pt; height:5pt; margin-right:5pt; vertical-align:.5pt; background:var(--dt-acc) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-pb{padding:5pt 8pt; font-size:7.8pt; line-height:10.8pt; color:var(--ft-ink) !important; overflow-wrap:anywhere}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-pname{margin-bottom:1pt; font-size:9.2pt; line-height:12pt; font-weight:700; color:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-addr{color:var(--ft-muted) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-kv{width:100% !important; margin:0; border:none !important; border-collapse:collapse; table-layout:auto}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-kv td{padding:1.2pt 0; border:none !important; vertical-align:top; background:transparent !important; font-size:7.8pt; line-height:10.8pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-kv td.k{width:42%; padding-right:6pt; color:var(--ft-muted) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-bank .ft-kv td.k{width:34%}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-kv td.v{font-weight:700; color:var(--ft-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-cf{margin-top:7pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-cf .ft-pb{padding:4pt 8pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-cfgrid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 12pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .iv-cblock{display:block; margin:0; padding:2pt 0}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .iv-cblock .iv-clbl{display:block; font-size:6.6pt; line-height:8.5pt; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--dt-acc) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .iv-cblock .iv-cval{display:block; font-size:7.8pt; line-height:10.8pt; color:var(--ft-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .iv-desc{margin:7pt 0 0; padding:0; font-size:8.2pt; line-height:11pt; font-weight:400; color:var(--ft-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-terms .ft-pb{text-align:justify; color:var(--ft-muted) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-note + .ft-note{margin-top:4pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-note p{margin:0 0 3pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-aiw-t{font-style:italic}
+
+/* line items: navy header, hairline rows, faint zebra, navy closing rule */
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items{margin:8pt 0 0; padding:0; overflow:visible}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-table{width:100% !important; margin:0; border:none !important; border-collapse:collapse; font-size:8.2pt; line-height:11pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-thr th{padding:4.5pt 7pt; border:.75pt solid var(--dt-ink) !important; background:var(--dt-ink) !important; color:#fff !important;
+  font-size:6.8pt; line-height:9pt; font-weight:700; letter-spacing:.1em; text-transform:uppercase; vertical-align:middle}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-row td{padding:5pt 7pt; border:none !important; border-bottom:.75pt solid var(--ft-line) !important; background:transparent !important;
+  font-size:8.2pt; line-height:11pt; vertical-align:top; color:var(--ft-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-row:nth-child(even) td{background:var(--ft-zebra) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-row.iv-lastrow td{border-bottom:1pt solid var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-row td[style*="right"]{white-space:nowrap}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-sub{margin:0; font-size:8.2pt; line-height:11pt; color:var(--ft-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-coltot td,:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-tot td{padding:4pt 7pt; border:none !important; background:var(--ft-band) !important; font-weight:700; color:var(--dt-ink) !important}
+
+/* totals: grey band rows, the last row (balance due / total) in navy */
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tot{width:100% !important; margin:0; border:none !important; border-collapse:collapse; table-layout:auto}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tot td{padding:3.5pt 8pt; border:none !important; border-bottom:.75pt solid #fff !important; background:var(--ft-band) !important; font-size:8.2pt; line-height:11pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tot td.k{text-align:right; font-weight:700; color:var(--ft-muted) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tot td.v{width:40%; text-align:right; white-space:nowrap; font-weight:700; border-left:.75pt solid var(--ft-line) !important; color:var(--ft-ink) !important; font-variant-numeric:lining-nums tabular-nums}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tot tr.grand td{padding:5pt 8pt; border-bottom:0 !important; background:var(--dt-ink) !important; font-size:9pt; color:#fff !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tot tr.grand td.k{font-size:7.8pt; letter-spacing:.06em; text-transform:uppercase}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tot tr.grand td.v{border-left:.75pt solid rgba(255,255,255,.3) !important}
+
+/* signatures and the footer line */
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sign{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); margin-top:12pt; break-inside:avoid; page-break-inside:avoid}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sig{display:flex; flex-direction:column; justify-content:flex-end; padding-right:12pt}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sig-for{font-size:7.8pt; line-height:11pt; font-weight:700; color:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sig-for span{display:block; text-transform:uppercase; letter-spacing:.04em; color:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sig-line{width:58mm; max-width:100%; height:28pt; border:none !important; border-bottom:.75pt solid var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sig-meta{margin-top:3pt; font-size:7.2pt; line-height:10pt; color:var(--ft-muted) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-foot{margin:0; padding:1.8mm 0 0; border:none !important; border-top:.75pt solid var(--ft-line) !important; background:#fff !important;
+  text-align:center; font-size:6.6pt; line-height:9.2pt; letter-spacing:0; color:var(--ft-muted) !important; break-inside:avoid; page-break-inside:avoid}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-fl1{letter-spacing:.03em; color:var(--dt-ink) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-fco{text-transform:uppercase}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-foot .ft-dot{padding:0 2px; color:var(--dt-acc) !important}
+:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-disc{font-style:italic}
+
+/* small screens: one column, the line table scrolls inside the sheet */
+@media (max-width:640px){
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft{max-width:none; padding:16px 14px}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page{height:auto}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-lh{flex-direction:column; align-items:flex-start; gap:8px}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-lh-l{flex-basis:auto; max-width:100%}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-firm{text-align:left}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-tag{white-space:normal}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-band{flex-direction:column; align-items:flex-start; gap:2px}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sub{text-align:left}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row,:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row-tot,
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sign,:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-cfgrid{grid-template-columns:minmax(0,1fr)}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row .ft-panel{min-height:0}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-sign{gap:16px}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items{overflow-x:auto; -webkit-overflow-scrolling:touch}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-table{min-width:460px}
+}
+
+/* paper: A4 with 10 mm margins; the letterhead repeats at the top of every page and the footer line
+   sits at the foot of every page (the in-table copy only reserves its room) */
+@page dtft{size:A4;margin:10mm}
+@media print{
+  #printRegion .iv-card.dt-doc.dt-ft{page:dtft; padding:0 !important; max-width:none !important; width:100% !important; border-radius:0 !important}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page{height:276mm}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-page > tfoot .ft-foot{visibility:hidden}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-fixfoot{display:block; position:fixed; left:0; right:0; bottom:0}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items{overflow:visible !important}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-table{min-width:0 !important}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-table thead{display:table-header-group}
+  :is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-items .iv-table tr,:is(#printRegion,body) .iv-card.dt-doc.dt-ft .ft-row{break-inside:avoid; page-break-inside:avoid}
+}

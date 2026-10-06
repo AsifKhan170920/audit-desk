@@ -1,0 +1,48 @@
+/* Settings fixes (B) — js/settings-fixes-b.js. Colours come from the app's tokens, so light and dark both work. */
+
+/* date boxes painted in the chosen format while not focused */
+input[type="date"].sfb-date:not(:focus)::-webkit-datetime-edit,
+input[type="date"].sfb-date:not(:focus)::-webkit-datetime-edit-fields-wrapper,
+input[type="date"].sfb-date:not(:focus)::-webkit-datetime-edit-text,
+input[type="date"].sfb-date:not(:focus)::-webkit-datetime-edit-day-field,
+input[type="date"].sfb-date:not(:focus)::-webkit-datetime-edit-month-field,
+input[type="date"].sfb-date:not(:focus)::-webkit-datetime-edit-year-field{color:transparent}
+input[type="date"].sfb-date:focus{background-image:none !important}
+
+/* Back button in every settings breadcrumb */
+.sfb-back{margin-right:8px;padding:2px 9px;font-size:12px;line-height:1.5;vertical-align:middle}
+
+/* Settings index: in use / not in use yet */
+.sfb-idx-h{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2);padding:8px 18px 2px}
+
+/* Batch Operations page */
+.sfb-bo-sec{margin-bottom:18px}
+.sfb-bo-h{font-weight:700;margin-bottom:4px;color:var(--ink-2,inherit)}
+.sfb-bo-tsv{width:100%;min-height:180px;box-sizing:border-box;white-space:pre;overflow:auto;margin-top:6px}
+.sfb-bo-act{margin-top:8px;display:flex;gap:8px}
+
+/* User Permissions header with the New button */
+.sfb-perm-h{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.sfb-perm-h h2{margin:0}
+
+/* Theme dropdown on document views and the themed document */
+.sfb-theme-wrap{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted-2);margin:0 4px}
+.sfb-theme-sel{max-width:180px;padding:3px 6px;font-size:12.5px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:inherit}
+.sfb-theme-frame{display:block;width:100%;min-height:320px;border:1px solid var(--line);border-radius:8px;background:#fff;margin:6px 0}
+
+/* Sales Invoice stock warning */
+.sfb-stock{margin:10px 0;padding:10px 14px;border:1px solid var(--warn-line,#f0c36d);background:var(--warn-tint,#fff8e6);color:var(--warn,#8a5a00);border-radius:8px;font-size:13px}
+.sfb-stock-t{font-weight:700;margin-bottom:2px}
+.sfb-stock ul{margin:4px 0 4px 18px;padding:0}
+.sfb-stock-n{font-size:12px;opacity:.85}
+.sfb-loc-row select{min-width:200px}
+
+/* Trial Balance grouped by account type */
+.tb-grouped .tb-grp td{font-weight:700;background:var(--surface-2);padding-top:9px}
+.tb-grouped .tb-acct{padding-left:22px}
+.tb-grouped .tb-code{color:var(--muted-2)}
+.tb-grouped .tb-sub td{font-weight:600;border-top:1px solid var(--line)}
+.tb-grouped .tb-total td{font-weight:700;border-top:2px solid var(--line)}
+
+@media print{ .sfb-back,.sfb-theme-wrap{display:none !important} .sfb-theme-frame{border:0} }
+@media (max-width:640px){ .sfb-theme-wrap span{display:none} .sfb-bo-tsv{min-height:140px} }
