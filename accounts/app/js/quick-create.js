@@ -94,6 +94,11 @@
       return r.ok ? { ok:true, value:r.record.name } : r;
     }
     if(src==='account'){
+      /* the dialog always sends a Group; a caller that leaves it out keeps the old behaviour */
+      if(values.parent !== undefined){
+        var gErr = groupError(b, values.parent);
+        if(gErr) return { ok:false, error:gErr, field:'parent' };
+      }
       var side = A.coaSideOf ? sideOfGroup(b, values.parent) : 'bs';
       var a = A.coaCreateAccount(b, { name:values.name, code:values.code, parent:values.parent, side:side, balance:values.balance });
       if(!a.ok) return a;
@@ -129,10 +134,27 @@
 
   /** Balance-sheet or profit-and-loss, so a new account lands on the right side. */
   function sideOfGroup(b, parentId){
-    if(parentId==='pl') return 'pl';
+    if(parentId==='pl' || parentId==='@income' || parentId==='@expense') return 'pl';
     var n=(b.coa||[]).filter(function(x){ return x.id===parentId; })[0];
     if(!n) return 'bs';
     try{ return app().coaSideOf(b, n); }catch(e){ return 'bs'; }
+  }
+
+  /** Group is required and must be one of the five elements or a group under one (App.COA_ELEMENTS). */
+  function groupError(b, parentId){
+    var A=app(), msg=(A && A.COA_GROUP_REQUIRED) || 'Group is required.';
+    if(parentId==null || String(parentId).trim()==='') return msg;
+    var opts=(A && A.coaGroupOptions) ? A.coaGroupOptions(b, 'all', null) : [];
+    if(!opts.some(function(o){ return String(o.value)===String(parentId); })) return 'Choose a valid Group — Assets, Liabilities, Equity, Income or Expenses.';
+    return '';
+  }
+
+  /** The register the dialog was opened from (salesInv, purchInv, bankCash …), for the Group default. */
+  function contextKey(sel){
+    var k = sel && sel.getAttribute && sel.getAttribute('data-qc-context');
+    if(k) return k;
+    var A=app();
+    try{ return (A && A.wsSection && LABEL2KEY[A.wsSection]) || ''; }catch(e){ return ''; }
   }
 
   /* --------------------------------------------------------------- options */
@@ -216,17 +238,22 @@
         accts.map(function(o){ return '<option value="'+esc(o.id)+'">'+esc(o.label)+'</option>'; }).join('') + '</select>';
     }
     if(f.type === 'coaGroup'){
-      var gs = (A.coaGroupOptions && A.coaGroupOptions(b, 'bs', null)) || [];
-      var pl = (A.coaGroupOptions && A.coaGroupOptions(b, 'pl', null)) || [];
-      var opt = function(o){ return '<option value="'+esc(o.value)+'">'+'    '.repeat(o.depth)+esc(o.label)+'</option>'; };
-      return lbl + '<select id="'+id+'">' +
-        (gs.length ? '<optgroup label="Balance Sheet">'+gs.map(opt).join('')+'</optgroup>' : '') +
-        (pl.length ? '<optgroup label="Profit &amp; Loss">'+pl.map(opt).join('')+'</optgroup>' : '') +
-        (gs.length||pl.length ? '' : '<option value="">(a group will be created)</option>') + '</select>';
+      /* the five elements in order, each with its groups nested under it (App.COA_ELEMENTS),
+         pre-selected by the form the dialog came from: Sales → Income, Purchases → Expenses, Bank → Assets */
+      return lbl + groupSelectHtml(id, b, A.coaDefaultGroupFor ? A.coaDefaultGroupFor(contextKey(pending && pending.sel)) : '');
     }
     var t = (f.type === 'date') ? 'date' : (f.type === 'number' || f.type === 'money') ? 'text' : 'text';
     var im = (f.type === 'number' || f.type === 'money') ? ' inputmode="decimal"' : '';
     return (f.showIf ? '' : lbl) + '<input id="'+id+'" type="'+t+'"'+im+(f.ph?' placeholder="'+esc(f.ph)+'"':'')+(f.showIf?' aria-label="'+esc(f.label)+'"':'')+'>';
+  }
+
+  /** The Group <select>: "— select group —" then Assets … Expenses with their groups indented beneath. */
+  function groupSelectHtml(id, b, def){
+    var A=app(), opts=(A && A.coaGroupOptions) ? A.coaGroupOptions(b, 'all', null) : [];
+    return '<select id="'+id+'"><option value=""'+(def?'':' selected')+'>— select group —</option>' +
+      opts.map(function(o){
+        return '<option value="'+esc(o.value)+'"'+(String(o.value)===String(def)?' selected':'')+(o.depth?'':' style="font-weight:600"')+'>'+
+          '    '.repeat(o.depth)+esc(o.label)+'</option>'; }).join('') + '</select>';
   }
 
   /* Same layout as the full form: fields sharing a `row` sit side by side (Name | Code), and a field
@@ -471,7 +498,8 @@
     labelOf:labelOf, valueKeyOf:valueKeyOf, fieldsFor:fieldsFor, known:known,
     create:create, decorate:decorate, scan:scan, refresh:refresh, refreshAll:refreshAll,
     open:open, submit:submit, cancel:cancel, readValues:readValues, reveal:reveal,
-    openPop:openPop, closePop:closePop, install:install
+    openPop:openPop, closePop:closePop, install:install,
+    groupError:groupError, contextKey:contextKey, groupSelectHtml:groupSelectHtml
   };
   global.QuickCreate = QuickCreate;
 

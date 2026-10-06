@@ -445,7 +445,45 @@
   };
   SFA.ps = PayslipForm;
   /** the payslip View: Earnings / Deductions / Contributions sections */
+  /* FIX_SPEC_5 A7 — payslip print / PDF: header (employee, ID, period, payroll date, days), then
+     A. Earnings → Gross earnings; B. Salary deductions → Total, = Salary for the period; C. Recoveries – loan / advance
+     → Total, = Net pay; D. Account summary; E. Loan / advance status. A section with no amounts is left out. */
   function payslipViewBody(b, rec) {
+    var P = global.Payroll; if (P && typeof P.payslipSections === 'function') { try { return payslipSectionsHtml(b, rec, P.payslipSections(b, rec)); } catch (e) { if (global.console) console.warn('payslip sections', e); } }
+    return payslipViewBodyOld(b, rec);
+  }
+  function balWord(v) { return v > 0.004 ? 'Payable ' + money(v) : (v < -0.004 ? 'Overpaid ' + money(-v) : 'Settled'); }
+  function payslipSectionsHtml(b, rec, s) {
+    var h = '', H = s.header || {}, dd = H.days || {};
+    h += '<div class="pr-psp-h"><dl>' + [['Employee', H.employee], ['Employee ID', H.code], ['Period', H.period], ['Payroll date', H.date ? fmtD(H.date) : '']].filter(function (x) { return !blank(x[1]); })
+      .map(function (x) { return '<div><dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd></div>'; }).join('') + '</dl>' +
+      (dd.daysTotal != null ? '<div class="pr-ps-vdays"><span>Total days in period <b>' + esc(String(dd.daysTotal)) + '</b></span><span>Days absent <b>' + esc(String(dd.daysAbsent || 0)) + '</b></span><span>Days worked <b>' + esc(String(dd.daysWorked)) + '</b></span></div>' : '') + '</div>';
+    var tbl = function (letter, title, L, totLbl, tot, after) { if (!L.length) return '';
+      return '<div class="iv-twrap sfa-ps-view pr-psp-sec" data-psp="' + letter + '"><table class="iv-table"><thead><tr class="iv-thr"><th style="text-align:left">' + esc(letter ? letter + '. ' + title : title) + '</th><th style="text-align:left">Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>' +
+        L.map(function (x, i) { return '<tr class="iv-row' + (i === L.length - 1 ? ' iv-lastrow' : '') + '"><td>' + esc(x.name) + '</td><td>' + esc(x.desc) + '</td><td style="text-align:right">' + money(x.amount) + '</td></tr>'; }).join('') +
+        '<tr class="iv-tot"><td colspan="2">' + esc(totLbl) + '</td><td class="iv-totbox">' + money(tot) + '</td></tr>' + (after || '') + '</tbody></table></div>'; };
+    var eq = function (lbl, v) { return '<tr class="iv-tot pr-psp-eq"><td colspan="2">= ' + esc(lbl) + '</td><td class="iv-totbox">' + money(v) + '</td></tr>'; };
+    h += tbl('A', 'Earnings', s.earnings, 'Gross earnings', s.gross);
+    h += tbl('B', 'Salary deductions', s.salDed, 'Total salary deductions', s.salTotal, eq('Salary for the period', s.cost));
+    h += tbl('C', 'Recoveries – loan / advance', s.recov, 'Total recoveries', s.recTotal, eq('Net pay', s.net));
+    if (s.contributions.length) h += tbl('', 'Employer contributions (paid by the employer, not deducted)', s.contributions, 'Total employer contributions', s.contrib);
+    h += '<div class="iv-belowtbl"><div class="iv-bl-left"></div><div class="iv-bl-right"><div class="iv-totbox2"><div class="iv-totrow"><span>Gross earnings</span><span>' + money(s.gross) + '</span></div>' +
+      (s.salDed.length ? '<div class="iv-totrow"><span>Salary deductions</span><span>' + money(s.salTotal) + '</span></div><div class="iv-totrow"><span>Salary for the period</span><span>' + money(s.cost) + '</span></div>' : '') +
+      (s.recov.length ? '<div class="iv-totrow"><span>Recoveries</span><span>' + money(s.recTotal) + '</span></div>' : '') +
+      '<div class="iv-totrow iv-totrow-g"><span>Net pay</span><span>' + money(s.net) + '</span></div></div></div></div>';
+    var A = s.account || {};
+    if (Math.abs(A.opening || 0) > 0.004 || Math.abs(A.paid || 0) > 0.004 || Math.abs(A.net || 0) > 0.004)
+      h += '<div class="iv-twrap sfa-ps-view pr-psp-sec" data-psp="D"><table class="iv-table"><thead><tr class="iv-thr"><th style="text-align:left" colspan="2">D. Account summary</th><th style="text-align:right">Amount</th></tr></thead><tbody>' +
+        '<tr class="iv-row"><td colspan="2">Opening balance</td><td style="text-align:right">' + esc(balWord(A.opening)) + '</td></tr>' +
+        '<tr class="iv-row"><td colspan="2">+ Net pay</td><td style="text-align:right">' + money(A.net) + '</td></tr>' +
+        (Math.abs(A.paid) > 0.004 ? '<tr class="iv-row"><td colspan="2">− Paid</td><td style="text-align:right">' + money(A.paid) + '</td></tr>' : '') +
+        '<tr class="iv-tot"><td colspan="2">= Closing balance</td><td class="iv-totbox">' + esc(balWord(A.closing)) + '</td></tr></tbody></table></div>';
+    if ((s.loans || []).length)
+      h += '<div class="iv-twrap sfa-ps-view pr-psp-sec" data-psp="E"><table class="iv-table"><thead><tr class="iv-thr"><th style="text-align:left">E. Loan / advance status</th><th style="text-align:right">Opening outstanding</th><th style="text-align:right">Recovered this month</th><th style="text-align:right">Closing outstanding</th></tr></thead><tbody>' +
+        s.loans.map(function (x) { return '<tr class="iv-row"><td>' + esc(x.name) + '</td><td style="text-align:right">' + money(x.opening) + '</td><td style="text-align:right">' + money(x.recovered) + '</td><td style="text-align:right">' + money(x.closing) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    return h;
+  }
+  function payslipViewBodyOld(b, rec) {
     var lns = (rec.lines || []).filter(Boolean), by = { earnings: [], deductions: [], contributions: [] };
     lns.forEach(function (l) { var a = num(l.amount != null && l.amount !== '' ? l.amount : l.net); var pt = String(l.ptype || l.type || '').toLowerCase();
       by[pt === 'contribution' ? 'contributions' : ((pt === 'deduction' || a < 0) ? 'deductions' : 'earnings')].push({ l: l, a: Math.abs(a) }); });
@@ -840,8 +878,8 @@
     var accOpts = function (roots) { return function (b) { return [['', '— account —']].concat(((b && b.coa) || []).filter(function (n) { return n && n.type === 'account' && !n.control && roots.indexOf(rootOf(b, n)) >= 0; })
       .map(function (n) { return [n.id, acctLabel(b, n.id)]; }).sort(function (x, y) { return String(x[1]).localeCompare(String(y[1])); })); }; };
     try { var pi = P.payslipItems.items;
-      [['earnings', 'account', ['expense', 'liabilities']], ['deductions', 'account', ['liabilities', 'expense']], ['contributions', 'expense', ['expense']], ['contributions', 'liability', ['liabilities']]].forEach(function (x) {
-        var f = findF(pi[x[0]].fields, x[1]); if (f) { f.opts = accOpts(x[2]); f.hint = x[2].length > 1 ? 'Expense and liability accounts' : (x[2][0] === 'expense' ? 'Expense accounts' : 'Liability accounts'); } });
+      [['earnings', 'account', ['expense', 'liabilities']], ['deductions', 'account', ['expense', 'liabilities', 'income', 'assets']], ['contributions', 'expense', ['expense']], ['contributions', 'liability', ['liabilities']]].forEach(function (x) {
+        var f = findF(pi[x[0]].fields, x[1]); if (f) { f.opts = accOpts(x[2]); f.hint = x[2].length > 2 ? 'Salary deduction: expense, liability or income account. Recovery: employee loan / advance asset account' : x[2].length > 1 ? 'Expense and liability accounts' :(x[2][0] === 'expense' ? 'Expense accounts' : 'Liability accounts'); } });
     } catch (e) {}
     /* 106-107: balance sheet starting balances — balance sheet accounts, Debit / Credit */
     try { var bs = P.starting.items['balance-sheet'];

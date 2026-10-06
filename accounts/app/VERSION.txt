@@ -1,3 +1,3 @@
 Copied from C:\Users\hp\Documents\Accounting-Client-wt\preview
-930b3ae Financial statements: payslip expenses always reach the P&L (P&L groups missing from the chart order are included and re-listed)
-2026-10-06T21:59:54.762Z
+efb40cb Merge branch 'feat-set-reminder' into release
+2026-10-06T23:43:07.622Z

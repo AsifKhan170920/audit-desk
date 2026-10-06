@@ -512,8 +512,8 @@ function settlementIndex(b,side,opts){
     var rows=list.map(function(inv){
       var uid=invUid(inv), tot=Number(inv.total)||0;
       /* withholding tax deducted on the invoice is owed by the tax authority, not the
-         customer (the ledger engine posts it off Accounts receivable) */
-      if(side==='cust' && inv.withholding) tot=Math.max(0, tot-(Number(inv.withholdingAmt||inv.whtAmount)||0));
+         customer / supplier (the ledger engine posts it off Accounts receivable / payable) */
+      if(inv.withholding) tot=Math.max(0, tot-(Number(inv.withholdingAmt||inv.whtAmount)||0));
       /* an allocation made while the invoice had no uuid yet ('id:<id>') still counts once it has one */
       var exRaw=(explicit[uid]||0)+((inv.uuid && inv.id!=null && ('id:'+inv.id) in explicit) ? explicit['id:'+inv.id] : 0);
       var ex=Math.max(0, Math.min(tot, exRaw));

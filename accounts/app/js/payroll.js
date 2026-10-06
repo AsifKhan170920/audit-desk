@@ -7,9 +7,12 @@
      employee record (Payslip Items: earnings, deductions, contributions) -> review grid ->
      Create, which adds one ordinary Payslip per employee dated the last day of the month
      (payslip.payrollRun = run id). Draft runs can be saved and finished later.
-   - Accrual basis: the payslips post through js/ledger-engine.js on the payroll date —
-     Dr salary / allowance expense, Cr Employee clearing account (net pay, per employee) and
-     the deduction / contribution liabilities. Nothing is posted by the run itself.
+   - Accrual basis (FIX_SPEC_4 #3): a posted run posts ONE journal entry on the payroll date from
+     its payslips (GL source 'payroll') — Dr salary / allowance expense (current Payslip Items
+     accounts), Cr Employee clearing account (net pay, per employee) and the deduction /
+     contribution liabilities. A payslip outside a run posts on its own (js/ledger-engine.js).
+   - Run payroll dialog (any month), Edit on the run, payslip edits synced back, reconciliation
+     badge + Rebuild, History on run and payslip, one-time data update: see "FIX_SPEC_4 #3" below.
    - Pay salaries: bank / cash account + payment date, per-employee amounts (default the
      outstanding net, partial and selected employees allowed, WPS list) -> Payment(s) with
      the employee as payee and a line on Employee clearing account / <employee>, so the
@@ -17,6 +20,10 @@
    - Run next month copies the last run. Reminders: "Payroll for <month> not run yet" and
      "Salaries for <month> not fully paid" (window.Reminders, guarded; also shown on the tab).
    - Payroll summary report by month and by employee.
+   - FIX_SPEC_5 A: deduction items are Salary deductions (lower the salary cost) or Recoveries (loan / advance: credit an
+     asset account per employee, lower net pay only). Grid groups Days | Earnings | Salary deductions | Salary cost |
+     Recoveries | Net pay | Employee balance (before / after, from Employee clearing account); recovery > outstanding
+     is refused; Settings → Payroll: fixed 30 days and the Absent deduction basis; payslip print sections A–E.
 
    Records: b.records.payroll = [{ id, uuid, month:'YYYY-MM', date, description,
      state:'draft'|'posted', cols:[{key,sec,itemId,item}], rows:[{employee, code, include,
@@ -94,24 +101,37 @@
     return ''; }
   function paySettings(b) {
     var s = (b && b.payrollSettings) || {}, w = WEEKENDS.filter(function (x) { return x[0] === s.weekend; })[0] || WEEKENDS[0], working = s.daysBasis === 'working';
-    return { basis: working ? 'working' : 'calendar', weekend: w[0], weekendLabel: w[1], wdays: w[2],
-      holidays: working && truthy(s.excludeHolidays) ? (s.holidays || []).map(function (h) { return isoDate(h && h.date); }).filter(Boolean) : [] };
+    /* FIX_SPEC_5 A3: fixed 30 days; absent deduction basis = Basic only, or Basic + chosen allowances */
+    var chosen = s.absentBasis === 'chosen';
+    return { basis: working ? 'working' : (s.daysBasis === 'fixed30' ? 'fixed30' : 'calendar'), weekend: w[0], weekendLabel: w[1], wdays: w[2],
+      holidays: working && truthy(s.excludeHolidays) ? (s.holidays || []).map(function (h) { return isoDate(h && h.date); }).filter(Boolean) : [],
+      absentBasis: chosen ? 'chosen' : 'basic', absentItems: chosen ? (s.absentItems || []).map(lc).filter(Boolean) : [] };
   }
   /** total days in the pay period of a month, from Settings → Payroll */
   function periodDays(b, ym) {
     if (!validYm(ym)) return 0; var s = paySettings(b), p = ym.split('-'), y = +p[0], m = +p[1], n = new Date(y, m, 0).getDate();
+    if (s.basis === 'fixed30') return 30;
     if (s.basis !== 'working') return n;
     var c = 0; for (var d = 1; d <= n; d++) { if (s.wdays.indexOf(new Date(y, m - 1, d).getDay()) >= 0 || s.holidays.indexOf(ym + '-' + pad(d)) >= 0) continue; c++; }
     return c;
   }
-  function basisLabel(b) { var s = paySettings(b); return s.basis === 'working' ? 'Working days — weekend ' + s.weekendLabel.toLowerCase() + (s.holidays.length ? ', public holidays excluded' : '') : 'Calendar days'; }
+  function basisLabel(b) { var s = paySettings(b); return s.basis === 'working' ? 'Working days — weekend ' + s.weekendLabel.toLowerCase() + (s.holidays.length ? ', public holidays excluded' : '') : (s.basis === 'fixed30' ? 'Fixed 30 days' : 'Calendar days'); }
   function truthy(v) { return v === true || v === 1 || /^(true|yes|on|1)$/i.test(String(v == null ? '' : v)); }
   function isBasicName(nm) { return /\bbasic\b/i.test(String(nm || '')); }
-  /** 'basic' | 'prorata' | '' for a payslip item */
+  /** an earnings item in the absent deduction basis (Basic, plus the allowances chosen in Settings → Payroll) */
+  function inAbsentBasis(b, nm) { if (isBasicName(nm)) return true; var s = paySettings(b); return s.absentBasis === 'chosen' && s.absentItems.indexOf(lc(nm)) >= 0; }
+  /** 'basic' (in the absent deduction basis) | 'prorata' | '' for a payslip item */
   function proKind(b, sec, itemId, name) {
     if (sec !== 'earnings') return ''; var it = findItem(b, sec, itemId, name), nm = it ? it.name : (name || '');
-    if (isBasicName(nm)) return 'basic'; return it && truthy(it.proRata) ? 'prorata' : '';
+    if (inAbsentBasis(b, nm)) return 'basic'; return it && truthy(it.proRata) ? 'prorata' : '';
   }
+  /* FIX_SPEC_5 A3 — two kinds of deduction items: 'salary' (absent, late, fines: reduces the salary cost) and
+     'recovery' (loan / advance repayment: credits a balance-sheet account per employee, lowers net pay only).
+     An item saved before the Type existed is a recovery when its account is an asset. */
+  function rootOfAcct(b, n) { try { return G('acctRoot')(b, n); } catch (e) { return ''; } }
+  function dedType(b, it) { if (!it) return 'salary'; if (it.type === 'recovery' || it.type === 'salary') return it.type;
+    var n = acct(b, it.account); return n && !n.control && rootOfAcct(b, n) === 'assets' ? 'recovery' : 'salary'; }
+  function isRecoveryAcct(b, n) { return !!n && !n.control && rootOfAcct(b, n) === 'assets'; }
   function dayTxt(n) { n = r2(n); return n + ' day' + (n === 1 ? '' : 's'); }
   /** '' when 0 <= absent <= total, else the problem */
   function daysError(total, absent) {
@@ -126,17 +146,20 @@
       {total, absent, worked, on, rows:[{kind, full, earned}], basic, basicEarned, absentDed, absentAcct, basicName} */
   function daysCalc(b, entries, total, absent) {
     var t = num(total), a = num(absent), on = t > 0 && a > 0 && a <= t;
-    var o = { total: t > 0 ? r2(t) : 0, absent: on ? r2(a) : 0, worked: t > 0 ? r2(on ? t - a : t) : 0, on: on, rows: [], basic: 0, basicEarned: 0, absentDed: 0, absentAcct: '', basicName: '' };
+    var o = { total: t > 0 ? r2(t) : 0, absent: on ? r2(a) : 0, worked: t > 0 ? r2(on ? t - a : t) : 0, on: on, rows: [], basic: 0, basicEarned: 0, absentDed: 0, absentAcct: '', basicName: '' }, names = [];
     (entries || []).forEach(function (e) {
       var k = e.kind != null ? e.kind : proKind(b, e.sec || 'earnings', e.itemId, e.item), full = r2(num(e.amount)), earned = full;
       if (on && k === 'prorata') earned = r2(full * o.worked / t);
-      if (k === 'basic' && full) { o.basic += full; if (!o.basicName) { var it = b ? findItem(b, 'earnings', e.itemId, e.item) : null; o.absentAcct = it && !blank(it.account) ? String(it.account) : ''; o.basicName = it ? it.name : (e.item || 'Basic salary'); } }
+      if (k === 'basic' && full) { o.basic += full; var it = b ? findItem(b, 'earnings', e.itemId, e.item) : null, nm = it ? it.name : (e.item || 'Basic salary');
+        if (!names.length) o.absentAcct = it && !blank(it.account) ? String(it.account) : ''; if (names.indexOf(nm) < 0) names.push(nm); }
       o.rows.push({ kind: k, full: full, earned: earned });
     });
-    o.basic = r2(o.basic); o.basicEarned = on ? r2(o.basic * o.worked / t) : o.basic; o.absentDed = r2(o.basic - o.basicEarned);
+    /* FIX_SPEC_5 A3: Absent deduction = (sum of the basis items) ÷ total days × days absent */
+    o.basicName = names.length > 1 ? '(' + names.join(' + ') + ')' : (names[0] || '');
+    o.basic = r2(o.basic); o.absentDed = on ? r2(o.basic * o.absent / t) : 0; o.basicEarned = r2(o.basic - o.absentDed);
     return o;
   }
-  /** the "Absent deduction" payslip line (credits the basic salary expense account) */
+  /** the "Absent deduction" payslip line (a salary deduction: credits the basic salary expense account) */
   function absentLine(b, c) {
     var n = acct(b, c.absentAcct), a = c.absentDed;
     var o = { ptype: 'Deduction', item: 'Absent deduction', itemId: '', absent: true, desc: dayTxt(c.absent) + ' absent × ' + (c.basicName || 'Basic salary') + ' ' + money(c.basic) + ' ÷ ' + r2(c.total) + ' days',
@@ -162,6 +185,9 @@
 
   /* -------------------------------------------------------------------- runs */
   function runs(b) { return recs(b, 'payroll').filter(Boolean); }
+  /* FIX_SPEC_4 #3: a payslip is linked to its run by payrollRunId (payrollRun is kept, older data and code read it) */
+  function runIdOf(p) { if (!p) return null; if (p.payrollRunId != null && p.payrollRunId !== '') return p.payrollRunId; return p.payrollRun != null && p.payrollRun !== '' ? p.payrollRun : null; }
+  function linkTo(p, run) { p.payrollRunId = run.id; p.payrollRun = run.id; }
   function runById(b, id) { return runs(b).filter(function (r) { return String(r.id) === String(id); })[0] || null; }
   function runForMonth(b, ym, exceptId) { return runs(b).filter(function (r) { return r.month === ym && String(r.id) !== String(exceptId); })[0] || null; }
   function lastRun(b) { return runs(b).slice().sort(function (x, y) { return String(y.month).localeCompare(String(x.month)) || (num(y.id) - num(x.id)); })[0] || null; }
@@ -182,15 +208,17 @@
   function addCol(b, d, sec, itemId, item) {
     var it = findItem(b, sec, itemId, item), id = it ? String(it.id) : (blank(itemId) ? '' : String(itemId)), nm = it ? it.name : (item || '');
     var k = colKey(sec, id, nm);
-    if (!d.cols.some(function (c) { return c.key === k; })) d.cols.push({ key: k, sec: sec, itemId: id, item: nm, pro: proKind(b, sec, id, nm) });
+    if (!d.cols.some(function (c) { return c.key === k; })) { var col = { key: k, sec: sec, itemId: id, item: nm, pro: proKind(b, sec, id, nm) }; if (sec === 'deductions') col.rec = dedType(b, it) === 'recovery'; d.cols.push(col); }
     return k;
   }
   function colKind(c) { return c.pro != null ? c.pro : (c.sec === 'earnings' && isBasicName(c.item) ? 'basic' : ''); }
+  /** a Recovery (loan / advance) deduction column */
+  function isRec(c) { return !!c && c.sec === 'deductions' && c.rec === true; }
   /** fill in what older drafts lack: total days of the month and each column's pro-rata kind */
   function ensureDays(b, d) {
     if (!d) return d;
     if (d.daysTotal == null || d.daysTotal === '') { d.daysTotal = periodDays(b, d.month); d.daysAuto = true; }
-    (d.cols || []).forEach(function (c) { c.pro = proKind(b, c.sec, c.itemId, c.item); });
+    (d.cols || []).forEach(function (c) { c.pro = proKind(b, c.sec, c.itemId, c.item); if (c.sec === 'deductions') c.rec = dedType(b, findItem(b, c.sec, c.itemId, c.item)) === 'recovery'; });
     return d;
   }
 
@@ -199,16 +227,21 @@
     if (!run) return null;
     if (run.state === 'draft') return { cols: clone(run.cols || []), rows: clone(run.rows || []) };
     var d = { cols: [], rows: [] };
-    recs(b, 'payslips').filter(function (p) { return p && String(p.payrollRun) === String(run.id); }).forEach(function (p) {
-      var row = { employee: p.employee || p.empName || '', include: true, amt: {}, daysAbsent: num(p.daysAbsent) };
-      /* monthly amounts: a pro-rated line gives back its full amount; the Absent deduction is derived, not an item */
-      (p.lines || []).filter(Boolean).forEach(function (l) { if (l.absent) return; var a = l.proRata && l.fullAmount != null && l.fullAmount !== '' ? Math.abs(num(l.fullAmount)) : lineAmt(l); if (!a) return;
-        var k = addCol(b, d, lineSec(l), l.itemId, l.item || l.desc || l.description); row.amt[k] = r2((row.amt[k] || 0) + a); });
-      d.rows.push(row); });
+    runPayslips(b, run).forEach(function (p) { d.rows.push(rowFromPayslip(b, d, p)); });
+    sortCols(b, d);
     return d;
   }
+  /** a grid row from a payslip (columns added to d as needed) */
+  function rowFromPayslip(b, d, p) {
+    var e = empByName(b, p.employee || p.empName || '');
+    var row = { employee: p.employee || p.empName || '', code: (e && e.code) || p.empCode || '', include: true, amt: {}, daysAbsent: num(p.daysAbsent), payslipId: p.id };
+    /* monthly amounts: a pro-rated line gives back its full amount; the Absent deduction is derived, not an item */
+    (p.lines || []).filter(Boolean).forEach(function (l) { if (l.absent) return; var a = l.proRata && l.fullAmount != null && l.fullAmount !== '' ? Math.abs(num(l.fullAmount)) : lineAmt(l); if (!a) return;
+      var k = addCol(b, d, lineSec(l), l.itemId, l.item || l.desc || l.description); row.amt[k] = r2((row.amt[k] || 0) + a); });
+    return row;
+  }
   function otherPayslip(b, name, ym, runId) {
-    return recs(b, 'payslips').filter(function (p) { return p && (p.employee || p.empName) === name && ymOf(p.date || p.issueDate) === ym && String(p.payrollRun || '') !== String(runId || 'x') && !(p.payrollRun && runById(b, p.payrollRun)); })[0] || null;
+    return recs(b, 'payslips').filter(function (p) { var rid = runIdOf(p); return p && (p.employee || p.empName) === name && ymOf(p.date || p.issueDate) === ym && String(rid == null ? '' : rid) !== String(runId || 'x') && !(rid != null && runById(b, rid)); })[0] || null;
   }
 
   /** a new draft for a month: every active employee from the pay setup, or copied from a run (opts.copyFrom) */
@@ -221,7 +254,7 @@
       var copied = src && src.rows.filter(function (r) { return r.employee === e.name; })[0];
       if (copied) { src.cols.forEach(function (c) { var v = num(copied.amt && copied.amt[c.key]); if (v) row.amt[addCol(b, d, c.sec, c.itemId, c.item)] = v; }); if (copied.include === false) row.include = false; }
       else { var s = paySetup(e); SECS.forEach(function (x) { s[x[0]].forEach(function (l) { if (!l.amount) return; var k = addCol(b, d, x[0], l.itemId, l.item); row.amt[k] = r2((row.amt[k] || 0) + l.amount); }); }); }
-      if (!Object.keys(row.amt).length) { row.include = false; row.note = 'No pay setup — enter amounts here, or add a pay setup on the employee.'; }
+      if (!Object.keys(row.amt).length) row.include = false;   /* FIX_SPEC_5 A2: no message — the row starts unticked */
       d.rows.push(row);
     });
     if (!d.cols.length) { var bs = findItem(b, 'earnings', null, 'Basic salary') || items(b, 'earnings')[0]; if (bs) addCol(b, d, 'earnings', bs.id, bs.name); }
@@ -243,20 +276,52 @@
   }
   /** {earnings, deductions, contributions, net, absentDed, total, absent, worked, col:{key: amount after pro-rata}} */
   function rowTotals(d, row) {
-    var t = { earnings: 0, deductions: 0, contributions: 0, col: {} }, x = rowCalc(d, row), i = 0;
-    (d.cols || []).forEach(function (c) { var v = num(row.amt && row.amt[c.key]); if (c.sec === 'earnings') v = x.rows[i++].earned; t.col[c.key] = v; t[c.sec] += v; });
-    t.deductions += x.absentDed;
+    var t = { earnings: 0, deductions: 0, contributions: 0, salDed: 0, recov: 0, col: {} }, x = rowCalc(d, row), i = 0;
+    (d.cols || []).forEach(function (c) { var v = num(row.amt && row.amt[c.key]); if (c.sec === 'earnings') v = x.rows[i++].earned; t.col[c.key] = v; t[c.sec] += v;
+      if (c.sec === 'deductions') { if (isRec(c)) t.recov += v; else t.salDed += v; } });
+    t.deductions += x.absentDed; t.salDed += x.absentDed;
     t.earnings = r2(t.earnings); t.deductions = r2(t.deductions); t.contributions = r2(t.contributions); t.net = r2(t.earnings - t.deductions);
+    /* FIX_SPEC_5 A3: Salary cost = gross − salary deductions (the expense); Net pay = salary cost − recoveries */
+    t.salDed = r2(t.salDed); t.recov = r2(t.recov); t.cost = r2(t.earnings - t.salDed);
     t.absentDed = x.absentDed; t.total = x.total; t.absent = x.absent; t.worked = x.worked; return t;
   }
+  var SUMK = ['earnings', 'deductions', 'contributions', 'net', 'absentDed', 'salDed', 'recov', 'cost', 'absent', 'worked'];
   function draftTotals(d) {
-    var t = { employees: 0, earnings: 0, deductions: 0, contributions: 0, net: 0, absentDed: 0, absent: 0, worked: 0 };
-    (d.rows || []).forEach(function (row) { if (!row.include) return; var x = rowTotals(d, row); t.employees++; t.earnings += x.earnings; t.deductions += x.deductions; t.contributions += x.contributions; t.net += x.net; t.absentDed += x.absentDed; t.absent += x.absent;
+    var t = { employees: 0 }; SUMK.forEach(function (k) { t[k] = 0; });
+    (d.rows || []).forEach(function (row) { if (!row.include) return; var x = rowTotals(d, row); t.employees++;
+      ['earnings', 'deductions', 'contributions', 'net', 'absentDed', 'salDed', 'recov', 'cost', 'absent'].forEach(function (k) { t[k] += x[k]; });
       if (!daysError(d.daysTotal, row.daysAbsent)) t.worked += x.total ? x.worked : 0; });
-    ['earnings', 'deductions', 'contributions', 'net', 'absentDed', 'absent', 'worked'].forEach(function (k) { t[k] = r2(t[k]); }); return t;
+    SUMK.forEach(function (k) { t[k] = r2(t[k]); }); return t;
   }
 
-  function validate(b, d) {
+  /* ---------------------------- FIX_SPEC_5 A4/A5 — loan outstanding and employee balance
+     Read from the general ledger, leaving out this run's own journal entry (or this payslip's
+     posting), so Create, Edit and the payslip print all see the balance BEFORE this payroll. */
+  function excl(L, o) { return (o.runId != null && L.src === 'payroll' && String(L.id) === String(o.runId)) || (o.psId != null && L.src === 'payslips' && String(L.id) === String(o.psId)); }
+  /** Dr − Cr of an account for one sub-account: undated (starting balances) plus dated lines up to o.to (o.before: strictly before) */
+  function glSub(b, acctId, sub, o) { var g = glOf(b), s = 0; if (!g || blank(acctId)) return 0;
+    g.lines.forEach(function (L) { if (L.acct !== acctId || L.sub !== sub || excl(L, o)) return;
+      if (L.date && o.before && L.date >= o.before) return; if (L.date && o.to && L.date > o.to) return; s += L.debit - L.credit; });
+    return r2(s); }
+  /** the employee's loan / advance outstanding on a recovery account up to the payroll date, before this run (debit balance) */
+  function loanOs(b, acctId, emp, date, o) { return glSub(b, acctId, emp, Object.assign({ to: date }, o || {})); }
+  /** Employee clearing account for the employee up to the day before the payroll date: + payable / − overpaid */
+  function empBefore(b, emp, date, o) { var id = empAcctId(b); return id ? -glSub(b, id, emp, Object.assign({ before: date }, o || {})) : 0; }
+  function balTxt(v) { return v > 0.004 ? 'Payable ' + money(v) : (v < -0.004 ? 'Overpaid ' + money(-v) : 'Settled'); }
+  function balCls(v) { return v > 0.004 ? 'pr-bal-pay' : (v < -0.004 ? 'pr-bal-over' : 'pr-bal-zero'); }
+  /** the account of a recovery column (its Payslip Item's account) */
+  function recAcct(b, c) { var it = findItem(b, c.sec, c.itemId, c.item); return it ? acct(b, it.account) : null; }
+  /** a row's recoveries per account: [{acct, name, amount, os, over}] */
+  function rowRecov(b, d, row) {
+    var by = {}, out = [];
+    (d.cols || []).forEach(function (c) { if (!isRec(c)) return; var a = num(row.amt && row.amt[c.key]); var n = recAcct(b, c); var k = n ? n.id : '';
+      if (!by[k]) { by[k] = { acct: n, name: n ? n.name : '', amount: 0, cols: [] }; out.push(by[k]); } by[k].amount = r2(by[k].amount + a); by[k].cols.push(c.key); });
+    out.forEach(function (x) { x.os = x.acct ? loanOs(b, x.acct.id, row.employee, d.date, { runId: d.id }) : 0; x.over = x.amount > 0.004 && x.amount - x.os > 0.005; });
+    return out;
+  }
+
+  function validate(b, d) { return withGl(b, function () { return validate0(b, d); }); }
+  function validate0(b, d) {
     var E = []; ensureDays(b, d);
     if (!validYm(d.month)) E.push('Choose the payroll month.');
     if (!d.date) E.push('Enter the payroll date.');
@@ -272,7 +337,10 @@
     var used = {}; inc.forEach(function (r) { d.cols.forEach(function (c) { if (num(r.amt && r.amt[c.key])) used[c.key] = c; }); });
     Object.keys(used).forEach(function (k) { var c = used[k], it = findItem(b, c.sec, c.itemId, c.item);
       if (!it) { E.push('"' + c.item + '" is not a ' + secDef(c.sec)[2].toLowerCase() + ' item any more — add it in Settings → Payslip Items or clear the column.'); return; }
-      if (c.sec === 'contributions' && (!acct(b, it.liability) || !acct(b, it.expense))) E.push('Contribution item "' + it.name + '" needs an expense and a liability account (Settings → Payslip Items).'); });
+      if (c.sec === 'contributions' && (!acct(b, it.liability) || !acct(b, it.expense))) E.push('Contribution item "' + it.name + '" needs an expense and a liability account (Settings → Payslip Items).');
+      if (c.sec === 'deductions' && it.type === 'recovery' && !isRecoveryAcct(b, acct(b, it.account))) E.push('Recovery item "' + it.name + '" must be mapped to an asset or receivable account, such as Employee loans or Salary advances (Settings → Payslip Items).'); });
+    /* FIX_SPEC_5 A4: a recovery may not be more than the employee's outstanding loan / advance */
+    inc.forEach(function (r) { rowRecov(b, d, r).forEach(function (x) { if (x.over) E.push(r.employee + ': recovery of ' + money(x.amount) + ' is more than the ' + money(x.os) + ' outstanding on ' + (x.name || 'the loan / advance account') + '.'); }); });
     return E;
   }
 
@@ -289,6 +357,7 @@
         account: n ? n.id : '', accountName: n ? n.name : '', amount: a, net: a, amountNoTax: a, totalWithTax: a, taxAmt: 0, qty: '', price: '' };
       o.description = o.desc;
       if (pro) { o.proRata = true; o.fullAmount = full; }
+      if (c.sec === 'deductions' && dedType(b, it) === 'recovery') o.recovery = true;
       if (c.sec === 'contributions') { var la = acct(b, it && it.liability); o.liabilityAccount = la ? la.id : ''; o.liabilityAccountName = la ? la.name : ''; }
       out.push(o); });
     if (x.absentDed > 0) out.push(absentLine(b, x));
@@ -326,13 +395,14 @@
       var rec = { date: d.date, issueDate: d.date, reference: nextRef(b, 'payslips'), employee: row.employee, empName: row.employee, empCode: e.code || '',
         description: d.description || ('Payroll ' + monthLabel(d.month)), narration: d.description || ('Payroll ' + monthLabel(d.month)),
         lines: lines, earnings: t.earnings, deductions: t.deductions, contributions: t.contributions, netPay: t.net, total: t.net, subtotal: t.net, amount: t.net, tax: 0, balanceDue: t.net,
-        payrollRun: run.id };
-      if (t.total > 0) { rec.daysTotal = t.total; rec.daysAbsent = t.absent; rec.daysWorked = t.worked; rec.daysBasis = paySettings(b).basis; }
+        payrollRun: run.id, payrollRunId: run.id };
+      if (t.total > 0) { rec.daysTotal = t.total; rec.daysAbsent = t.absent; rec.daysWorked = t.worked; rec.daysBasis = d.daysAuto === false ? 'manual' : paySettings(b).basis; }
       rec.id = newId(b); rec.uuid = uuid(); ps.push(rec); row.payslipId = rec.id; made.push(rec);
     });
     Object.assign(run, snapshot(d), { state: 'posted', posted: today() }); d.id = run.id;
+    run.history = run.history || []; hist(run, 'Run', 'Payroll run created', '', made.length + ' payslip' + (made.length === 1 ? '' : 's'));
     afterChange(b);
-    made.forEach(function (rec) { logAct(b, 'create', 'payslips', rec, null); });
+    P._busy++; try { made.forEach(function (rec) { logAct(b, 'create', 'payslips', rec, null); }); } finally { P._busy--; }
     logAct(b, before ? 'update' : 'create', 'payroll', run, before);
     return { run: run, payslips: made };
   }
@@ -341,7 +411,7 @@
   function empAcctId(b) { try { var n = GL.sysAcct(b, 'employee clearing account', false); return n ? n.id : null; } catch (e) { return null; } }
   function isEmpLine(b, l, empId) { if (!l || blank(l.sub)) return false; if (empId && String(l.account) === String(empId)) return true; return /^employee clearing account$/i.test(String(l.accountName || l.accounts || '')); }
   function runPayments(b, run) { return recs(b, 'payments').filter(function (p) { return p && String(p.payrollRun) === String(run.id); }); }
-  function runPayslips(b, run) { return recs(b, 'payslips').filter(function (p) { return p && String(p.payrollRun) === String(run.id); }); }
+  function runPayslips(b, run) { return recs(b, 'payslips').filter(function (p) { var rid = runIdOf(p); return p && rid != null && String(rid) === String(run.id); }); }
   /** a payslip's days: {daysTotal, daysAbsent, daysWorked} (nulls on a payslip saved before the fields existed; absent 0) */
   function psDays(p) { var t = p && p.daysTotal != null && p.daysTotal !== '' ? num(p.daysTotal) : null, a = num(p && p.daysAbsent);
     return { daysTotal: t, daysAbsent: a, daysWorked: t == null ? null : (p.daysWorked != null && p.daysWorked !== '' ? num(p.daysWorked) : r2(t - a)) }; }
@@ -413,13 +483,318 @@
     var pays = runPayments(b, run); if (pays.length) return { errors: ['This run has ' + pays.length + ' salary payment' + (pays.length === 1 ? '' : 's') + '. Delete ' + (pays.length === 1 ? 'it' : 'them') + ' from Payments first.'] };
     var lk = (b && b.lockDate) || ''; if (lk && run.state === 'posted' && run.date && run.date <= lk) return { errors: ['This run is dated on or before the lock date (' + fmtD(lk) + ').'] };
     var gone = runPayslips(b, run).map(clone);
-    b.records.payslips = recs(b, 'payslips').filter(function (p) { return !(p && String(p.payrollRun) === String(run.id)); });
+    b.records.payslips = recs(b, 'payslips').filter(function (p) { var rid = runIdOf(p); return !(p && rid != null && String(rid) === String(run.id)); });
     b.records.payroll = runs(b).filter(function (r) { return String(r.id) !== String(run.id); });
     afterChange(b);
     if (gone.length) logAct(b, 'delete', 'payslips', null, null, { bulkDeleted: gone, label: 'Payroll ' + monthLabel(run.month) + ' — ' + gone.length + ' payslips deleted' });
     logAct(b, 'delete', 'payroll', run, clone(run));
     return { deleted: gone.length };
   }
+
+  /* =====================================================================================
+     FIX_SPEC_4 #3 — edit from the run OR the payslip, everything in sync.
+     - Payslips are the source of truth, linked by payrollRunId. Run figures are read from them.
+     - One journal entry per run (GL source 'payroll', below): Dr each expense account, Cr each
+       deduction / contribution liability, Cr Employee clearing account per employee (net pay).
+       js/ledger-engine.js skips the payslips of a posted run, so nothing posts twice, and the
+       entry reads the CURRENT Payslip Items accounts, so a mapping change re-posts every run.
+     - saveRunEdit: the run's Edit (month, date, description, employee grid, add / remove) is
+       built on a copy of the records, validated, then saved in one go.
+     - onPayslipSaved / onPayslipDeleted: a payslip edited on its own updates its run (moved to
+       the run of its new month, created when missing), history on both.
+     - reconcile / rebuild: the ✓ / ⚠ badge and its Rebuild; migrate: the one-time data fix.
+     ===================================================================================== */
+  P._busy = 0; P._now = null;
+  function nowIso() { return P._now || new Date().toISOString(); }
+  function who() { var A = app();
+    try { var u = A && typeof A.currentUser === 'function' ? A.currentUser() : null; if (u && (u.name || u.username)) return String(u.name || u.username); } catch (e) {}
+    try { var n = A._userName(); if (n) return String(n); } catch (e) {} return ''; }
+  /** a History entry on a run or payslip: old -> new, where (Run / Payslip), user, time */
+  function hist(rec, where, what, from, to) { if (!rec) return; rec.history = rec.history || [];
+    rec.history.push({ at: nowIso(), user: who(), where: where, what: what, from: from == null ? '' : String(from), to: to == null ? '' : String(to) });
+    if (rec.history.length > 500) rec.history.splice(0, rec.history.length - 500); }
+  function empOf(p) { return p ? (p.employee || p.empName || '') : ''; }
+  function psById(b, id) { return recs(b, 'payslips').filter(function (p) { return p && String(p.id) === String(id); })[0] || null; }
+  function psRef(p) { return 'Payslip ' + (p.reference || '') + (empOf(p) ? ' (' + empOf(p) + ')' : ''); }
+  function fmtV(t, v) { if (v === '' || v == null) return ''; if (t === 'money') return money(v); if (t === 'date') return fmtD(v); return String(v); }
+  /** what a payslip says, for the History: header fields and the monthly amount of each item */
+  function psFacts(p) {
+    var o = { 'Date': ['date', String(p.date || p.issueDate || '').slice(0, 10)], 'Employee': ['text', empOf(p)], 'Description': ['text', p.description || p.narration || ''],
+      'Total days': ['days', p.daysTotal == null || p.daysTotal === '' ? '' : r2(num(p.daysTotal))], 'Days absent': ['days', r2(num(p.daysAbsent))] };
+    (p.lines || []).filter(Boolean).forEach(function (l) { var nm = l.absent ? 'Absent deduction' : (l.item || l.desc || l.description || 'Line');
+      var a = l.proRata && l.fullAmount != null && l.fullAmount !== '' ? Math.abs(num(l.fullAmount)) : lineAmt(l); o[nm] = ['money', r2((o[nm] ? o[nm][1] : 0) + a)]; });
+    o['Net pay'] = ['money', r2(netOf(p))];
+    return o;
+  }
+  function runFacts(run) { return { 'Month': ['text', monthLabel(run.month)], 'Payroll date': ['date', run.date || ''], 'Description': ['text', run.description || ''] }; }
+  function diff(a, c) { var out = [], keys = Object.keys(a); Object.keys(c).forEach(function (k) { if (keys.indexOf(k) < 0) keys.push(k); });
+    keys.forEach(function (k) { var x = a[k], y = c[k], t = (x || y)[0], z = t === 'money' ? 0 : '', xv = x ? x[1] : z, yv = y ? y[1] : z;
+      var ch = (t === 'money' || t === 'days') ? ((xv === '') !== (yv === '') || Math.abs(num(xv) - num(yv)) > 0.004) : String(xv) !== String(yv);
+      if (ch) out.push({ what: k, from: fmtV(t, xv), to: fmtV(t, yv) }); });
+    return out; }
+  /** what each employee was paid by the run's salary payments {employee: amount} */
+  function paidBy(b, run) { var empId = empAcctId(b), o = {};
+    runPayments(b, run).forEach(function (p) { (p.lines || []).filter(Boolean).forEach(function (l) { if (!isEmpLine(b, l, empId)) return; o[l.sub] = r2((o[l.sub] || 0) + num(l.amount != null && l.amount !== '' ? l.amount : l.net)); }); });
+    return o; }
+  /** total days of a run's period: Settings → Payroll for the actual month, unless entered by hand */
+  function runDays(b, run) { return run.daysAuto === false && run.daysTotal != null && run.daysTotal !== '' ? r2(num(run.daysTotal)) : periodDays(b, run.month); }
+  /** keep the run record's grid copy in step with its payslips (figures never read it for a posted run) */
+  function snapRun(b, run) { if (!run || run.state !== 'posted') return; var d = draftFromRun(b, run);
+    run.cols = d.cols; run.rows = d.rows.map(function (r) { return { employee: r.employee, code: r.code || '', include: true, note: '', amt: r.amt, daysAbsent: r2(num(r.daysAbsent)), payslipId: r.payslipId }; });
+    if (run.daysAuto !== false) run.daysTotal = periodDays(b, run.month); }
+  /** lines, totals and days of a payslip from a grid row */
+  function setLines(b, d, row, p) {
+    var lines = payslipLines(b, d, row), t = rowTotals(d, row);
+    p.lines = lines; p.earnings = t.earnings; p.deductions = t.deductions; p.contributions = t.contributions; p.netPay = p.total = p.subtotal = p.amount = p.balanceDue = t.net; p.tax = 0;
+    if (t.total > 0) { p.daysTotal = t.total; p.daysAbsent = t.absent; p.daysWorked = t.worked; p.daysBasis = d.daysAuto === false ? 'manual' : paySettings(b).basis; }
+    else { delete p.daysTotal; delete p.daysAbsent; delete p.daysWorked; delete p.daysBasis; }
+  }
+  /** write a payslip from a grid row; keeps its id, reference and custom fields. oldDesc: the run's old description
+      (a payslip whose description was changed by hand keeps it) */
+  function writePayslip(b, d, row, p, run, oldDesc) {
+    var e = empByName(b, row.employee) || {}, desc = d.description || ('Payroll ' + monthLabel(d.month));
+    p.date = p.issueDate = d.date; p.employee = p.empName = row.employee; p.empCode = e.code || p.empCode || '';
+    var cur = p.description || p.narration || ''; if (blank(cur) || cur === oldDesc || /^Payroll [A-Z][a-z]{2} \d{4}$/.test(cur)) p.description = p.narration = desc;
+    setLines(b, d, row, p); if (run) linkTo(p, run); return p;
+  }
+  /** a payslip's total days changed (month moved, Settings → Payroll): days absent are re-applied to its lines */
+  function fixDays(b, p, total) {
+    if (p.daysTotal == null || p.daysTotal === '' || p.daysBasis === 'manual' || Math.abs(num(p.daysTotal) - total) < 0.005) return false;
+    if (num(p.daysAbsent) > 0) { var d = { cols: [], rows: [], daysTotal: total, daysAuto: true, month: ymOf(p.date), date: p.date }; var row = rowFromPayslip(b, d, p); d.rows.push(row); setLines(b, d, row, p); }
+    else { p.daysTotal = total; p.daysWorked = total; p.daysAbsent = 0; p.daysBasis = paySettings(b).basis; }
+    return true;
+  }
+  function relinkPayment(pm, fromYm, toYm) { if (!pm) return; var a = monthLabel(fromYm), z = monthLabel(toYm); pm.payrollMonth = toYm;
+    var sw = function (s) { return typeof s === 'string' && a && s.indexOf(a) >= 0 ? s.split(a).join(z) : s; };
+    pm.description = sw(pm.description); pm.payee = sw(pm.payee); (pm.lines || []).forEach(function (l) { if (l) { l.desc = sw(l.desc); l.description = sw(l.description); } }); }
+  /** salary payments that paid only this employee follow its payslip to another run (when no payslip of the employee is left behind) */
+  function movePayments(b, from, to, emp) {
+    if (runPayslips(b, from).some(function (p) { return empOf(p) === emp; })) return 0; var empId = empAcctId(b), n = 0;
+    runPayments(b, from).forEach(function (pm) { var L = (pm.lines || []).filter(function (l) { return isEmpLine(b, l, empId); });
+      if (!L.length || L.some(function (l) { return l.sub !== emp; })) return;
+      pm.payrollRun = to.id; relinkPayment(pm, from.month, to.month); n++;
+      hist(from, 'Payslip', 'Salary payment ' + (pm.reference || '') + ' re-linked', monthLabel(from.month), monthLabel(to.month)); hist(to, 'Payslip', 'Salary payment ' + (pm.reference || '') + ' re-linked', monthLabel(from.month), monthLabel(to.month)); });
+    return n; }
+  function newRunFor(b, ym, date) {
+    var run = { id: newId(b), uuid: uuid(), created: today(), month: ym, date: date && ymOf(date) === ym ? date : monthEnd(ym), description: 'Payroll ' + monthLabel(ym),
+      daysTotal: periodDays(b, ym), daysAuto: true, cols: [], rows: [], state: 'posted', posted: today(), history: [] };
+    b.records = b.records || {}; b.records.payroll = (b.records.payroll || []).concat([run]);
+    hist(run, 'Payslip', 'Payroll run created', '', 'for a payslip dated in ' + monthLabel(ym));
+    return run; }
+  function postedRunFor(b, ym) { return runs(b).filter(function (r) { return r.month === ym && r.state === 'posted'; })[0] || null; }
+
+  /** the run's Edit: d = editDraft(...) changed on the page. Returns {run, added, removed, changed} or {errors} */
+  function editDraft(b, run) {
+    var src = draftFromRun(b, run);
+    var d = { id: run.id, editing: true, month: run.month, date: run.date, description: run.description || '', cols: src.cols, rows: src.rows, daysAuto: run.daysAuto !== false };
+    d.daysTotal = runDays(b, run);
+    d.rows.forEach(function (r) { r._touched = true; });
+    d.orig = clone(snapshot(d)); return d;
+  }
+  function rowSig(r) { var o = {}; Object.keys(r.amt || {}).sort().forEach(function (k) { var v = r2(num(r.amt[k])); if (v) o[k] = v; }); return JSON.stringify([o, r2(num(r.daysAbsent)), r.employee]); }
+  function saveRunEdit(b, d) {
+    var run0 = runById(b, d.id); if (!run0 || run0.state !== 'posted') return { errors: ['Payroll run not found.'] };
+    if (!validYm(d.month)) return { errors: ['Choose the payroll month.'] };
+    if (d.daysAuto !== false) d.daysTotal = periodDays(b, d.month);
+    var E = validate(b, d);
+    var lk = (b && b.lockDate) || ''; if (lk && run0.date && run0.date <= lk) E.push('This run is dated on or before the lock date (' + fmtD(lk) + ') and cannot be changed while the period is locked.');
+    var paid = paidBy(b, run0), keep = {};
+    d.rows.forEach(function (r) { if (r.include && r.payslipId != null) keep[String(r.payslipId)] = 1; });
+    runPayslips(b, run0).forEach(function (p) { if (keep[String(p.id)]) return; var e = empOf(p);
+      if ((paid[e] || 0) > 0.004 && !d.rows.some(function (r) { return r.include && r.employee === e; }))
+        E.push(e + ' was already paid ' + money(paid[e]) + ' for ' + monthLabel(run0.month) + '. Delete that salary payment first (Payments), or keep the employee in the run.'); });
+    if (E.length) return { errors: E };
+    var before = clone(run0), res = { added: 0, removed: 0, changed: 0, relinked: 0 };
+    P._busy++;
+    try {
+      /* everything is built on a copy of the records and saved at the end in one go */
+      var w = clone(b.records), wb = Object.assign({}, b, { records: w }), run = runById(wb, d.id), ob = {};
+      ((d.orig && d.orig.rows) || []).forEach(function (r) { if (r.payslipId != null) ob[String(r.payslipId)] = r; });
+      var rf0 = runFacts(run), oldMonth = run.month, oldDesc = run.description || '', oldDays = runDays(wb, run);
+      var hdrChanged = oldMonth !== d.month || run.date !== d.date || oldDesc !== (d.description || ''), daysChanged = Math.abs(num(d.daysTotal) - num(oldDays)) > 0.004;
+      var gone = runPayslips(wb, run).filter(function (p) { return !keep[String(p.id)]; });
+      if (gone.length) { var gid = {}; gone.forEach(function (p) { gid[String(p.id)] = 1; hist(run, 'Run', 'Employee removed', empOf(p) + ' — ' + psRef(p) + ', net ' + money(netOf(p)), ''); });
+        w.payslips = (w.payslips || []).filter(function (p) { return !(p && gid[String(p.id)]); }); res.removed = gone.length; }
+      Object.assign(run, { month: d.month, date: d.date, description: d.description || '', daysTotal: r2(num(d.daysTotal)), daysAuto: d.daysAuto !== false });
+      w.payslips = w.payslips || [];
+      d.rows.forEach(function (row) { if (!row.include) return;
+        var p = row.payslipId != null ? psById(wb, row.payslipId) : null;
+        if (p && String(runIdOf(p)) !== String(run.id)) p = null;
+        if (!p) { p = { reference: nextRef(wb, 'payslips') }; p.id = newId(wb); p.uuid = uuid(); w.payslips.push(p); writePayslip(wb, d, row, p, run, oldDesc); row.payslipId = p.id; res.added++;
+          hist(run, 'Run', 'Employee added', '', row.employee + ' — ' + psRef(p) + ', net ' + money(netOf(p))); hist(p, 'Run', 'Payslip created from the payroll run', '', monthLabel(d.month)); return; }
+        var o = ob[String(p.id)], same = !!o && rowSig(o) === rowSig(row);
+        if (same && !hdrChanged && !daysChanged) return;
+        var f0 = psFacts(p);
+        if (same && !daysChanged) { p.date = p.issueDate = d.date; var cd = p.description || p.narration || ''; if (blank(cd) || cd === oldDesc || /^Payroll [A-Z][a-z]{2} \d{4}$/.test(cd)) p.description = p.narration = d.description || ('Payroll ' + monthLabel(d.month)); }
+        else writePayslip(wb, d, row, p, run, oldDesc);
+        var ch = diff(f0, psFacts(p)); if (!ch.length) return; res.changed++;
+        ch.forEach(function (c) { hist(p, 'Run', c.what, c.from, c.to); hist(run, 'Run', empOf(p) + ' — ' + c.what, c.from, c.to); }); });
+      diff(rf0, runFacts(run)).forEach(function (c) { hist(run, 'Run', c.what, c.from, c.to); });
+      if (oldMonth !== d.month) runPayments(wb, run).forEach(function (pm) { relinkPayment(pm, oldMonth, d.month); res.relinked++; hist(run, 'Run', 'Salary payment ' + (pm.reference || '') + ' re-linked', monthLabel(oldMonth), monthLabel(d.month)); });
+      snapRun(wb, run); run.updated = today();
+      b.records.payroll = w.payroll; b.records.payslips = w.payslips; b.records.payments = w.payments;
+    } finally { P._busy--; }
+    afterChange(b);
+    var nr = runById(b, d.id); logAct(b, 'update', 'payroll', nr, before);
+    res.run = nr; res.figures = figures(b, nr); return res;
+  }
+
+  /** a payslip saved on its own (form, Form Designer, import): link it to the run of its month, history on both */
+  function onPayslipSaved(b, id, before) {
+    var p = psById(b, id); if (!p) return null;
+    var dt = String(p.date || p.issueDate || '').slice(0, 10), ym = ymOf(dt); if (!validYm(ym)) return null;
+    var rid = runIdOf(p), old = rid != null ? runById(b, rid) : null; if (old && old.state !== 'posted') old = null;
+    var target = old && old.month === ym ? old : postedRunFor(b, ym), created = false;
+    if (!target && old) { target = newRunFor(b, ym, dt); created = true; }
+    if (!target) return null;                       /* a payslip on its own, in a month without a payroll run */
+    P._busy++;
+    try {
+      linkTo(p, target);
+      if (dt !== target.date) { hist(p, 'Payslip', 'Date set to the payroll date', fmtD(dt), fmtD(target.date)); p.date = p.issueDate = target.date; }
+      fixDays(b, p, runDays(b, target));
+      var emp = empOf(p);
+      if (!before) { hist(p, 'Payslip', 'Payslip created', '', monthLabel(ym)); hist(target, 'Payslip', 'Employee added', '', emp + ' — ' + psRef(p) + ', net ' + money(netOf(p))); }
+      else diff(psFacts(before), psFacts(p)).forEach(function (c) { hist(p, 'Payslip', c.what, c.from, c.to); hist(target, 'Payslip', emp + ' — ' + c.what, c.from, c.to); });
+      if (old && old !== target) { hist(p, 'Payslip', 'Payroll run', monthLabel(old.month), monthLabel(target.month));
+        hist(old, 'Payslip', psRef(p) + ' moved to ' + monthLabel(target.month), emp, ''); hist(target, 'Payslip', psRef(p) + ' moved from ' + monthLabel(old.month), '', emp);
+        movePayments(b, old, target, emp); snapRun(b, old); }
+      snapRun(b, target);
+    } finally { P._busy--; }
+    afterChange(b);
+    return { run: target, created: created, moved: !!(old && old !== target) };
+  }
+  function onPayslipDeleted(b, before) {
+    var rid = runIdOf(before), run = rid != null ? runById(b, rid) : null; if (!run || run.state !== 'posted') return;
+    hist(run, 'Payslip', 'Employee removed', empOf(before) + ' — ' + psRef(before) + ', net ' + money(netOf(before)), ''); snapRun(b, run); afterChange(b);
+  }
+  /** '' or why a payslip may not be deleted: its salary was paid and no other payslip of the employee is left in the run */
+  function payslipDeleteBlock(b, p) {
+    var rid = runIdOf(p), run = rid != null ? runById(b, rid) : null; if (!run || run.state !== 'posted') return '';
+    var emp = empOf(p), paid = paidBy(b, run)[emp] || 0; if (paid <= 0.004) return '';
+    if (runPayslips(b, run).some(function (x) { return x.id !== p.id && empOf(x) === emp; })) return '';
+    return 'Salary of ' + money(paid) + ' was already paid to ' + emp + ' for ' + monthLabel(run.month) + '. Delete that salary payment first (Payments) — a payment must not point at a deleted payslip.';
+  }
+
+  /* ---------------------------------------------------------- run posting */
+  function acctNamed(b, name) { var t = lc(name); return ((b && b.coa) || []).filter(function (n) { return n && n.type === 'account' && lc(n.name) === t; })[0] || null; }
+  /** the accounts a payslip line posts to, from the CURRENT Payslip Items (the line's own account as the fallback) */
+  function lineAccts(b, p, l, sec) {
+    var it = findItem(b, sec, l.itemId, l.item);
+    if (l.absent) { var bl = (p.lines || []).filter(function (x) { return x && !x.absent && lineSec(x) === 'earnings' && proKind(b, 'earnings', x.itemId, x.item || x.desc) === 'basic'; })[0]; it = bl ? findItem(b, 'earnings', bl.itemId, bl.item) : null; }
+    var n = acct(b, it ? (sec === 'contributions' ? it.expense : it.account) : '') || acct(b, l.account) || (blank(l.accountName) ? null : acctNamed(b, l.accountName));
+    var o = { a: n ? n.id : '' };
+    if (sec === 'contributions') { var la = acct(b, it && it.liability) || acct(b, l.liabilityAccount) || (blank(l.liabilityAccountName) ? null : acctNamed(b, l.liabilityAccountName)); o.l = la ? la.id : ''; }
+    return o;
+  }
+  /** GL source: one journal entry per posted run, on the payroll date */
+  function runPosting(b, api) {
+    var out = [], recSet = {}; try { recSet = G('GL').recoveryAccts(b) || {}; } catch (e) { recSet = {}; }
+    runs(b).forEach(function (run) {
+      if (run.state !== 'posted') return; var ps = runPayslips(b, run); if (!ps.length) return;
+      var typ = 'Payroll — ' + monthLabel(run.month), agg = {}, order = [], loose = [];
+      var add = function (e) { if (!e || !e.v) return; if (!e.a) { loose.push(e); return; } var k = e.a + '|' + (e.s || '') + '|' + (e.v > 0 ? 'd' : 'c') + '|' + (e.t || '');
+        if (!agg[k]) { agg[k] = { a: e.a, s: e.s || '', v: 0, t: e.t }; order.push(k); } agg[k].v = r2(agg[k].v + e.v); };
+      var sal = function (v, t) { return { a: api.need('salaries'), v: v, t: t }; };
+      ps.forEach(function (p) { var emp = empOf(p), net = 0, lns = (p.lines || []).filter(Boolean);
+        if (!lns.length) { net = num(p.netPay != null && p.netPay !== '' ? p.netPay : p.total); add(sal(net, typ + ' — earnings')); }
+        lns.forEach(function (l) { var a = num(l.amount != null && l.amount !== '' ? l.amount : (l.net != null && l.net !== '' ? l.net : l.amountNoTax)); if (!a) return;
+          var sec = lineSec(l), x = lineAccts(b, p, l, sec), v = Math.abs(a), sub = blank(l.sub) ? '' : String(l.sub);
+          if (sec === 'contributions') { add(x.a ? api.acctEnt(x.a, sub, v, { t: typ + ' — employer contributions' }) : sal(v, typ + ' — employer contributions'));
+            add(x.l ? api.acctEnt(x.l, '', -v, { t: typ + ' — contributions payable' }) : { a: null, v: -v, why: 'contribution "' + (l.item || '') + '" has no liability account' }); return; }
+          if (sec === 'deductions') { net -= v;
+            /* FIX_SPEC_5 A6: a recovery credits the loan / advance account for the employee (never the P&L) */
+            var rec = !!x.a && recSet[x.a]; if (rec && !sub) sub = emp;
+            add(x.a ? api.acctEnt(x.a, sub, -v, { t: typ + (rec ? ' — recoveries' : ' — deductions') }) : sal(-v, typ + ' — deductions')); }
+          else { net += v; add(x.a ? api.acctEnt(x.a, sub, v, { t: typ + ' — earnings' }) : sal(v, typ + ' — earnings')); } });
+        net = r2(net);
+        if (net) add(blank(emp) ? { a: null, v: -net, why: 'payslip ' + (p.reference || '') + ' has no employee' } : { a: api.need('employee clearing account'), s: emp, v: -net, t: 'Net pay — ' + emp }); });
+      out.push({ meta: { src: 'payroll', id: run.id, date: run.date, ref: 'Payroll ' + monthLabel(run.month), type: typ, desc: run.description || typ },
+        ents: order.map(function (k) { return agg[k]; }).concat(loose) });
+    });
+    return out;
+  }
+  function registerPosting() { var GLx = G('GL'); try { if (GLx && typeof GLx.registerSource === 'function') GLx.registerSource('payroll', runPosting); } catch (e) {} }
+
+  /* ------------------------------------------------- reconciliation & rebuild */
+  var GLM = null;   /* the ledger, read once while a grid is drawn / checked (FIX_SPEC_5: balances per row) */
+  function glOf(b) { if (GLM && GLM.b === b) return GLM.g; var GLx = G('GL'); try { return GLx ? GLx.get(b) : null; } catch (e) { return null; } }
+  function withGl(b, fn) { if (GLM && GLM.b === b) return fn(); var prev = GLM; GLM = { b: b, g: null }; GLM.g = (function () { var GLx = G('GL'); try { return GLx ? GLx.get(b) : null; } catch (e) { return null; } })(); try { return fn(); } finally { GLM = prev; } }
+  /** {ok, reasons[]}: payslips = run, run = journal, net − payments = outstanding, Employee clearing = outstanding */
+  function reconcile(b, run) {
+    var R = { ok: true, reasons: [] }; if (!run || run.state !== 'posted') return R;
+    var add = function (m) { R.reasons.push(m); }, f = figures(b, run), ps = runPayslips(b, run), days = runDays(b, run), ids = {};
+    ps.forEach(function (p) { ids[String(p.id)] = 1; var n = netOf(p), lbl = psRef(p), dt = String(p.date || p.issueDate || '').slice(0, 10);
+      if (p.netPay != null && p.netPay !== '' && Math.abs(num(p.netPay) - n) > 0.005) add(lbl + ': saved net pay ' + money(p.netPay) + ' differs from its lines (' + money(n) + ').');
+      if (ymOf(dt) !== run.month) add(lbl + ' is dated ' + fmtD(dt) + ', outside ' + monthLabel(run.month) + '.');
+      else if (dt !== run.date) add(lbl + ' is dated ' + fmtD(dt) + ', not on the payroll date ' + fmtD(run.date) + '.');
+      if (p.daysTotal != null && p.daysTotal !== '' && p.daysBasis !== 'manual' && Math.abs(num(p.daysTotal) - days) > 0.004) add(lbl + ' counts ' + r2(num(p.daysTotal)) + ' days in the period; ' + monthLabel(run.month) + ' has ' + days + ' (Settings → Payroll).'); });
+    (run.rows || []).forEach(function (r) { if (r && r.include !== false && r.payslipId != null && !ids[String(r.payslipId)]) add(r.employee + ': the payslip of this run is missing (deleted or unlinked).'); });
+    var gl = glOf(b), empId = empAcctId(b);
+    if (gl && ps.length && Math.abs(f.net) > 0.004) {
+      var tx = gl.txs.filter(function (t) { return t.src === 'payroll' && String(t.id) === String(run.id); })[0];
+      if (!tx) add('No journal entry is posted for this run.');
+      else { var jn = r2(tx.lines.filter(function (L) { return empId && L.acct === empId; }).reduce(function (s, L) { return s + L.credit - L.debit; }, 0));
+        if (Math.abs(jn - f.net) > 0.005) add('The journal credits ' + money(jn) + ' to Employee clearing account; the run’s net pay is ' + money(f.net) + '.');
+        if (tx.date !== run.date) add('The journal is dated ' + fmtD(tx.date) + ', not on the payroll date ' + fmtD(run.date) + '.');
+        if (tx.problems && tx.problems.length) add('Journal: ' + tx.problems.join('; ') + '.'); } }
+    var pd = paidBy(b, run), tot = 0; Object.keys(pd).forEach(function (k) { tot += pd[k]; }); tot = r2(tot);
+    if (Math.abs(tot - f.paid) > 0.005) add('Salary payments of ' + money(tot) + ' are linked to this run, but only ' + money(f.paid) + ' is for employees with a payslip in it.');
+    if (Math.abs(r2(f.net - f.paid) - f.outstanding) > 0.005) add('Net pay − payments (' + money(r2(f.net - f.paid)) + ') ≠ Outstanding (' + money(f.outstanding) + ').');
+    if (gl && empId) { var pids = {}, cl = 0; f.payments.forEach(function (p) { pids[String(p.id)] = 1; });
+      gl.lines.forEach(function (L) { if (L.acct !== empId) return; if ((L.src === 'payroll' && String(L.id) === String(run.id)) || (L.src === 'payments' && pids[String(L.id)])) cl += L.credit - L.debit; });
+      cl = r2(cl); var exp = r2(f.net - tot);
+      if (Math.abs(cl - exp) > 0.005) add('Employee clearing account shows ' + money(cl) + ' owed for this run; Outstanding is ' + money(exp) + '.'); }
+    R.ok = !R.reasons.length; return R;
+  }
+  /** the whole Employee clearing account against the outstanding of every run (payslips / payments outside runs explain any difference) */
+  function clearingCheck(b) {
+    var empId = empAcctId(b), bal = 0, out = 0, gl = glOf(b);
+    if (gl && empId) gl.lines.forEach(function (L) { if (L.acct === empId) bal += L.credit - L.debit; });
+    runs(b).forEach(function (r) { if (r.state === 'posted') out += figures(b, r).outstanding; });
+    bal = r2(bal); out = r2(out); return { balance: bal, outstanding: out, diff: r2(bal - out) };
+  }
+  /** put a run right: links, dates, days, saved net pay, payment months; the journal is re-posted from the records */
+  function rebuild(b, runId, opts) {
+    opts = opts || {}; var run = runById(b, runId); if (!run || run.state !== 'posted') return { errors: ['Payroll run not found.'] };
+    var fixes = [], where = 'Run'; P._busy++;
+    try {
+      run.history = run.history || [];
+      (run.rows || []).forEach(function (r) { if (r.payslipId == null) return; var p = psById(b, r.payslipId); if (p && runIdOf(p) == null) { linkTo(p, run); fixes.push(psRef(p) + ' linked to the run'); } });
+      var days = runDays(b, run); if (run.daysAuto !== false) run.daysTotal = days;
+      runPayslips(b, run).slice().forEach(function (p) {
+        var dt = String(p.date || p.issueDate || '').slice(0, 10), ym = ymOf(dt), emp = empOf(p);
+        if (validYm(ym) && ym !== run.month) {
+          var t = postedRunFor(b, ym) || newRunFor(b, ym, dt); linkTo(p, t); if (dt !== t.date) p.date = p.issueDate = t.date; fixDays(b, p, runDays(b, t));
+          hist(run, where, psRef(p) + ' moved to ' + monthLabel(ym), emp, ''); hist(t, where, psRef(p) + ' moved from ' + monthLabel(run.month), '', emp); hist(p, where, 'Payroll run', monthLabel(run.month), monthLabel(ym));
+          movePayments(b, run, t, emp); snapRun(b, t); fixes.push(psRef(p) + ' moved to ' + monthLabel(ym)); return; }
+        if (dt !== run.date) { hist(p, where, 'Date', fmtD(dt), fmtD(run.date)); fixes.push(psRef(p) + ': date ' + fmtD(dt) + ' → ' + fmtD(run.date)); p.date = p.issueDate = run.date; }
+        var f0 = psFacts(p), d0 = p.daysTotal;
+        if (fixDays(b, p, days)) { diff(f0, psFacts(p)).forEach(function (c) { hist(p, where, c.what, c.from, c.to); }); fixes.push(psRef(p) + ': total days ' + d0 + ' → ' + days); }
+        var n = netOf(p); if (p.netPay != null && p.netPay !== '' && Math.abs(num(p.netPay) - n) > 0.005) { hist(p, where, 'Net pay (saved)', money(p.netPay), money(n)); fixes.push(psRef(p) + ': net pay ' + money(p.netPay) + ' → ' + money(n)); }
+        if (p.netPay == null || p.netPay === '' || Math.abs(num(p.netPay) - n) > 0.005) { p.netPay = p.total = p.subtotal = p.amount = p.balanceDue = n; } });
+      runPayments(b, run).forEach(function (pm) { if (pm.payrollMonth !== run.month) { var fm = pm.payrollMonth; relinkPayment(pm, fm || run.month, run.month); if (fm) fixes.push('Payment ' + (pm.reference || '') + ' re-linked to ' + monthLabel(run.month)); } });
+      snapRun(b, run);
+      if (fixes.length) hist(run, where, opts.label || 'Rebuild', '', fixes.join('; ')); else if (!opts.quiet) hist(run, where, opts.label || 'Rebuild', '', 'Nothing to fix — journal re-posted from the payslips');
+    } finally { P._busy--; }
+    afterChange(b);
+    return { fixes: fixes, run: run };
+  }
+  /** one-time, idempotent data fix on opening a business (FIX_SPEC_4 #3.8) */
+  var MIG = 1;
+  function migrate(b) {
+    if (!b || !b.records || num(b.payrollSync) >= MIG) return false;
+    var rs = runs(b).filter(function (r) { return r.state === 'posted'; });
+    if (rs.length) {
+      P._busy++;
+      try {
+        rs.forEach(function (run) { recs(b, 'payslips').forEach(function (p) { if (p && (p.payrollRunId == null || p.payrollRunId === '') && p.payrollRun != null && String(p.payrollRun) === String(run.id)) p.payrollRunId = run.id; }); });
+        rs.forEach(function (run) { rebuild(b, run.id, { quiet: true, label: 'Data update (FIX 4)' }); });
+      } finally { P._busy--; }
+    }
+    b.payrollSync = MIG; return true;
+  }
+  /** earnings items without an expense account (they post to Salaries) */
+  function itemsNoAccount(b) { return items(b, 'earnings').filter(function (it) { return !acct(b, it.account); }); }
 
   /** the month the next run is for: the month after the last run, else the current month */
   function nextMonth(b) { var l = lastRun(b); return l ? (l.state === 'draft' ? l.month : addMonths(l.month, 1)) : ymOf(today()); }
@@ -497,39 +872,98 @@
       (r.link && r.link.id ? '<a class="led-link" onclick="Payroll.ui.open(' + JSON.stringify(r.link.id) + ')">Open</a>' : (/not run yet/.test(r.title) ? '<a class="led-link" onclick="Payroll.ui.newRun(' + esc(JSON.stringify(r.id.replace('payroll-run-', ''))) + ')">Run now</a>' : '')) + '</div>'; }).join('') + '</div>';
   }
 
+  /* ---- FIX_SPEC_4 #3: reconciliation badge, Payslip Items warning, History, Run payroll dialog ---- */
+  function recBadge(rc, short) {
+    if (rc.ok) return '<span class="pr-rec pr-rec-ok" title="Payslips = run totals = journal; net pay − payments = Outstanding = Employee clearing account">✓ Reconciled</span>';
+    return '<span class="pr-rec pr-rec-bad" title="' + esc(rc.reasons.join('\n')) + '">⚠ Mismatch' + (short ? ' (' + rc.reasons.length + ')' : '') + '</span>';
+  }
+  function itemsWarn(b) {
+    var L = itemsNoAccount(b); if (!L.length) return '';
+    return '<div class="info-bar pr-warnbar" role="status"><b>Payslip Items without an expense account:</b> ' + L.map(function (x) { return esc(x.name); }).join(', ') +
+      '. Their amounts post to <i>Salaries</i> until you choose an account. <a class="led-link" onclick="Payroll.ui.items(\'earnings\')">Settings → Payslip Items</a></div>';
+  }
+  function clearingNote(b) {
+    if (!runs(b).some(function (r) { return r.state === 'posted'; })) return ''; var c = clearingCheck(b); if (Math.abs(c.diff) <= 0.005) return '';
+    return '<div class="info-bar pr-hint">Employee clearing account balance ' + money(c.balance) + ' · outstanding of all payroll runs ' + money(c.outstanding) + ' — the difference of ' + money(c.diff) + ' comes from payslips, payments or starting balances outside the payroll runs.</div>';
+  }
+  function histTable(H) {
+    H = (H || []).slice().reverse();
+    if (!H.length) return '<div class="reg-empty">No changes recorded yet.</div>';
+    return '<div class="tbl-scroll"><table class="reg-tbl pr-tbl pr-hist"><thead><tr><th>Date / time</th><th>User</th><th>Edited in</th><th>Change</th><th>Old value</th><th>New value</th></tr></thead><tbody>' +
+      H.map(function (h) { var t = String(h.at || ''); var when = t ? fmtD(t.slice(0, 10)) + ' ' + t.slice(11, 16) : '';
+        return '<tr><td class="nw">' + esc(when) + '</td><td>' + esc(h.user || '') + '</td><td>' + esc(h.where || '') + '</td><td>' + esc(h.what || '') + '</td><td class="m">' + esc(h.from || '') + '</td><td class="m">' + esc(h.to || '') + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+  }
+  function outLabel(v) { return v < -0.004 ? 'Recoverable (advance)' : 'Outstanding'; }
+  function outMoney(v) { return v < -0.004 ? money(-v) : money(v); }
+  /** the Run payroll dialog: month (any), payroll date (month end), description; a month that has a run is refused with a link */
+  function startHtml(b) {
+    var s = UI.startState || (UI.startState = startInit(b)), ex = validYm(s.month) ? runForMonth(b, s.month) : null;
+    var dup = ex ? '<div class="tf-errbox pr-err" role="alert">A payroll run for ' + esc(monthLabel(s.month)) + ' already exists' + (ex.state === 'draft' ? ' (draft)' : '') + '. <a class="led-link" onclick="Payroll.ui.open(' + esc(JSON.stringify(ex.id)) + ')">Open Payroll ' + esc(monthLabel(s.month)) + '</a></div>' : '';
+    return crumb([['Payroll', 'Payroll.ui.list()'], ['Run payroll']]) +
+      '<div class="pr-dlg-wrap"><div class="card pr-card pr-dlg" id="prStart" role="dialog" aria-label="Run payroll"><div class="pr-card-h"><h2>Run payroll</h2></div>' + errBox() + dup +
+      '<div class="pr-fields pr-dlg-f"><label class="pr-f"><span>Month / year</span><input class="pr-in" type="month" id="prStMonth" value="' + esc(s.month) + '" onchange="Payroll.ui.startHdr(\'month\',this.value)"></label>' +
+      '<label class="pr-f"><span>Payroll date</span><input class="pr-in" type="date" id="prStDate" value="' + esc(s.date) + '" onchange="Payroll.ui.startHdr(\'date\',this.value)"></label>' +
+      '<label class="pr-f pr-f-w"><span>Description</span><input class="pr-in pr-in-w" type="text" id="prStDesc" value="' + esc(s.description) + '" oninput="Payroll.ui.startHdr(\'description\',this.value)"></label></div>' +
+      '<div class="pr-sub">' + esc(monthLabel(s.month)) + ': ' + periodDays(b, s.month) + ' days in the period (' + esc(basisLabel(b)) + '). Every active employee is filled in from the pay setup on the next screen.</div>' +
+      '<div class="form-actions"><button class="btn btn-primary" onclick="Payroll.ui.startGo()"' + (ex ? ' disabled' : '') + '>Continue</button><button class="btn" onclick="Payroll.ui.list()">Cancel</button></div></div></div>';
+  }
+  /** under the payslip View: its payroll run and the History tab */
+  function payslipExtraHtml(b, p) {
+    var rid = runIdOf(p), run = rid != null ? runById(b, rid) : null, h = '<div class="pr-psx">';
+    if (run) { var f = figures(b, run), row = f.rows.filter(function (r) { return r.payslip && String(r.payslip.id) === String(p.id); })[0];
+      h += '<div class="info-bar pr-hint">Part of <a class="led-link" onclick="Payroll.ui.goRun(' + esc(JSON.stringify(run.id)) + ')">Payroll ' + esc(monthLabel(run.month)) + '</a> (' + esc(fmtD(run.date)) + '). ' +
+        'Changes here update the run, its journal entry, WPS and the employee balance.' + (row && row.paid > 0.004 ? ' Paid ' + money(row.paid) + ' · ' + outLabel(row.outstanding).toLowerCase() + ' ' + outMoney(row.outstanding) + '.' : '') + '</div>'; }
+    h += '<details class="pr-pshist"' + ((p.history || []).length ? '' : '') + '><summary>History' + ((p.history || []).length ? ' (' + p.history.length + ')' : '') + '</summary>' + histTable(p.history) + '</details></div>';
+    return h;
+  }
+  /** the payslip form warns when the salary was already paid */
+  function wrapPayslipForm() {
+    var F = G('SettingsFixesA'); F = F && F.ps; if (!F || F._payroll || typeof F.html !== 'function') return; F._payroll = 1;
+    var oh = F.html; F.html = function (b) { var h = oh.apply(this, arguments);
+      try { var t = F.state(), p = t && t.id != null ? psById(b, t.id) : null, rid = runIdOf(p), run = rid != null ? runById(b, rid) : null;
+        if (run && run.state === 'posted') { var paid = paidBy(b, run)[empOf(p)] || 0;
+          var note = '<div class="info-bar ' + (paid > 0.004 ? 'pr-warnbar' : 'pr-hint') + '" role="status">' + (paid > 0.004 ? '<b>Salary already paid.</b> Changing it will create an outstanding difference (' + money(paid) + ' paid). ' : '') +
+            'This payslip is part of Payroll ' + esc(monthLabel(run.month)) + ' — saving updates the run, its journal entry and WPS. A date in another month moves it to that month’s run.</div>';
+          h = h.replace('<div id="psErr"></div>', note + '<div id="psErr"></div>'); } } catch (e) {}
+      return h; };
+  }
+  function startInit(b) { var ym = nextMonth(b); return { month: ym, date: monthEnd(ym), description: 'Payroll ' + monthLabel(ym) }; }
+
   /* ---- list ---- */
   function listHtml(b) {
     var rs = runs(b).slice().sort(function (x, y) { return String(y.month).localeCompare(String(x.month)); });
     var nm = nextMonth(b), last = lastRun(b);
     var actions = '';
     if (can('canCreate', 'Payroll')) {
-      actions = '<button class="btn btn-primary btn-xs" onclick="Payroll.ui.newRun()">Run payroll for ' + esc(monthLabel(nm)) + '</button>' +
+      actions = '<button class="btn btn-primary btn-xs" onclick="Payroll.ui.start()" title="Choose the month (next unprocessed: ' + esc(monthLabel(nm)) + '), payroll date and description">Run payroll</button>' +
         (last && last.state === 'posted' && !runForMonth(b, addMonths(last.month, 1)) ? '<button class="btn btn-xs" onclick="Payroll.ui.runNext()" title="Copy ' + esc(monthLabel(last.month)) + ' into ' + esc(monthLabel(addMonths(last.month, 1))) + '">Run next month</button>' : '');
     }
     var body = rs.map(function (r) { var f = figures(b, r);
       return '<tr class="pr-click" onclick="Payroll.ui.open(' + JSON.stringify(r.id) + ')"><td class="nw"><a class="led-link">' + esc(monthLabel(r.month)) + '</a></td><td class="nw">' + esc(fmtD(r.date)) + '</td><td class="r">' + f.employees + '</td>' +
-        '<td class="m r">' + money(f.gross) + '</td><td class="m r">' + money(f.deductions) + '</td><td class="m r bold">' + money(f.net) + '</td><td class="m r">' + (r.state === 'draft' ? '' : money(f.paid)) + '</td><td>' + stBadge(f.status) + '</td></tr>'; }).join('');
+        '<td class="m r">' + money(f.gross) + '</td><td class="m r">' + money(f.deductions) + '</td><td class="m r bold">' + money(f.net) + '</td><td class="m r">' + (r.state === 'draft' ? '' : money(f.paid)) + '</td><td>' + stBadge(f.status) + '</td>' +
+        '<td>' + (r.state === 'draft' ? '' : recBadge(reconcile(b, r), true)) + '</td></tr>'; }).join('');
     var emps = employees(b).filter(empActive), noSetup = emps.filter(function (e) { return !hasSetup(e); });
     var hint = !emps.length ? '<div class="info-bar">Add your employees first (Payroll → Employees), with their pay setup, then run payroll here.</div>'
       : (noSetup.length ? '<div class="info-bar pr-hint">' + noSetup.length + ' of ' + emps.length + ' active employee' + (emps.length === 1 ? '' : 's') + ' ' + (noSetup.length === 1 ? 'has' : 'have') + ' no pay setup yet (' + noSetup.slice(0, 4).map(function (e) { return esc(e.name); }).join(', ') + (noSetup.length > 4 ? ', …' : '') + '). Open the employee → <b>Pay setup</b> so payroll can fill in their salary.</div>' : '');
     return crumb([['Payroll']]) +
       '<div class="reg-panel-head lt-head pr-head"><div class="lt-head-l"><span class="reg-panel-title">Payroll</span>' + actions + '</div>' +
       '<div class="pr-head-r"><button class="btn btn-xs" onclick="Payroll.ui.report()">Payroll summary</button></div></div>' +
-      remStrip(reminders(b)) + hint +
-      '<div class="tbl-scroll"><table class="reg-tbl lt-tbl pr-tbl"><thead><tr><th>Month</th><th>Date</th><th class="r">Employees</th><th class="r">Gross</th><th class="r">Deductions</th><th class="r">Net pay</th><th class="r">Paid</th><th>Status</th></tr></thead><tbody>' +
-      (body || '<tr><td colspan="8"><div class="reg-empty">No payroll runs yet. Click <b>Run payroll for ' + esc(monthLabel(nm)) + '</b> to create this month’s payslips in one go.</div></td></tr>') + '</tbody></table></div>' +
+      remStrip(reminders(b)) + hint + itemsWarn(b) + clearingNote(b) +
+      '<div class="tbl-scroll"><table class="reg-tbl lt-tbl pr-tbl"><thead><tr><th>Month</th><th>Date</th><th class="r">Employees</th><th class="r">Gross</th><th class="r">Deductions</th><th class="r">Net pay</th><th class="r">Paid</th><th>Status</th><th>Reconciliation</th></tr></thead><tbody>' +
+      (body || '<tr><td colspan="9"><div class="reg-empty">No payroll runs yet. Click <b>Run payroll</b>, choose the month, and every employee’s payslip is created in one go.</div></td></tr>') + '</tbody></table></div>' +
       '<div class="reg-foot"><span class="cnt">' + rs.length + ' ' + (rs.length === 1 ? 'run' : 'runs') + '</span></div>';
   }
 
   /* ---- review grid ----
-     FIX_SPEC_3 #2: every item column is at least 120px and grows with its content; the grid
+     FIX_SPEC_3 #2: every item column is at least 110px (FIX_SPEC_5) and grows with its content; the grid
      scrolls sideways inside its own box (never the page); the tick + Employee columns stick
      to the left and Net pay to the right; long item names wrap to two lines and keep the full
      name as a tooltip. The table's min-width comes from the column count and is redrawn on
      every add / remove. #1: the "Add item column" control is always there — disabled with
      "All items added" once every payslip item is a column, enabled again when one is removed. */
-  var COL_MIN = 120;
-  function cellIn(ri, key, v) { return '<input type="text" inputmode="decimal" class="pr-num" data-pr-cell="' + ri + '|' + esc(key) + '" value="' + (num(v) ? esc(String(v)) : '') + '" oninput="Payroll.ui.cell(' + ri + ',' + esc(JSON.stringify(key)) + ',this.value)">'; }
+  var COL_MIN = 110;
+  function cellIn(ri, key, v, bad) { return '<input type="text" inputmode="decimal" class="pr-num' + (bad ? ' pr-bad' : '') + '"' + (bad ? ' aria-invalid="true" title="' + esc(bad) + '"' : '') + ' data-pr-cell="' + ri + '|' + esc(key) + '" value="' + (num(v) ? esc(String(v)) : '') + '" oninput="Payroll.ui.cell(' + ri + ',' + esc(JSON.stringify(key)) + ',this.value)">'; }
   function proHint(d, t, c) { return colKind(c) === 'prorata' && t.absent > 0 && t.total > 0 ? '= ' + money(t.col[c.key]) : ''; }
   /** the add-column control: options for the items not on the grid yet; {html, disabled, tip} */
   function addColCtl(b, d) {
@@ -542,88 +976,141 @@
       (dis ? ' disabled aria-disabled="true" title="' + esc(tip) + '"' : ' title="Add a payslip item as a column"') + ' onchange="Payroll.ui.addCol(this.value)"><option value="">' + (dis ? esc(any ? 'All items added' : 'No payslip items yet') : '+ Add item column…') + '</option>' + opts + '</select></span>' +
       '<a class="led-link" onclick="Payroll.ui.items()">' + (any ? 'Payslip Items' : 'Settings → Payslip Items') + '</a></div>' };
   }
-  function reviewHtml(b) {
+  /* FIX_SPEC_5 A1/A2/A4/A5 — the grid:
+       [✓] | Employee | Days (Total, Absent, Worked) | Earnings (items…, Gross) | Salary deductions (Absent ded., items…, Total)
+       | Salary cost | Recoveries – loan / advance (items…, Total) | Employer contributions | Net pay | Employee balance (Before, After)
+     Every th / td stays display:table-cell (a flex cell makes the browser drop rowspan and shifts the second header
+     row one column left); centring is done by an inner <div>. Calculated values are plain read-only numbers. */
+  function recLbl(c) { return /advance/i.test(c.item || '') ? 'Advance o/s' : 'Loan o/s'; }
+  function balLink(b, emp, v, key) { return '<a class="led-link pr-bal-l ' + balCls(v) + '"' + (key ? ' data-pr-bal="' + key + '"' : '') + ' title="Open the ledger of ' + esc(emp) + '" onclick="Payroll.ui.empLedger(' + esc(JSON.stringify(emp)) + ')">' + esc(balTxt(v)) + '</a>'; }
+  /** the employee balance before this payroll for every row: [number] (also kept for refreshTotals) */
+  function rowsBefore(b, d) { var o = []; d.rows.forEach(function (r, i) { o[i] = empBefore(b, r.employee, d.date, { runId: d.id }); }); d._before = o; return o; }
+  function reviewHtml(b) { return withGl(b, function () { return reviewHtml0(b); }); }
+  function reviewHtml0(b) {
     var d = UI.draft; if (!d) return listHtml(b); ensureDays(b, d);
-    var T = draftTotals(d), S = colSums(d), ctl = addColCtl(b, d), n = d.cols.length;
-    var E = d.cols.filter(function (c) { return c.sec === 'earnings'; }), D = d.cols.filter(function (c) { return c.sec === 'deductions'; }), C = d.cols.filter(function (c) { return c.sec === 'contributions'; });
-    var showGross = E.length > 1, showDed = D.length > 0;
-    var nE = E.length + (showGross ? 1 : 0), nD = 1 + D.length + (showDed ? 1 : 0);
-    /* group start cells (pr-gs) carry the 2px divider between Days | Earnings | Deductions | Contributions | Net pay */
-    var colHead = function (c, first) { var pk = colKind(c), tip = c.item + (pk === 'prorata' ? ' — pro-rata: (monthly ÷ total days) × days worked' : (pk === 'basic' ? ' — days absent are shown as the Absent deduction' : ''));
-      return '<th class="r pr-col pr-gx-' + c.sec + (first ? ' pr-gs' : '') + '" title="' + esc(tip) + '"><div class="pr-th"><span class="pr-th-t">' + esc(c.item) + '</span>' +
+    var T = draftTotals(d), S = colSums(d), ctl = addColCtl(b, d), n = d.cols.length, BF = rowsBefore(b, d);
+    var E = d.cols.filter(function (c) { return c.sec === 'earnings'; }), SD = d.cols.filter(function (c) { return c.sec === 'deductions' && !isRec(c); }),
+      RC = d.cols.filter(isRec), C = d.cols.filter(function (c) { return c.sec === 'contributions'; });
+    var nE = E.length + 1, nD = SD.length + 2, nR = RC.length ? RC.length + 1 : 0;
+    var ncols = 2 + 3 + nE + nD + 1 + nR + C.length + 1 + 2;
+    var grp = function (c) { return isRec(c) ? 'recov' : c.sec; };
+    var colHead = function (c, first) { var pk = colKind(c), tip = c.item + (pk === 'prorata' ? ' — pro-rata: (monthly ÷ total days) × days worked' : (pk === 'basic' ? ' — in the absent deduction basis' : '')) + (isRec(c) ? ' — recovery: lowers net pay, not the salary cost' : '');
+      return '<th class="r pr-col pr-gx-' + grp(c) + (first ? ' pr-gs' : '') + '" title="' + esc(tip) + '"><div class="pr-th"><span class="pr-th-t">' + esc(c.item) + '</span>' +
         '<button type="button" class="pr-x" title="Remove this column" aria-label="Remove ' + esc(c.item) + '" onclick="Payroll.ui.dropCol(' + esc(JSON.stringify(c.key)) + ')">×</button></div>' + (pk === 'prorata' ? '<em class="pr-pro">pro-rata</em>' : '') + '</th>'; };
-    var g1 = '<th class="act chk pr-stk pr-stk-l0" rowspan="2"><input type="checkbox" aria-label="Tick all" title="Tick all" onchange="Payroll.ui.incAll(this.checked)"' + (d.rows.length && d.rows.every(function (r) { return r.include; }) ? ' checked' : '') + '></th>' +
+    var allOn = d.rows.length && d.rows.every(function (r) { return r.include; });
+    var g1 = '<th class="pr-chk pr-stk pr-stk-l0" rowspan="2"><div class="pr-cc"><input type="checkbox" aria-label="Tick all" title="Tick all" onchange="Payroll.ui.incAll(this.checked)"' + (allOn ? ' checked' : '') + '></div></th>' +
       '<th class="pr-emp pr-stk pr-stk-l1" rowspan="2">Employee</th>' +
       '<th class="pr-grp pr-gx-days pr-gs" colspan="3">Days</th>' +
-      (nE ? '<th class="pr-grp pr-gx-earnings pr-gs" colspan="' + nE + '">Earnings</th>' : '') +
-      '<th class="pr-grp pr-gx-deductions pr-gs" colspan="' + nD + '">Deductions</th>' +
+      '<th class="pr-grp pr-gx-earnings pr-gs" colspan="' + nE + '">Earnings</th>' +
+      '<th class="pr-grp pr-gx-deductions pr-gs" colspan="' + nD + '" title="Absent, late, fines: reduce the salary cost">Salary deductions</th>' +
+      '<th class="r pr-cost pr-gx-cost pr-gs" rowspan="2" title="Gross earnings − salary deductions: the salary expense">Salary cost</th>' +
+      (nR ? '<th class="pr-grp pr-gx-recov pr-gs" colspan="' + nR + '" title="Loan / advance repayments: credit the employee’s loan or advance account, lower net pay only">Recoveries – loan / advance</th>' : '') +
       (C.length ? '<th class="pr-grp pr-gx-contributions pr-gs" colspan="' + C.length + '">Employer contributions</th>' : '') +
-      '<th class="r pr-net pr-stk pr-stk-r pr-gs" rowspan="2">Net pay</th>';
+      '<th class="r pr-net pr-stk pr-stk-r pr-gs" rowspan="2">Net pay</th>' +
+      '<th class="pr-grp pr-gx-bal pr-gs pr-stk pr-stk-rg" colspan="2" title="Employee clearing account: before = up to the day before the payroll date; after = before + net pay">Employee balance</th>';
     var g2 = '<th class="r pr-day pr-gx-days pr-gs" title="Total days in the period">Total</th><th class="r pr-day pr-gx-days" title="Days absent (enter)">Absent</th><th class="r pr-day pr-gx-days" title="Days worked = total − absent">Worked</th>' +
-      E.map(function (c, i) { return colHead(c, i === 0); }).join('') + (showGross ? '<th class="r pr-gx-earnings">Gross</th>' : '') +
-      '<th class="r pr-gx-deductions pr-gs" title="(Basic ÷ total days) × days absent">Absent ded.</th>' + D.map(function (c) { return colHead(c, false); }).join('') + (showDed ? '<th class="r pr-gx-deductions">Total ded.</th>' : '') +
-      C.map(function (c, i) { return colHead(c, i === 0); }).join('');
-    var amt = function (i, r, t, c, first) { return '<td class="r pr-col pr-gx-' + c.sec + (first ? ' pr-gs' : '') + '">' + cellIn(i, c.key, r.amt[c.key]) + (colKind(c) === 'prorata' ? '<div class="pr-earned" data-pr-e="' + i + '|' + esc(c.key) + '">' + proHint(d, t, c) + '</div>' : '') + '</td>'; };
-    var rows = d.rows.map(function (r, i) { var t = rowTotals(d, r), bad = daysError(d.daysTotal, r.daysAbsent);
-      return '<tr class="' + (r.include ? '' : 'pr-off') + '" data-pr-row="' + i + '"><td class="act chk pr-stk pr-stk-l0"><input type="checkbox" aria-label="Include ' + esc(r.employee) + '"' + (r.include ? ' checked' : '') + ' onchange="Payroll.ui.inc(' + i + ',this.checked)"></td>' +
-        '<td class="pr-emp pr-stk pr-stk-l1" title="' + esc(r.employee) + '"><b>' + esc(r.employee) + '</b>' + (r.code ? '<span class="pr-code">' + esc(r.code) + '</span>' : '') + (r.note ? '<div class="pr-note">' + esc(r.note) + '</div>' : '') + '</td>' +
+      E.map(function (c, i) { return colHead(c, i === 0); }).join('') + '<th class="r pr-gx-earnings pr-sum">Gross</th>' +
+      '<th class="r pr-gx-deductions pr-gs" title="(Absent deduction basis ÷ total days) × days absent">Absent ded.</th>' + SD.map(function (c) { return colHead(c, false); }).join('') + '<th class="r pr-gx-deductions pr-sum">Total</th>' +
+      (nR ? RC.map(function (c, i) { return colHead(c, i === 0); }).join('') + '<th class="r pr-gx-recov pr-sum">Total</th>' : '') +
+      C.map(function (c, i) { return colHead(c, i === 0); }).join('') +
+      '<th class="r pr-gx-bal pr-bal pr-stk pr-stk-b1 pr-gs" title="Up to the day before the payroll date">Before payroll</th><th class="r pr-gx-bal pr-bal pr-stk pr-stk-b2" title="Before + net pay of this run">After payroll</th>';
+    var amt = function (i, r, t, c, first) { return '<td class="r pr-col pr-gx-' + grp(c) + (first ? ' pr-gs' : '') + '">' + cellIn(i, c.key, r.amt[c.key]) + (colKind(c) === 'prorata' ? '<div class="pr-earned" data-pr-e="' + i + '|' + esc(c.key) + '">' + proHint(d, t, c) + '</div>' : '') + '</td>'; };
+    var rows = d.rows.map(function (r, i) { var t = rowTotals(d, r), bad = daysError(d.daysTotal, r.daysAbsent), rv = rowRecov(b, d, r), after = r2(BF[i] + (r.include ? t.net : 0));
+      var osOf = function (c) { return rv.filter(function (x) { return x.cols.indexOf(c.key) >= 0; })[0] || { os: 0, over: false }; };
+      var amtR = function (c, first) { var x = osOf(c); return '<td class="r pr-col pr-gx-recov' + (first ? ' pr-gs' : '') + '">' + cellIn(i, c.key, r.amt[c.key], x.over ? 'Recovery is more than the ' + money(x.os) + ' outstanding' : '') +
+        '<div class="pr-os' + (x.over ? ' pr-os-bad' : '') + '" data-pr-os="' + i + '|' + esc(c.key) + '">' + esc(recLbl(c)) + ': ' + money(x.os) + '</div></td>'; };
+      return '<tr class="' + (r.include ? '' : 'pr-off') + (after < -0.004 ? ' pr-overpaid' : '') + '" data-pr-row="' + i + '">' +
+        '<td class="pr-chk pr-stk pr-stk-l0"><div class="pr-cc"><input type="checkbox" aria-label="Include ' + esc(r.employee) + '"' + (r.include ? ' checked' : '') + ' onchange="Payroll.ui.inc(' + i + ',this.checked)"></div></td>' +
+        '<td class="pr-emp pr-stk pr-stk-l1"' + (r.note ? ' title="' + esc(r.employee + ' — ' + r.note) + '"' : ' title="' + esc(r.employee) + '"') + '><div class="pr-emp-i"><b>' + esc(r.employee) + '</b>' + (r.code ? '<span class="pr-code">' + esc(r.code) + '</span>' : '') +
+          (d.editing ? '<button type="button" class="pr-x pr-rm" title="Remove this employee from the run" aria-label="Remove ' + esc(r.employee) + '" onclick="Payroll.ui.rmEmp(' + i + ')">×</button>' + (r.payslipId == null ? '<span class="pr-new">new</span>' : '') : '') + '</div></td>' +
         '<td class="m r pr-day pr-ro pr-gx-days pr-gs" data-pr-t="' + i + ':total">' + esc(String(t.total || num(d.daysTotal) || '')) + '</td>' +
         '<td class="r pr-day pr-gx-days"><input type="text" inputmode="decimal" class="pr-num pr-days' + (bad ? ' pr-bad' : '') + '" data-pr-abs="' + i + '" aria-label="Days absent — ' + esc(r.employee) + '"' + (bad ? ' aria-invalid="true" title="' + esc(bad) + '"' : '') +
           ' value="' + (num(r.daysAbsent) ? esc(String(r.daysAbsent)) : '') + '" placeholder="0" oninput="Payroll.ui.days(' + i + ',this.value)"></td>' +
         '<td class="m r pr-day pr-ro pr-gx-days" data-pr-t="' + i + ':worked">' + esc(bad ? '—' : String(t.total ? t.worked : '')) + '</td>' +
-        E.map(function (c, k) { return amt(i, r, t, c, k === 0); }).join('') + (showGross ? '<td class="m r pr-ro pr-gx-earnings" data-pr-t="' + i + ':earnings">' + money(t.earnings) + '</td>' : '') +
-        '<td class="m r pr-ro pr-gx-deductions pr-gs" data-pr-t="' + i + ':absentDed">' + money(t.absentDed) + '</td>' + D.map(function (c) { return amt(i, r, t, c, false); }).join('') +
-        (showDed ? '<td class="m r pr-ro pr-gx-deductions" data-pr-t="' + i + ':deductions">' + money(t.deductions) + '</td>' : '') +
+        E.map(function (c, k) { return amt(i, r, t, c, k === 0); }).join('') + '<td class="m r pr-ro pr-gx-earnings pr-sum" data-pr-t="' + i + ':earnings">' + money(t.earnings) + '</td>' +
+        '<td class="m r pr-ro pr-gx-deductions pr-gs" data-pr-t="' + i + ':absentDed">' + money(t.absentDed) + '</td>' + SD.map(function (c) { return amt(i, r, t, c, false); }).join('') +
+        '<td class="m r pr-ro pr-gx-deductions pr-sum" data-pr-t="' + i + ':salDed">' + money(t.salDed) + '</td>' +
+        '<td class="m r bold pr-ro pr-cost pr-gx-cost pr-gs" data-pr-t="' + i + ':cost">' + money(t.cost) + '</td>' +
+        (nR ? RC.map(function (c, k) { return amtR(c, k === 0); }).join('') + '<td class="m r pr-ro pr-gx-recov pr-sum" data-pr-t="' + i + ':recov">' + money(t.recov) + '</td>' : '') +
         C.map(function (c, k) { return amt(i, r, t, c, k === 0); }).join('') +
-        '<td class="m r bold pr-net pr-stk pr-stk-r pr-gs" data-pr-t="' + i + ':net">' + money(t.net) + '</td></tr>'; }).join('');
-    var sumC = function (c, first) { return '<td class="m r pr-gx-' + c.sec + (first ? ' pr-gs' : '') + '" data-pr-col="' + esc(c.key) + '">' + money(S[c.key] || 0) + '</td>'; };
-    var foot = '<tr class="tot-row"><td class="pr-stk pr-stk-l0"></td><td class="tot-lbl pr-stk pr-stk-l1">Total (<span data-pr-sum="employees">' + T.employees + '</span> ticked)</td>' +
+        '<td class="m r bold pr-net pr-stk pr-stk-r pr-gs" data-pr-t="' + i + ':net">' + money(t.net) + '</td>' +
+        '<td class="m r pr-gx-bal pr-bal pr-stk pr-stk-b1 pr-gs">' + balLink(b, r.employee, BF[i]) + '</td>' +
+        '<td class="m r pr-gx-bal pr-bal pr-stk pr-stk-b2">' + balLink(b, r.employee, after, String(i)) + (after < -0.004 ? '<span class="pr-ovw" data-pr-ovw="' + i + '" title="Still overpaid after this payroll">⚠</span>' : '<span class="pr-ovw" data-pr-ovw="' + i + '" hidden title="Still overpaid after this payroll">⚠</span>') + '</td></tr>'; }).join('');
+    var sumC = function (c, first) { return '<td class="m r pr-gx-' + grp(c) + (first ? ' pr-gs' : '') + '" data-pr-col="' + esc(c.key) + '">' + money(S[c.key] || 0) + '</td>'; };
+    var bfT = 0, afT = 0; d.rows.forEach(function (r, i) { if (!r.include) return; bfT += BF[i]; afT += BF[i] + rowTotals(d, r).net; }); bfT = r2(bfT); afT = r2(afT);
+    var foot = '<tr class="tot-row"><td class="pr-chk pr-stk pr-stk-l0"></td><td class="tot-lbl pr-stk pr-stk-l1">Total (<span data-pr-sum="employees">' + T.employees + '</span> ticked)</td>' +
       '<td class="pr-gx-days pr-gs"></td><td class="m r pr-gx-days" data-pr-sum="absent">' + esc(String(T.absent || 0)) + '</td><td class="m r pr-gx-days" data-pr-sum="worked">' + esc(String(T.worked || 0)) + '</td>' +
-      E.map(function (c, i) { return sumC(c, i === 0); }).join('') + (showGross ? '<td class="m r pr-gx-earnings" data-pr-sum="earnings">' + money(T.earnings) + '</td>' : '') +
-      '<td class="m r pr-gx-deductions pr-gs" data-pr-sum="absentDed">' + money(T.absentDed) + '</td>' + D.map(function (c) { return sumC(c, false); }).join('') +
-      (showDed ? '<td class="m r pr-gx-deductions" data-pr-sum="deductions">' + money(T.deductions) + '</td>' : '') +
+      E.map(function (c, i) { return sumC(c, i === 0); }).join('') + '<td class="m r pr-gx-earnings pr-sum" data-pr-sum="earnings">' + money(T.earnings) + '</td>' +
+      '<td class="m r pr-gx-deductions pr-gs" data-pr-sum="absentDed">' + money(T.absentDed) + '</td>' + SD.map(function (c) { return sumC(c, false); }).join('') +
+      '<td class="m r pr-gx-deductions pr-sum" data-pr-sum="salDed">' + money(T.salDed) + '</td>' +
+      '<td class="m r bold pr-cost pr-gx-cost pr-gs" data-pr-sum="cost">' + money(T.cost) + '</td>' +
+      (nR ? RC.map(function (c, i) { return sumC(c, i === 0); }).join('') + '<td class="m r pr-gx-recov pr-sum" data-pr-sum="recov">' + money(T.recov) + '</td>' : '') +
       C.map(function (c, i) { return sumC(c, i === 0); }).join('') +
-      '<td class="m r bold pr-net pr-stk pr-stk-r pr-gs" data-pr-sum="net">' + money(T.net) + '</td></tr>';
-    var title = (d.id ? 'Payroll ' + monthLabel(d.month) + ' (draft)' : 'Run payroll — ' + monthLabel(d.month));
-    var ncols = 3 + nE + nD + C.length + 3;
-    return crumb([['Payroll', 'Payroll.ui.list()'], [title]]) +
+      '<td class="m r bold pr-net pr-stk pr-stk-r pr-gs" data-pr-sum="net">' + money(T.net) + '</td>' +
+      '<td class="m r pr-gx-bal pr-bal pr-stk pr-stk-b1 pr-gs" data-pr-sum="before">' + esc(balTxt(bfT)) + '</td><td class="m r pr-gx-bal pr-bal pr-stk pr-stk-b2" data-pr-sum="after">' + esc(balTxt(afT)) + '</td></tr>';
+    var title = d.editing ? 'Edit payroll — ' + monthLabel(d.month) : (d.id ? 'Payroll ' + monthLabel(d.month) + ' (draft)' : 'Run payroll — ' + monthLabel(d.month));
+    var run0 = d.editing ? runById(b, d.id) : null, paid0 = run0 ? figures(b, run0).paid : 0;
+    var cr = d.editing && run0 ? [['Payroll', 'Payroll.ui.list()'], [monthLabel(run0.month), 'Payroll.ui.open(' + JSON.stringify(run0.id) + ')'], ['Edit']] : [['Payroll', 'Payroll.ui.list()'], [title]];
+    return crumb(cr) +
       '<div class="card pr-card pr-run" id="prReview"><div class="pr-card-h"><h2>' + esc(title) + '</h2></div>' + errBox() +
+      (paid0 > 0.004 ? '<div class="info-bar pr-warnbar" role="alert"><b>Salary already paid.</b> Changing it will create an outstanding difference (' + money(paid0) + ' paid so far).</div>' : '') + itemsWarn(b) +
       '<div class="pr-secs"><section class="pr-sec"><h3 class="pr-sec-h">Period</h3><div class="pr-fields">' +
         '<label class="pr-f"><span>Month</span><input class="pr-in" type="month" value="' + esc(d.month) + '" onchange="Payroll.ui.hdr(\'month\',this.value)"></label>' +
         '<label class="pr-f"><span>Payroll date</span><input class="pr-in" type="date" value="' + esc(d.date) + '" onchange="Payroll.ui.hdr(\'date\',this.value)"></label>' +
         '<div class="pr-f pr-f-days"><label for="prDaysTotal">Total days in period</label><input class="pr-in" type="text" inputmode="decimal" id="prDaysTotal" value="' + esc(String(d.daysTotal == null ? '' : d.daysTotal)) + '" oninput="Payroll.ui.hdr(\'daysTotal\',this.value)">' +
           '<small class="pr-f-h">' + esc(d.daysAuto === false ? 'Entered by hand' : basisLabel(b)) + ' · <a class="led-link" onclick="Payroll.ui.settings()">Settings → Payroll</a></small></div></div></section>' +
       '<section class="pr-sec pr-sec-w"><h3 class="pr-sec-h">Description</h3><input class="pr-in pr-in-w" type="text" aria-label="Description" value="' + esc(d.description || '') + '" oninput="Payroll.ui.hdr(\'description\',this.value)"></section></div>' +
-      '<details class="pr-how"><summary>How this works</summary><div>One payslip per ticked employee, dated ' + esc(fmtD(d.date)) + '. Accrual basis: salaries and allowances are expensed on that date and the net pay is owed to each employee until you use <b>Pay salaries</b>. ' +
-        'Days absent: Basic salary is reduced by an <b>Absent deduction</b> line (Basic ÷ total days × days absent); allowances ticked <i>Pro-rata</i> in Payslip Items are paid for the days worked; other items are fixed.</div></details>' +
+      '<details class="pr-how"><summary>How this works</summary><div>One payslip per ticked employee, dated ' + esc(fmtD(d.date)) + '. Accrual basis: <b>Salary cost</b> (gross earnings − salary deductions) is the salary expense on that date and the <b>Net pay</b> is owed to each employee until you use <b>Pay salaries</b>. ' +
+        'Days absent: an <b>Absent deduction</b> (absent deduction basis ÷ total days × days absent) is a salary deduction; allowances ticked <i>Pro-rata</i> in Payslip Items are paid for the days worked; other items are fixed. ' +
+        '<b>Recoveries</b> (loan / advance repayments) credit the employee’s loan or advance account and lower net pay only — they never touch the salary expense. <b>Employee balance</b> is the Employee clearing account before this payroll and after its net pay.</div></details>' +
       '<section class="pr-sec pr-sec-emp"><h3 class="pr-sec-h">Employees</h3>' +
-      '<div class="tbl-scroll pr-grid-wrap" id="prGridWrap"><table class="reg-tbl pr-grid" data-cols="' + n + '"><thead><tr class="pr-grp-row">' + g1 + '</tr><tr class="pr-col-row">' + g2 + '</tr></thead><tbody>' +
+      '<div class="tbl-scroll pr-grid-wrap" id="prGridWrap"><table class="reg-tbl pr-grid" data-cols="' + n + '" data-ncols="' + ncols + '"><thead><tr class="pr-grp-row">' + g1 + '</tr><tr class="pr-col-row">' + g2 + '</tr></thead><tbody>' +
         (rows || '<tr><td colspan="' + ncols + '"><div class="reg-empty">No active employees.</div></td></tr>') + '</tbody><tfoot>' + foot + '</tfoot></table></div>' +
-      ctl.html + '</section>' +
+      ctl.html + (d.editing ? addEmpCtl(b, d) : '') + '</section>' +
+      (d.editing ? '<div class="form-actions"><button class="btn btn-primary" onclick="Payroll.ui.saveEdit()">Save</button><button class="btn" onclick="Payroll.ui.cancel()">Cancel</button>' +
+        '<span class="pr-sub" style="margin-left:auto">Saving updates every payslip, the journal entry, WPS and the employee balances together.</span></div></div>' :
       '<div class="form-actions"><button class="btn btn-primary" onclick="Payroll.ui.create()">Create <span data-pr-sum="employees2">' + T.employees + '</span> payslips</button>' +
         '<button class="btn" onclick="Payroll.ui.saveDraft()">Save draft</button><button class="btn" onclick="Payroll.ui.cancel()">Cancel</button>' +
-        (d.id && can('canDelete', 'Payroll') ? '<button class="btn btn-danger" style="margin-left:auto" onclick="Payroll.ui.del(' + JSON.stringify(d.id) + ')">Delete draft</button>' : '') + '</div></div>';
+        (d.id && can('canDelete', 'Payroll') ? '<button class="btn btn-danger" style="margin-left:auto" onclick="Payroll.ui.del(' + JSON.stringify(d.id) + ')">Delete draft</button>' : '') + '</div></div>');
+  }
+  /** + Add employee (the run's Edit): active employees not on the grid yet */
+  function addEmpCtl(b, d) {
+    var on = {}; d.rows.forEach(function (r) { on[r.employee] = 1; });
+    var L = employees(b).filter(function (e) { return !on[e.name]; });
+    return '<div class="pr-addcol pr-addemp"><select id="prAddEmp" aria-label="Add an employee to the run"' + (L.length ? '' : ' disabled title="Every employee is in the run"') + ' onchange="Payroll.ui.addEmp(this.value)"><option value="">' + (L.length ? '+ Add employee…' : 'All employees added') + '</option>' +
+      L.map(function (e) { return '<option value="' + esc(e.name) + '">' + esc((e.code ? e.code + ' - ' : '') + e.name) + (empActive(e) ? '' : ' (inactive)') + '</option>'; }).join('') + '</select></div>';
   }
   /** column totals of the ticked rows, after pro-rata */
   function colSums(d) { var s = {}; d.rows.forEach(function (r) { if (!r.include) return; var t = rowTotals(d, r); d.cols.forEach(function (c) { s[c.key] = r2((s[c.key] || 0) + (t.col[c.key] || 0)); }); }); return s; }
-  function refreshTotals() {
-    var d = UI.draft, h = byId('prReview'); if (!d || !h) return; var T = draftTotals(d), S = colSums(d);
+  function refreshTotals() { var b = curB(); if (!b) return refreshTotals0(); return withGl(b, refreshTotals0); }
+  function refreshTotals0() {
+    var d = UI.draft, h = byId('prReview'); if (!d || !h) return; var T = draftTotals(d), S = colSums(d), b = curB(), BF = d._before || [];
     var q = function (sel) { return h.querySelector(sel); }, qk = function (s) { return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); };
-    d.rows.forEach(function (r, i) { var t = rowTotals(d, r), bad = daysError(d.daysTotal, r.daysAbsent);
-      ['earnings', 'deductions', 'net', 'absentDed'].forEach(function (k) { var c = q('[data-pr-t="' + i + ':' + k + '"]'); if (c) c.textContent = money(t[k]); });
+    var bfT = 0, afT = 0;
+    d.rows.forEach(function (r, i) { var t = rowTotals(d, r), bad = daysError(d.daysTotal, r.daysAbsent), bf = num(BF[i]), after = r2(bf + (r.include ? t.net : 0));
+      if (r.include) { bfT += bf; afT += bf + t.net; }
+      ['earnings', 'salDed', 'cost', 'recov', 'net', 'absentDed'].forEach(function (k) { var c = q('[data-pr-t="' + i + ':' + k + '"]'); if (c) c.textContent = money(t[k]); });
       var ct = q('[data-pr-t="' + i + ':total"]'); if (ct) ct.textContent = String(t.total || num(d.daysTotal) || '');
       var cw = q('[data-pr-t="' + i + ':worked"]'); if (cw) cw.textContent = bad ? '—' : String(t.total ? t.worked : '');
       var ab = q('[data-pr-abs="' + i + '"]'); if (ab) { ab.classList.toggle('pr-bad', !!bad); if (bad) { ab.setAttribute('aria-invalid', 'true'); ab.setAttribute('title', bad); } else { ab.removeAttribute('aria-invalid'); ab.removeAttribute('title'); } }
-      d.cols.forEach(function (c) { if (colKind(c) !== 'prorata') return; var e = q('[data-pr-e="' + i + '|' + qk(c.key) + '"]'); if (e) e.textContent = proHint(d, t, c); }); });
+      d.cols.forEach(function (c) { if (colKind(c) !== 'prorata') return; var e = q('[data-pr-e="' + i + '|' + qk(c.key) + '"]'); if (e) e.textContent = proHint(d, t, c); });
+      /* recoveries against the outstanding loan / advance */
+      if (b && d.cols.some(isRec)) rowRecov(b, d, r).forEach(function (x) { x.cols.forEach(function (k) {
+        var os = q('[data-pr-os="' + i + '|' + qk(k) + '"]'); if (os) os.classList.toggle('pr-os-bad', x.over);
+        var inp = q('[data-pr-cell="' + i + '|' + qk(k) + '"]'); if (inp) { inp.classList.toggle('pr-bad', x.over); if (x.over) { inp.setAttribute('aria-invalid', 'true'); inp.setAttribute('title', 'Recovery is more than the ' + money(x.os) + ' outstanding'); } else { inp.removeAttribute('aria-invalid'); inp.removeAttribute('title'); } } }); });
+      var bl = q('[data-pr-bal="' + i + '"]'); if (bl) { bl.textContent = balTxt(after); ['pr-bal-pay', 'pr-bal-over', 'pr-bal-zero'].forEach(function (c) { bl.classList.toggle(c, c === balCls(after)); }); }
+      var tr = q('[data-pr-row="' + i + '"]'); if (tr) tr.classList.toggle('pr-overpaid', after < -0.004);
+      var w = q('[data-pr-ovw="' + i + '"]'); if (w) { if (after < -0.004) w.removeAttribute('hidden'); else w.setAttribute('hidden', ''); } });
     d.cols.forEach(function (c) { var el = q('[data-pr-col="' + qk(c.key) + '"]'); if (el) el.textContent = money(S[c.key] || 0); });
-    ['earnings', 'deductions', 'net', 'absentDed', 'employees', 'absent', 'worked'].forEach(function (k) { var el = q('[data-pr-sum="' + k + '"]'); if (el) el.textContent = k === 'employees' ? T.employees : ((k === 'absent' || k === 'worked') ? String(T[k] || 0) : money(T[k])); });
+    SUMK.concat(['employees']).forEach(function (k) { var el = q('[data-pr-sum="' + k + '"]'); if (el) el.textContent = k === 'employees' ? T.employees : ((k === 'absent' || k === 'worked') ? String(T[k] || 0) : money(T[k])); });
+    var sb = q('[data-pr-sum="before"]'); if (sb) sb.textContent = balTxt(r2(bfT)); var sa = q('[data-pr-sum="after"]'); if (sa) sa.textContent = balTxt(r2(afT));
     var e2 = q('[data-pr-sum="employees2"]'); if (e2) e2.textContent = T.employees;
   }
 
   /* ---- run view ---- */
   function runHtml(b, run) {
     var f = figures(b, run), A = app();
-    var tiles = [['Employees', f.employees, 0], ['Gross', money(f.gross), 1], ['Deductions', money(f.deductions), 1], ['Net pay', money(f.net), 1], ['Paid', money(f.paid), 1], ['Outstanding', money(f.outstanding), 1]];
+    var tiles = [['Employees', f.employees, 0], ['Gross', money(f.gross), 1], ['Deductions', money(f.deductions), 1], ['Net pay', money(f.net), 1], ['Paid', money(f.paid), 1], [outLabel(f.outstanding), outMoney(f.outstanding), 1]];
     if (f.contributions) tiles.splice(3, 0, ['Employer contributions', money(f.contributions), 1]);
     var hasDays = f.rows.some(function (r) { return r.daysTotal != null; });
     var dayTds = function (r) { return hasDays ? '<td class="m r">' + (r.daysTotal == null ? '' : esc(String(r.daysTotal))) + '</td><td class="m r">' + (r.daysTotal == null ? '' : esc(String(r.daysAbsent || 0))) + '</td><td class="m r">' + (r.daysWorked == null ? '' : esc(String(r.daysWorked))) + '</td>' : ''; };
@@ -631,7 +1118,7 @@
       return '<tr><td class="c-name"><b>' + esc(r.employee) + '</b>' + (r.code ? '<span class="pr-code">' + esc(r.code) + '</span>' : '') + '</td>' +
         '<td class="nw">' + (r.payslip ? '<a class="led-link" onclick="Payroll.ui.payslip(' + JSON.stringify(r.payslip.id) + ')">Payslip ' + esc(r.payslip.reference || '') + '</a>' : '') + '</td>' + dayTds(r) +
         '<td class="m r">' + money(r.gross) + '</td><td class="m r">' + money(r.deductions) + '</td><td class="m r bold">' + money(r.net) + '</td><td class="m r">' + money(r.paid) + '</td><td class="m r' + (r.outstanding > 0.004 ? ' pr-owe' : '') + '">' + money(r.outstanding) + '</td>' +
-        '<td>' + stBadge(r.outstanding <= 0.004 ? 'Paid' : (r.paid > 0.004 ? 'Partly paid' : 'Accrued')) + '</td></tr>'; }).join('');
+        '<td>' + stBadge(r.outstanding < -0.004 ? 'Recoverable' : (r.outstanding <= 0.004 ? 'Paid' : (r.paid > 0.004 ? 'Partly paid' : 'Accrued'))) + '</td></tr>'; }).join('');
     var pays = f.payments.map(function (p) { return '<tr><td class="nw">' + esc(fmtD(p.date)) + '</td><td class="nw"><a class="led-link" onclick="Payroll.ui.payment(' + JSON.stringify(p.id) + ')">Payment ' + esc(p.reference || '') + '</a></td><td>' + esc(p.paidFrom || '') + '</td><td>' + esc(p.payee || '') + '</td><td class="m r">' + money(num(p.amount != null && p.amount !== '' ? p.amount : p.total)) + '</td></tr>'; }).join('');
     var nextYm = addMonths(run.month, 1);
     var acts = (f.outstanding > 0.004 && can('canCreate', 'Payments') ? '<button class="btn btn-primary" onclick="Payroll.ui.pay(' + JSON.stringify(run.id) + ')">Pay salaries</button>' : '') +
@@ -640,9 +1127,18 @@
       '<button class="btn" onclick="window.print()">Print</button>' +
       '<button class="btn" onclick="Payroll.ui.list()">Back</button>' +
       (can('canDelete', 'Payroll') ? '<button class="btn btn-danger" style="margin-left:auto" onclick="Payroll.ui.del(' + JSON.stringify(run.id) + ')">Delete</button>' : '');
-    return crumb([['Payroll', 'Payroll.ui.list()'], [monthLabel(run.month)]]) +
-      '<div class="card pr-card"><div class="pr-card-h"><h2>Payroll — ' + esc(monthLabel(run.month)) + '</h2>' + stBadge(f.status) + '</div>' + errBox() +
-      '<div class="pr-meta">Payroll date ' + esc(fmtD(run.date)) + (run.description ? ' · ' + esc(run.description) : '') + '</div>' +
+    /* FIX_SPEC_4 #3: Edit next to Pay salaries / Delete, the reconciliation badge, Details | History tabs */
+    if (can('canEdit', 'Payroll')) acts = '<button class="btn" onclick="Payroll.ui.edit(' + JSON.stringify(run.id) + ')">Edit</button>' + acts;
+    var rc = reconcile(b, run), tab = UI.route && UI.route.tab === 'history' ? 'history' : 'details';
+    var recBox = rc.ok ? '' : '<div class="info-bar pr-warnbar pr-recbox" role="alert"><b>⚠ Mismatch</b><ul>' + rc.reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' +
+      (can('canEdit', 'Payroll') ? '<button class="btn btn-sm" onclick="Payroll.ui.rebuild(' + JSON.stringify(run.id) + ')">Rebuild</button>' : '') + '</div>';
+    var tabs = '<div class="pr-tabs" role="tablist"><button type="button" role="tab" class="pr-tab' + (tab === 'details' ? ' on' : '') + '" aria-selected="' + (tab === 'details') + '" onclick="Payroll.ui.tab(\'details\')">Details</button>' +
+      '<button type="button" role="tab" class="pr-tab' + (tab === 'history' ? ' on' : '') + '" aria-selected="' + (tab === 'history') + '" onclick="Payroll.ui.tab(\'history\')">History' + ((run.history || []).length ? ' <span class="pr-cnt">' + run.history.length + '</span>' : '') + '</button></div>';
+    var head = crumb([['Payroll', 'Payroll.ui.list()'], [monthLabel(run.month)]]) +
+      '<div class="card pr-card"><div class="pr-card-h"><h2>Payroll — ' + esc(monthLabel(run.month)) + '</h2>' + stBadge(f.status) + recBadge(rc) + '</div>' + errBox() +
+      '<div class="pr-meta">Payroll date ' + esc(fmtD(run.date)) + (run.description ? ' · ' + esc(run.description) : '') + ' · ' + runDays(b, run) + ' days in the period</div>' + recBox + tabs;
+    if (tab === 'history') return head + histTable(run.history) + '<div class="form-actions pr-acts">' + acts + '</div></div>';
+    return head +
       '<div class="pr-tiles">' + tiles.map(function (t) { return '<div class="pr-tile"><span>' + esc(t[0]) + '</span><b class="' + (t[2] ? 'm' : '') + '">' + esc(String(t[1])) + '</b></div>'; }).join('') + '</div>' +
       '<div class="tbl-scroll"><table class="reg-tbl pr-tbl"><thead><tr><th>Employee</th><th>Payslip</th>' + (hasDays ? '<th class="r" title="Total days in the period">Days</th><th class="r">Absent</th><th class="r">Worked</th>' : '') + '<th class="r">Gross</th><th class="r">Deductions</th><th class="r">Net pay</th><th class="r">Paid</th><th class="r">Outstanding</th><th>Status</th></tr></thead><tbody>' +
         (rows || '<tr><td colspan="' + (hasDays ? 11 : 8) + '"><div class="reg-empty">The payslips of this run were deleted.</div></td></tr>') + '</tbody>' +
@@ -707,6 +1203,8 @@
   function pageHtml(b) {
     var r = UI.route || { page: 'list' };
     if (r.page === 'review') return reviewHtml(b);
+    if (r.page === 'start') return startHtml(b);
+    if (r.page === 'edit') { if (!UI.draft || !UI.draft.editing || !runById(b, UI.draft.id)) { UI.route = { page: 'list' }; return listHtml(b); } return reviewHtml(b); }
     if (r.page === 'report') return reportHtml(b);
     if (r.page === 'run' || r.page === 'pay') { var run = runById(b, r.id); if (!run) { UI.route = { page: 'list' }; return listHtml(b); }
       if (run.state === 'draft') { if (!UI.draft || String(UI.draft.id) !== String(run.id)) UI.draft = Object.assign({ id: run.id }, clone(snapshot(run))); UI.route = { page: 'review' }; return reviewHtml(b); }
@@ -723,19 +1221,51 @@
   }
   function payOnly() { var st = UI.payState; if (!st) return null; var o = {}; st.rows.forEach(function (r) { if (r.sel && num(r.amount)) o[r.employee] = num(r.amount); }); return o; }
 
-  UI.list = function () { UI.draft = null; UI.payState = null; go({ page: 'list' }); };
-  UI.open = function (id) { var b = curB(), run = runById(b, id); if (!run) return UI.list(); UI.payState = null;
+  UI.list = function () { UI.draft = null; UI.payState = null; UI.startState = null; go({ page: 'list' }); };
+  UI.open = function (id) { var b = curB(), run = runById(b, id); if (!run) return UI.list(); UI.payState = null; UI.startState = null;
     if (run.state === 'draft') { UI.draft = Object.assign({ id: run.id }, clone(snapshot(run))); return go({ page: 'review' }); }
-    go({ page: 'run', id: run.id }); };
+    UI.draft = null; go({ page: 'run', id: run.id }); };
+  /* FIX_SPEC_4 #3.1 — Run payroll opens the dialog (month / payroll date / description) */
+  UI.start = function () { var b = curB(); if (!can('canCreate', 'Payroll')) return say('Your permissions do not allow running payroll.'); UI.startState = startInit(b); UI.draft = null; go({ page: 'start' }); };
+  UI.startHdr = function (k, v) { var s = UI.startState; if (!s) return;
+    if (k === 'month') { if (!validYm(v)) return; var autoDate = s.date === monthEnd(s.month), autoDesc = s.description === 'Payroll ' + monthLabel(s.month); s.month = v; if (autoDate) s.date = monthEnd(v); if (autoDesc) s.description = 'Payroll ' + monthLabel(v); UI.errors = []; render(); return; }
+    s[k] = v; };
+  UI.startGo = function () { var b = curB(), s = UI.startState; if (!s) return; var E = [];
+    if (!validYm(s.month)) E.push('Choose the payroll month.'); if (!isoDate(s.date)) E.push('Enter the payroll date.');
+    var ex = validYm(s.month) ? runForMonth(b, s.month) : null; if (ex) E.push('A payroll run for ' + monthLabel(s.month) + ' already exists.');
+    if (E.length) { UI.errors = E; return render(); }
+    var d = prefill(b, s.month); d.date = isoDate(s.date); d.description = s.description || d.description; UI.startState = null; UI.draft = d; go({ page: 'review' }); };
   UI.newRun = function (ym) { var b = curB(); if (!can('canCreate', 'Payroll')) return say('Your permissions do not allow running payroll.');
-    ym = validYm(ym) ? ym : nextMonth(b); var ex = runForMonth(b, ym); if (ex) return UI.open(ex.id);
+    if (!validYm(ym)) return UI.start(); var ex = runForMonth(b, ym); if (ex) return UI.open(ex.id);
     UI.draft = prefill(b, ym); go({ page: 'review' }); };
+  /* FIX_SPEC_4 #3.2 — Edit a posted run */
+  UI.edit = function (id) { var b = curB(), run = runById(b, id); if (!run || run.state !== 'posted') return; if (!can('canEdit', 'Payroll')) return say('Your permissions do not allow changing payroll runs.');
+    var open = function () { UI.draft = editDraft(curB(), runById(curB(), id)); UI.dirty = false; go({ page: 'edit', id: id }); };
+    if (figures(b, run).paid > 0.004) return ask('Salary already paid. Changing it will create an outstanding difference.', { title: 'Edit payroll ' + monthLabel(run.month), okText: 'Edit anyway' }).then(function (ok) { if (ok) open(); });
+    open(); };
+  UI.saveEdit = function () { var A = app(), b = curB(), d = UI.draft; if (!b || !d || !d.editing) return;
+    var run = runById(b, d.id); if (!run) return UI.list();
+    var go2 = function () { var bb = curB(), r = saveRunEdit(bb, d); if (r.errors) { UI.errors = r.errors; render(); try { byId('wsMain').scrollTop = 0; } catch (e) {} return; }
+      A.saveBiz(bb); var o = r.figures.outstanding;
+      toast('Payroll ' + monthLabel(r.run.month) + ' saved' + (r.figures.paid > 0.004 ? ' — ' + (o < -0.004 ? 'recoverable / advance ' + money(-o) : 'outstanding ' + money(o)) : ''));
+      UI.dirty = false; UI.draft = null; go({ page: 'run', id: r.run.id }); };
+    var pays = runPayments(b, run).length;
+    if (pays && (run.month !== d.month || run.date !== d.date)) return ask('This run has ' + pays + ' salary payment' + (pays === 1 ? '' : 's') + '. Moving it to ' + monthLabel(d.month) + ' (' + fmtD(d.date) + ') re-links ' + (pays === 1 ? 'it' : 'them') + ' to the changed run. Continue?', { title: 'Re-link salary payments', okText: 'Save and re-link' }).then(function (ok) { if (ok) go2(); });
+    go2(); };
+  UI.addEmp = function (name) { var d = UI.draft, b = curB(); if (!d || !name) return; var e = empByName(b, name); if (!e || d.rows.some(function (r) { return r.employee === name; })) return;
+    var row = { employee: e.name, code: e.code || '', include: true, _touched: true, note: '', amt: {}, daysAbsent: 0, payslipId: null }, s = paySetup(e);
+    SECS.forEach(function (x) { s[x[0]].forEach(function (l) { if (!l.amount) return; var k = addCol(b, d, x[0], l.itemId, l.item); row.amt[k] = r2((row.amt[k] || 0) + l.amount); }); });
+    d.rows.push(row); sortCols(b, d); UI.dirty = true; regrid(null); };
+  UI.rmEmp = function (i) { var d = UI.draft; if (!d || !d.rows[i]) return; d.rows.splice(i, 1); UI.dirty = true; render(); };
+  UI.tab = function (t) { if (!UI.route || UI.route.page !== 'run') return; UI.route.tab = t === 'history' ? 'history' : 'details'; render(); };
+  UI.rebuild = function (id) { var A = app(), b = curB(); if (!can('canEdit', 'Payroll')) return say('Your permissions do not allow changing payroll runs.');
+    var r = rebuild(b, id); if (r.errors) return say(r.errors.join('\n')); A.saveBiz(b); toast(r.fixes.length ? 'Rebuilt — ' + r.fixes.length + ' fix' + (r.fixes.length === 1 ? '' : 'es') : 'Rebuilt — journal re-posted'); render(); };
   UI.runNext = function (fromId) { var b = curB(); if (!can('canCreate', 'Payroll')) return say('Your permissions do not allow running payroll.');
     var src = fromId != null ? runById(b, fromId) : lastRun(b); if (!src) return UI.newRun();
     var ym = addMonths(src.month, 1), ex = runForMonth(b, ym); if (ex) return UI.open(ex.id);
     UI.draft = prefill(b, ym, { copyFrom: src }); go({ page: 'review' }); };
   UI.report = function (y) { go({ page: 'report', year: y || null }); };
-  UI.items = function () { var A = app(); if (global.SettingsFixesA && SettingsFixesA.openPayslipItems) return SettingsFixesA.openPayslipItems(''); try { A.selectSection('Settings'); } catch (e) {} };
+  UI.items = function (sec) { var A = app(); if (global.SettingsFixesA && SettingsFixesA.openPayslipItems) return SettingsFixesA.openPayslipItems(sec || ''); try { A.selectSection('Settings'); } catch (e) {} };
   UI.hdr = function (k, v) { var d = UI.draft; if (!d) return; var b = curB();
     if (k === 'month') { if (!validYm(v)) return; var keepDate = d.date !== monthEnd(d.month), keepDesc = d.description !== 'Payroll ' + monthLabel(d.month);
       d.month = v; if (!keepDate) d.date = monthEnd(v); if (!keepDesc) d.description = 'Payroll ' + monthLabel(v); if (d.daysAuto !== false) d.daysTotal = periodDays(b, v); notes(b, d); render(); return; }
@@ -787,16 +1317,23 @@
     L.push([]); L.push(['Employee', 'Code', 'Months', 'Days absent', 'Absent deduction', 'Gross', 'Deductions', 'Contributions', 'Net pay', 'Owing today']);
     s.employees.forEach(function (e) { L.push([e.employee, e.code, e.monthCount, e.daysAbsent, e.absentDed, e.gross, e.deductions, e.contributions, e.net, e.owing]); });
     download('payroll-summary-' + s.year + '.csv', L.map(function (r) { return r.map(csvCell).join(','); }).join('\n') + '\n'); };
+  /* FIX_SPEC_5 A5: the employee balance opens that employee's ledger (Employee clearing account) */
+  UI.empLedger = function (name) { var A = app(), b = curB(), e = empByName(b, name); if (!A || !e) return;
+    var lbl = 'Employees'; try { var K = KEY2LABEL; if (K && K.employees) lbl = K.employees; } catch (x) {}
+    try { A.selectSection(lbl); A.openLedger(e.id); } catch (x) {} };
   UI.payslip = function (id) { var A = app(); try { A.gotoRecord('payslips', id); } catch (e) {} };
   UI.payment = function (id) { var A = app(); try { A.gotoRecord('payments', id); } catch (e) {} };
+  UI.goRun = function (id) { var A = app(); try { A.gotoRecord('payroll', id); } catch (e) {} };
 
   /* unsaved changes on the Run payroll page (js/unsaved-guard.js asks before the sidebar opens another page) */
   ['hdr', 'days', 'cell', 'inc', 'incAll', 'addCol', 'dropCol'].forEach(function (k) { var o = UI[k]; UI[k] = function () { UI.dirty = true; return o.apply(this, arguments); }; });
-  ['list', 'newRun', 'runNext', 'open'].forEach(function (k) { var o = UI[k]; UI[k] = function () { UI.dirty = false; return o.apply(this, arguments); }; });
-  P.unsaved = function () { return UI.dirty && UI.draft && UI.route && UI.route.page === 'review' ? 'The payroll run for ' + monthLabel(UI.draft.month) + ' has changes that are not saved. Leave without saving? (Use Save draft to keep them.)' : ''; };
+  ['list', 'newRun', 'runNext', 'open', 'start'].forEach(function (k) { var o = UI[k]; UI[k] = function () { UI.dirty = false; return o.apply(this, arguments); }; });
+  P.unsaved = function () { if (!(UI.dirty && UI.draft && UI.route)) return ''; if (UI.route.page === 'edit') return 'Your changes to payroll ' + monthLabel(UI.draft.month) + ' are not saved. Leave without saving?';
+    return UI.route.page === 'review' ? 'The payroll run for ' + monthLabel(UI.draft.month) + ' has changes that are not saved. Leave without saving? (Use Save draft to keep them.)' : ''; };
   UI.cancel = function () {
-    var m = P.unsaved(); if (!m) return UI.list();
-    ask(m, { title: 'Unsaved changes', okText: 'Leave without saving', danger: true }).then(function (ok) { if (ok) UI.list(); });
+    var d = UI.draft, back = d && d.editing ? function () { UI.open(d.id); } : UI.list;
+    var m = P.unsaved(); if (!m) return back();
+    ask(m, { title: 'Unsaved changes', okText: 'Leave without saving', danger: true }).then(function (ok) { if (ok) back(); });
   };
 
   /* ------------------------------------------------------------- install */
@@ -811,8 +1348,28 @@
       try { if (typeof this.permLevel === 'function' && this.permLevel(b, 'Payroll') < 1) return orig.apply(this, args); } catch (e) {}
       return pageHtml(b); });
     wrap(A, 'renderMain', function (orig, args) {
-      if (isPayroll(this) && (this.wsMode === 'form' || this.wsMode === 'view')) { this.wsMode = 'list'; }
+      if (isPayroll(this) && (this.wsMode === 'form' || this.wsMode === 'view')) {
+        /* a ledger row of the run's journal entry (src 'payroll') opens the run */
+        if (this.wsMode === 'view' && this.editingId != null) { var rv = runById(this.curBiz(), this.editingId); if (rv && rv.state === 'posted') { UI.route = { page: 'run', id: rv.id }; UI.draft = null; } this.editingId = null; }
+        this.wsMode = 'list'; }
       return orig.apply(this, args); });
+    /* FIX_SPEC_4 #3: one-time data update when a business is opened (or the page reloads on it) */
+    wrap(A, 'renderWorkspace', function (orig, args) { try { var b = this.curBiz && this.curBiz(); if (b && migrate(b)) this.saveBiz(b); } catch (e) { if (global.console) console.warn('payroll migrate', e); } return orig.apply(this, args); });
+    /* a payslip saved / deleted anywhere (its own form, Form Designer, import) keeps its run in step */
+    wrap(A, '_logActivity', function (orig, args) { var r = orig.apply(this, args);
+      try { if (!P._busy && args[2] === 'payslips') { var b = args[0], act = args[1];
+        if ((act === 'create' || act === 'update') && args[3] && args[3].id != null) onPayslipSaved(b, args[3].id, args[4] || null);
+        else if (act === 'delete' && !args[3] && args[4]) onPayslipDeleted(b, args[4]); } } catch (e) { if (global.console) console.warn('payroll sync', e); }
+      return r; });
+    wrap(A, 'deleteRecord', function (orig, args) {
+      if (l2k()[this.wsSection] === 'payslips') { var b = this.curBiz(), p = b ? psById(b, args[0]) : null, m = p ? payslipDeleteBlock(b, p) : ''; if (m) { say(m); return; } }
+      return orig.apply(this, args); });
+    /* the payslip View: which run it belongs to, and its History */
+    wrap(A, 'viewHtml', function (orig, args) { var h = orig.apply(this, args);
+      try { if (l2k()[this.wsSection] === 'payslips' && this.editingId != null) { var b = args[0] || this.curBiz(), p = psById(b, this.editingId); if (p) h += payslipExtraHtml(b, p); } } catch (e) {}
+      return h; });
+    wrapPayslipForm();
+    registerPosting();
     wrap(A, 'selectSection', function (orig, args) { if (args[0] === 'Payroll') { UI.route = { page: 'list' }; UI.draft = null; UI.payState = null; UI.errors = []; } return orig.apply(this, args); });
     wrap(A, 'newRecord', function (orig, args) { if (isPayroll(this)) return UI.newRun(); return orig.apply(this, args); });
     ['viewRecord', 'editRecord'].forEach(function (n) { wrap(A, n, function (orig, args) { if (isPayroll(this)) return UI.open(args[0]); return orig.apply(this, args); }); });
@@ -825,11 +1382,23 @@
   }
 
   /* ------------------------------------------- Settings → Payroll, Payslip Items "Pro-rata" */
+  /** Settings → Payroll: the allowances added to Basic for the Absent deduction (the business's earnings items, read when drawn) */
+  function absentItemsField() {
+    var f = { k: 'absentItems', l: 'Allowances in the absent deduction basis', t: 'checks', def: [], show: function (v) { return v.absentBasis === 'chosen'; },
+      hint: 'Basic salary is always included. Items ticked here are not also pro-rated.' };
+    try { Object.defineProperty(f, 'items', { enumerable: true, configurable: true, get: function () { var b = null; try { b = app().curBiz(); } catch (e) {}
+      return items(b, 'earnings').map(function (x) { return x.name; }).filter(function (nm) { return !isBasicName(nm); }); } }); } catch (e) { f.items = []; }
+    return f;
+  }
   function dmy(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || ''); }
   var SETTINGS_PAGE = { title: 'Payroll', kind: 'form', store: 'payrollSettings',
-    intro: 'How payroll counts the days of a pay period. Days worked = total days − days absent. Basic salary is reduced by an Absent deduction line; allowances ticked "Pro-rata" in Payslip Items are paid for the days worked; other items are fixed.',
+    intro: 'How payroll counts the days of a pay period. Days worked = total days − days absent. An Absent deduction line = (Basic, or Basic + the chosen allowances) ÷ total days × days absent; allowances ticked "Pro-rata" in Payslip Items are paid for the days worked; other items are fixed.',
     fields: [
-      { k: 'daysBasis', l: 'Total days in a pay period', t: 'select', def: 'calendar', opts: [['calendar', 'Calendar days (every day of the month)'], ['working', 'Working days (leave out weekends)']] },
+      { k: 'daysBasis', l: 'Total days in a pay period', t: 'select', def: 'calendar', opts: [['calendar', 'Calendar days (every day of the month)'], ['fixed30', 'Fixed 30 days (every month)'], ['working', 'Working days (leave out weekends)']] },
+      /* FIX_SPEC_5 A3: what the Absent deduction is worked out on */
+      { k: 'absentBasis', l: 'Absent deduction basis', t: 'select', def: 'basic', opts: [['basic', 'Basic salary only'], ['chosen', 'Basic salary + chosen allowances']],
+        hint: 'Absent deduction = (sum of the basis items) ÷ total days × days absent. It is a salary deduction: it lowers the salary cost.' },
+      absentItemsField(),
       { k: 'weekend', l: 'Weekend', t: 'select', def: 'sat-sun', opts: WEEKENDS.map(function (w) { return [w[0], w[1]]; }), show: function (v) { return v.daysBasis === 'working'; },
         hint: 'UAE: Saturday and Sunday (federal), Friday and Saturday, or Sunday only for a six-day week.' },
       { k: 'excludeHolidays', l: 'Leave out public holidays', t: 'checkbox', show: function (v) { return v.daysBasis === 'working'; } },
@@ -837,21 +1406,101 @@
         hint: 'A holiday that falls on a weekend day is not counted twice.' }],
     load: function (r) { r.holidays = (r.holidays || []).map(function (h) { return { date: h && isoDate(h.date) ? dmy(isoDate(h.date)) : (h && h.date) || '', name: (h && h.name) || '' }; }); return r; },
     validate: function (v) { var bad = (v.holidays || []).filter(function (h) { return h && !blank(h.date) && !isoDate(h.date); })[0]; if (bad) return 'Public holiday date "' + bad.date + '" is not a date — use DD/MM/YYYY.'; },
-    beforeSave: function (r) { if (r.daysBasis !== 'working') r.daysBasis = 'calendar'; if (!WEEKENDS.some(function (w) { return w[0] === r.weekend; })) r.weekend = 'sat-sun';
+    beforeSave: function (r) { if (r.daysBasis !== 'working' && r.daysBasis !== 'fixed30') r.daysBasis = 'calendar'; if (r.absentBasis !== 'chosen') r.absentBasis = 'basic';
+      r.absentItems = (Array.isArray(r.absentItems) ? r.absentItems : []).map(function (x) { return String(x || '').trim(); }).filter(function (x) { return x && !isBasicName(x); });
+      if (!WEEKENDS.some(function (w) { return w[0] === r.weekend; })) r.weekend = 'sat-sun';
       r.excludeHolidays = !!r.excludeHolidays; r.holidays = (r.holidays || []).filter(function (h) { return h && isoDate(h.date); }).map(function (h) { return { date: isoDate(h.date), name: String(h.name || '') }; }).sort(function (x, y) { return x.date.localeCompare(y.date); }); } };
   function installSettings(A) {
     var SP = G('SettingsPages'); if (!SP || !SP.PAGES || SP._payroll) return; SP._payroll = true; var PG = SP.PAGES;
     PG.payrollSettings = SETTINGS_PAGE;
     A.set_payrollSettings = function (b) { return SP.page(b, 'payrollSettings'); };
     wrap(A, 'setTiles', function (orig, args) { var t = orig.apply(this, args) || []; if (t.some(function (x) { return x[2] === 'payrollSettings'; })) return t;
-      var i = t.findIndex(function (x) { return x[2] === 'payslipItems'; }), tile = ['briefcase', 'Payroll', 'payrollSettings', 'Days in a pay period: calendar or working days, weekends, public holidays', 1, 1];
+      var i = t.findIndex(function (x) { return x[2] === 'payslipItems'; }), tile = ['briefcase', 'Payroll', 'payrollSettings', 'Days in a pay period (calendar, fixed 30 or working days), absent deduction basis', 1, 1];
       t = t.slice(); t.splice(i < 0 ? t.length : i, 0, tile); return t; });
     var I = G('ICO'); if (I && typeof I.forSetting === 'function' && !I._payrollSet) { var fs = I.forSetting; I._payrollSet = 1; I.forSetting = function (key, size, cls) { return key === 'payrollSettings' ? this.get('briefcase', size, cls) : fs.apply(this, arguments); }; }
     try { var E = PG.payslipItems.items.earnings;
       if (!(E.fields || []).some(function (f) { return f && f.k === 'proRata'; })) {
         E.fields.splice(2, 0, { k: 'proRata', l: 'Pro-rata', t: 'checkbox', hint: 'Pay this allowance for the days worked: (monthly ÷ total days) × days worked. Basic salary is always reduced for days absent, as a separate Absent deduction line; items left unticked are fixed.' });
         E.cols.push({ k: 'proRata', l: 'Pro-rata', fmt: function (v, r) { return isBasicName(r && r.name) ? 'Basic (absent deduction)' : (truthy(v) ? 'Yes' : ''); } }); }
+      earningsAccountRequired(E);
     } catch (e) {}
+    try { deductionTypes(PG.payslipItems.items.deductions); contributionAccounts(PG.payslipItems.items.contributions); } catch (e) {}
+  }
+  /* FIX_SPEC_5 A3 — Payslip deduction items get a Type: Salary deduction (absent, late, fines — credits an expense, liability
+     or income account) or Recovery (loan / advance repayment — credits an asset / receivable account, per employee).
+     Every item needs an account. */
+  var DED_TYPES = [['salary', 'Salary deduction — absent, late, fines (lowers the salary cost)'], ['recovery', 'Recovery — loan / advance repayment (balance sheet, lowers net pay only)']];
+  function deductionTypes(D) {
+    if (!D || D._types) return; D._types = 1;
+    if (!(D.fields || []).some(function (f) { return f && f.k === 'type'; }))
+      D.fields.splice(1, 0, { k: 'type', l: 'Type', t: 'select', opts: DED_TYPES, hint: 'A recovery maps to an asset or receivable account (Employee loans, Salary advances); its balance is kept per employee and shown under the recovery in Run payroll.' });
+    var af = (D.fields || []).filter(function (f) { return f && f.k === 'account'; })[0]; if (af) { af.req = 1; af.hint = 'Required. Salary deduction: the expense account it reduces (or e.g. Other income for fines). Recovery: the employee loan / advance asset account.'; }
+    var ol = D.load; D.load = function (r, b) { r = ol ? (ol(r, b) || r) : r; if (r.type !== 'salary' && r.type !== 'recovery') r.type = dedType(b, r); return r; };
+    var ov = D.validate;
+    D.validate = function (v, b, id) { var m = ov ? ov.apply(this, arguments) : null; if (m) return m;
+      var n = acct(b, v && v.account); if (!n) return 'Choose the account of this deduction item.';
+      var root = rootOfAcct(b, n), t = v.type === 'recovery' ? 'recovery' : 'salary';
+      if (t === 'recovery' && !isRecoveryAcct(b, n)) return 'A recovery item may only map to an asset or receivable account (e.g. Employee loans, Salary advances) — "' + n.name + '" is not one.';
+      if (t === 'salary' && root === 'assets') return '"' + n.name + '" is an asset account — choose Type "Recovery" for a loan / advance repayment, or an expense account for a salary deduction.';
+      return null; };
+    var obs = D.beforeSave; D.beforeSave = function (r, b) { if (obs) obs(r, b); if (r.type !== 'recovery') r.type = 'salary'; };
+    if (!(D.cols || []).some(function (c) { return c && c.k === 'type'; })) D.cols.splice(1, 0, { k: 'type', l: 'Type', fmt: function (v, r, b) { return dedType(b, Object.assign({}, r, { type: v })) === 'recovery' ? 'Recovery (loan / advance)' : 'Salary deduction'; } });
+  }
+  function contributionAccounts(Cn) {
+    if (!Cn || Cn._acctReq) return; Cn._acctReq = 1;
+    (Cn.fields || []).forEach(function (f) { if (f && (f.k === 'expense' || f.k === 'liability')) f.req = 1; });
+    var ov = Cn.validate;
+    Cn.validate = function (v, b) { var m = ov ? ov.apply(this, arguments) : null; if (m) return m;
+      if (!acct(b, v && v.expense)) return 'Choose the expense account of this contribution item.';
+      if (!acct(b, v && v.liability)) return 'Choose the liability account of this contribution item.'; return null; };
+  }
+  /* FIX_SPEC_4 #3.7 — every Earnings item needs an expense account; existing items without one are flagged */
+  function earningsAccountRequired(E) {
+    if (!E || E._acctReq) return; E._acctReq = 1;
+    var f = (E.fields || []).filter(function (x) { return x && x.k === 'account'; })[0];
+    if (f) { f.req = 1; f.hint = 'Required. Salaries and allowances of this item are expensed to this account (the payroll journal reads it every time, so a change re-posts every run).'; }
+    var ov = E.validate;
+    E.validate = function (v, b, id) { var m = ov ? ov.apply(this, arguments) : null; if (m) return m;
+      var n = acct(b, v && v.account); if (!n) return 'Choose the expense account of this earnings item.';
+      var root = ''; try { root = G('acctRoot')(b, n); } catch (e) { root = ''; }
+      if (root && root !== 'expense') return '"' + n.name + '" is not an expense account — choose an account under Expenses (Profit and Loss).';
+      return null; };
+    var c = (E.cols || []).filter(function (x) { return x && x.k === 'account'; })[0];
+    if (c) { var of = c.fmt; c.fmt = function (v, r, b) { if (!acct(b, v)) return '⚠ No expense account — required'; return of ? of.apply(this, arguments) : v; }; }
+    var intro0 = E.intro || '';
+    try { Object.defineProperty(E, 'intro', { configurable: true, enumerable: true, get: function () { var A = app(), b = null; try { b = A.curBiz(); } catch (e) {}
+      var L = b ? itemsNoAccount(b) : []; return (intro0 ? intro0 + ' ' : '') + (L.length ? '⚠ No expense account yet: ' + L.map(function (x) { return x.name; }).join(', ') + ' — their amounts post to Salaries until you choose one. Every earnings item needs an expense account.' : ''); } }); } catch (e) {}
+  }
+
+  /* ------------------------------------------------- FIX_SPEC_5 A7 — the payslip print sections
+     {header, earnings, salDed, recov, contributions: [{name, desc, amount}], gross, salTotal, cost, recTotal, net,
+      account:{opening, net, paid, closing}, loans:[{name, opening, recovered, closing}]} */
+  function lineIsRecovery(b, l) { if (!l || l.absent) return false; if (l.recovery) return true;
+    var it = findItem(b, 'deductions', l.itemId, l.item); if (it) return dedType(b, it) === 'recovery';
+    var n = acct(b, l.account) || (blank(l.accountName) ? null : acctNamed(b, l.accountName)); return !!n && (function () { try { return !!G('GL').empSubAcct(b, n.id); } catch (e) { return false; } })(); }
+  function recLineAcct(b, l) { var it = findItem(b, 'deductions', l.itemId, l.item); return (it && acct(b, it.account)) || acct(b, l.account) || (blank(l.accountName) ? null : acctNamed(b, l.accountName)); }
+  function payslipSections(b, p) {
+    var o = { earnings: [], salDed: [], recov: [], contributions: [], gross: 0, salTotal: 0, cost: 0, recTotal: 0, contrib: 0, net: 0, loans: [] };
+    if (!p) return o;
+    var emp = empOf(p), e = empByName(b, emp), dt = String(p.date || p.issueDate || '').slice(0, 10), rid = runIdOf(p), run = rid != null ? runById(b, rid) : null;
+    var ex = run && run.state === 'posted' ? { runId: run.id } : { psId: p.id };
+    o.header = { employee: emp, code: (e && e.code) || p.empCode || '', period: monthLabel(ymOf(dt)), date: dt, days: psDays(p) };
+    var byLoan = {};
+    (p.lines || []).filter(Boolean).forEach(function (l) { var s = lineSec(l), a = lineAmt(l); if (!a) return;
+      var row = { name: l.absent ? 'Absent deduction' : (l.item || l.desc || l.description || ''), desc: l.desc || l.description || '', amount: r2(a) };
+      if (row.desc === row.name) row.desc = '';
+      if (s === 'earnings') { o.earnings.push(row); o.gross += a; }
+      else if (s === 'contributions') { o.contributions.push(row); o.contrib += a; }
+      else if (lineIsRecovery(b, l)) { o.recov.push(row); o.recTotal += a; var n = recLineAcct(b, l), k = n ? n.id : '';
+        if (n) { if (!byLoan[k]) { byLoan[k] = { acct: n.id, name: n.name, recovered: 0 }; o.loans.push(byLoan[k]); } byLoan[k].recovered += a; } }
+      else { o.salDed.push(row); o.salTotal += a; } });
+    ['gross', 'salTotal', 'recTotal', 'contrib'].forEach(function (k) { o[k] = r2(o[k]); });
+    o.cost = r2(o.gross - o.salTotal); o.net = r2(o.cost - o.recTotal);
+    if (!(p.lines || []).filter(Boolean).length) { o.net = r2(num(p.netPay != null && p.netPay !== '' ? p.netPay : p.total)); o.gross = o.cost = o.net; }
+    var opening = empBefore(b, emp, dt, ex), paid = run && run.state === 'posted' ? r2(num(paidBy(b, run)[emp])) : 0;
+    o.account = { opening: opening, net: o.net, paid: paid, closing: r2(opening + o.net - paid) };
+    o.loans.forEach(function (x) { x.recovered = r2(x.recovered); x.opening = loanOs(b, x.acct, emp, dt, ex); x.closing = r2(x.opening - x.recovered); });
+    return o;
   }
 
   P.SECS = SECS; P.items = items; P.findItem = findItem; P.paySetup = paySetup; P.setupTotals = setupTotals; P.hasSetup = hasSetup; P.empActive = empActive;
@@ -861,8 +1510,12 @@
   P.figures = figures; P.status = status; P.pay = pay; P.deleteRun = deleteRun; P.summary = summary; P.reminders = reminders; P.wpsTable = wpsTable;
   P.periodDays = periodDays; P.paySettings = paySettings; P.daysCalc = daysCalc; P.daysError = daysError; P.proKind = proKind; P.absentLine = absentLine; P.proDesc = proDesc; P.isoDate = isoDate;
   P.basisLabel = basisLabel; P.psDays = psDays; P.addColCtl = addColCtl; P.WEEKENDS = WEEKENDS;
+  P.runIdOf = runIdOf; P.editDraft = editDraft; P.saveRunEdit = saveRunEdit; P.onPayslipSaved = onPayslipSaved; P.onPayslipDeleted = onPayslipDeleted; P.payslipDeleteBlock = payslipDeleteBlock;
+  P.reconcile = reconcile; P.rebuild = rebuild; P.migrate = migrate; P.runPosting = runPosting; P.clearingCheck = clearingCheck; P.itemsNoAccount = itemsNoAccount; P.runDays = runDays; P.paidBy = paidBy;
+  P.dedType = dedType; P.loanOs = loanOs; P.empBefore = empBefore; P.rowRecov = rowRecov; P.balTxt = balTxt; P.payslipSections = payslipSections; P.isRec = isRec;
   P.registerReminders = registerReminders; P.install = install; P.pageHtml = pageHtml; P.ui = UI;
   global.Payroll = P;
+  registerPosting();
   install();
   try { if (doc() && doc().addEventListener) doc().addEventListener('DOMContentLoaded', function () { install(); registerReminders(); }); } catch (e) {}
   try { if (global.addEventListener) global.addEventListener('load', registerReminders); } catch (e) {}

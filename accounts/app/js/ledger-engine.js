@@ -66,6 +66,7 @@ var GL = (function(){
     'investments':                  { id:'sys_invest',     name:'Investments',                  parent:'assets',      flags:{ control:1 } },
     'investment gains (losses)':    { id:'sys_invest_gain',name:'Investment gains (losses)',    parent:'@income' },
     'withholding tax receivable':   { id:'sys_wht',        name:'Withholding tax receivable',   parent:'assets' },
+    'withholding tax payable':      { id:'sys_wht_pay',    name:'Withholding tax payable',      parent:'liabilities' },
     'billable time':                { id:'sys_bt',         name:'Billable time',                parent:'assets',      flags:{ control:1 } },
     'billable time - movement':     { id:'sys_bt_move',    name:'Billable time - movement',     parent:'@income' },
     'billable time - write-offs':   { id:'sys_bt_wo',      name:'Billable time - write-offs',   parent:'@expense' },
@@ -104,6 +105,14 @@ var GL = (function(){
     b.coa.push(n); return n;
   }
   function acctRootSafe(b,n){ try{ return acctRoot(b,n); }catch(e){ return 'assets'; } }
+  /* FIX_SPEC_5 A3: the balance-sheet accounts of "Recovery" payslip deduction items (Employee loans,
+     Salary advances ...) are tracked per employee: their postings keep the employee as sub-account.
+     A deduction item without a type is a recovery when its account is an asset. {acctId: 1} */
+  function recoveryAccts(b){ var o={}; ((b&&b.payslipItems&&b.payslipItems.deductions)||[]).forEach(function(it){
+      if(!it||blank(it.account)) return; var n=byId(b,it.account); if(!n||n.control) return;
+      var t=it.type==='recovery'||it.type==='salary'?it.type:(acctRootSafe(b,n)==='assets'?'recovery':'salary');
+      if(t==='recovery') o[n.id]=1; }); return o; }
+  function empSubAcct(b,id){ return !!recoveryAccts(b)[id]; }
   function natureD(b,n){ var r=acctRootSafe(b,n); return r==='assets'||r==='expense'; }
 
   /* which register a control account's sub-accounts come from */
@@ -160,6 +169,7 @@ var GL = (function(){
     var R=b.records||{}, lines=[], txs=[], issues=[];
     var SBE='@sbe', SUSP='@susp';            // placeholders, mapped to real accounts at the end
     var placeholders={};
+    var EMPSUB=recoveryAccts(b);             // FIX_SPEC_5 A3: loan / advance accounts keep the employee as sub-account
     function need(key){ var n=sysAcct(b,key,false); if(n) return n.id; var ph='@'+lc(key); placeholders[ph]=key; return ph; }
     function nameOfId(id){ if(id===SBE) return 'Starting balance equity'; if(id===SUSP) return 'Suspense'; if(placeholders[id]) return SYS[lc(placeholders[id])]?SYS[lc(placeholders[id])].name:placeholders[id]; var n=byId(b,id); return n?n.name:id; }
 
@@ -188,7 +198,7 @@ var GL = (function(){
         if(blank(sub)){ return { a:null, v:v, t:extra.t, d:extra.d, why:'"'+n.name+'" needs a '+(kind==='bankCash'?'bank or cash account':'sub-account') }; }
         if(kind==='bankCash'){ var bk=bankOf(b,sub); if(!bk) return { a:null, v:v, t:extra.t, why:'unknown bank account "'+sub+'"' }; sub=bk.name; }
       }
-      return { a:n.id, s:kind?sub:'', v:v, t:extra.t, d:extra.d };
+      return { a:n.id, s:kind?sub:(EMPSUB[n.id]&&!blank(sub)?String(sub):''), v:v, t:extra.t, d:extra.d };
     }
     function bankEnt(ref, v, t){ var bk=bankOf(b,ref);
       if(!bk) return { a:null, v:v, t:t, why:blank(ref)?'no bank or cash account selected':'unknown bank account "'+ref+'"' };
@@ -301,6 +311,9 @@ var GL = (function(){
       /* withholding tax deducted on the invoice itself: receivable from the authority, not the customer */
       if(!purchase && key==='salesInv' && inv.withholding && num(inv.withholdingAmt||inv.whtAmount) && !blank(party)){
         var w=num(inv.withholdingAmt||inv.whtAmount); ents.push({ a:need('withholding tax receivable'), v:w, t:'Withholding tax — '+party }, { a:need('accounts receivable'), s:party, v:-w, t:'Withholding tax — '+party }); }
+      /* purchase side: the withheld part is owed to the tax authority, not the supplier */
+      if(purchase && key==='purchInv' && inv.withholding && num(inv.withholdingAmt||inv.whtAmount) && !blank(party)){
+        var wp=num(inv.withholdingAmt||inv.whtAmount); ents.push({ a:need('accounts payable'), s:party, v:wp, t:'Withholding tax — '+party }, { a:need('withholding tax payable'), v:-wp, t:'Withholding tax — '+party }); }
       post({ src:key, id:inv.id, date:inv.issueDate||inv.date, ref:inv.reference, type:typ, party:party, desc:inv.description }, ents);
     }
     (R.salesInv||[]).forEach(function(i){ if(i) invoiceDoc(i,'salesInv','customer','accounts receivable',false,1,'Sales invoice'); });
@@ -321,14 +334,19 @@ var GL = (function(){
           [ { a:need('accounts receivable'), s:i.customer, v:f }, { a:lfa.id, v:-f } ]); }); }catch(e){}
 
     /* ---------- payslips: earnings to salaries, net pay owed to the employee ---------- */
-    (R.payslips||[]).forEach(function(p){ if(!p) return; var emp=p.employee||p.empName||''; var typ='Payslip'+(emp?' — '+emp:'');
+    /* FIX_SPEC_4 #3: the payslips of a posted payroll run post as ONE journal entry per run (js/payroll.js registers
+       the 'payroll' source below), so they are skipped here; a payslip on its own posts as before */
+    var payRunSrc=SOURCES.some(function(S){ return S.id==='payroll'; }), postedRun={};
+    if(payRunSrc) (R.payroll||[]).forEach(function(r){ if(r&&r.state==='posted'&&r.id!=null) postedRun[String(r.id)]=1; });
+    (R.payslips||[]).forEach(function(p){ if(!p) return; var rid=(p.payrollRunId!=null&&p.payrollRunId!=='')?p.payrollRunId:p.payrollRun; if(payRunSrc && rid!=null && rid!=='' && postedRun[String(rid)]) return;
+      var emp=p.employee||p.empName||''; var typ='Payslip'+(emp?' — '+emp:'');
       var ents=[], netPay=0, lns=(p.lines||[]).filter(function(l){ return l; });
       if(lns.length){ lns.forEach(function(ln){ var a=num(ln.amount!=null&&ln.amount!==''?ln.amount:(ln.net!=null&&ln.net!==''?ln.net:ln.amountNoTax)); if(!a) return;
           var n=lineAcct(b,ln), pt=lc(ln.ptype||ln.type);
           if(pt==='contribution'){ /* employer contribution: expense and a separate liability, not net pay */
             if(n) ents.push(acctEnt(n,lineSub(ln),Math.abs(a),{t:typ})); var la=byId(b,ln.liabilityAccount)||byName(b,ln.liabilityAccount); ents.push(acctEnt(la,'',-Math.abs(a),{t:typ})); return; }
           var deduction = pt==='deduction' || a<0; var v=Math.abs(a);
-          if(deduction){ netPay-=v; ents.push(n?acctEnt(n,lineSub(ln),-v,{t:typ+' — deduction'}):{ a:need('salaries'), v:-v, t:typ+' — deduction' }); }
+          if(deduction){ netPay-=v; var dsub=lineSub(ln)||(n&&EMPSUB[n.id]?emp:''); ents.push(n?acctEnt(n,dsub,-v,{t:typ+(n&&EMPSUB[n.id]?' — recovery':' — deduction')}):{ a:need('salaries'), v:-v, t:typ+' — deduction' }); }
           else { netPay+=v; ents.push(n?acctEnt(n,lineSub(ln),v,{t:typ+' — earning'}):{ a:need('salaries'), v:v, t:typ+' — earning' }); } }); }
       else { netPay=num(p.netPay!=null&&p.netPay!==''?p.netPay:p.total); if(netPay) ents.push({ a:need('salaries'), v:netPay, t:typ }); }
       if(netPay) ents.push(blank(emp)?{ a:null, v:-netPay, why:'no employee selected' }:{ a:need('employee clearing account'), s:emp, v:-netPay, t:'Net pay'+(emp?' — '+emp:'') });
@@ -427,7 +445,7 @@ var GL = (function(){
 
   /* --------------------------------------------------------------- caching */
   var CACHE=[];
-  function fingerprint(b){ try{ return JSON.stringify([b.id,b.records,b.coa,b.lateFees,b.inventoryKits,b.taxCodes,today()]); }catch(e){ return null; } }
+  function fingerprint(b){ try{ return JSON.stringify([b.id,b.records,b.coa,b.lateFees,b.inventoryKits,b.taxCodes,b.payslipItems,today()]); }catch(e){ return null; } }
   function get(b){ if(!b) return { lines:[], txs:[], issues:[], byAcct:{} };
     var fp=fingerprint(b);
     for(var i=0;i<CACHE.length;i++){ if(CACHE[i].fp===fp && fp!=null){
@@ -503,7 +521,8 @@ var GL = (function(){
 
   return { build:build, get:get, invalidate:invalidate, balance:balance, net:net, entries:entries, subBalance:subBalance,
            subBalances:subBalances, docLines:docLines, partyEntries:partyEntries, trial:trial, issues:issues, sysAcct:sysAcct, lineNums:lineNums,
-           lineAcct:lineAcct, subKind:subKind, bankOf:bankOf, num:num, r2:r2, today:today, rcTagOf:rcTagOf, registerSource:registerSource };
+           lineAcct:lineAcct, subKind:subKind, bankOf:bankOf, num:num, r2:r2, today:today, rcTagOf:rcTagOf, registerSource:registerSource,
+           recoveryAccts:recoveryAccts, empSubAcct:empSubAcct };
 })();
 if(typeof window!=='undefined') window.GL=GL;
 
@@ -517,7 +536,10 @@ function postingsForRecord(b,key,rec){
   var lines=(rec.id!=null)?GL.docLines(b,key,rec.id):[];
   var src=b;
   if(!lines.length){ src=JSON.parse(JSON.stringify(b)); src.records=src.records||{}; var arr=(src.records[key]||[]).filter(function(x){ return !(rec.id!=null&&x.id===rec.id); });
-    var tmp=JSON.parse(JSON.stringify(rec)); if(tmp.id==null) tmp.id='__preview__'; arr.push(tmp); src.records[key]=arr;
+    var tmp=JSON.parse(JSON.stringify(rec)); if(tmp.id==null) tmp.id='__preview__';
+    /* a payslip of a payroll run posts inside the run's one journal entry: show its own share here */
+    if(key==='payslips'){ delete tmp.payrollRunId; delete tmp.payrollRun; }
+    arr.push(tmp); src.records[key]=arr;
     lines=GL.build(src).lines.filter(function(L){ return L.src===key && String(L.id)===String(tmp.id); }); }
   var banks=((src.records||{}).bankCash)||[];
   return lines.map(function(L){ var n=(src.coa||[]).filter(function(x){ return x&&x.id===L.acct; })[0];

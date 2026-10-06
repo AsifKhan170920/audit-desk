@@ -26,6 +26,7 @@ const App = {
       flagControls(b); ensureSubledgerControls(b); ensureInventoryAccounts(b); ensureFixedAssetAccounts(b); ensureCapitalControl(b); ensureSuspense(b);
       if(b.id===1001 && !b.bankReconciled && b.records&&b.records.bankCash){ // keep demo's shown bank balances stable now that receipts post
         b.records.bankCash.forEach(rec=>{ const seeded=Number(rec.balance)||0; rec.balance=0; const move=bankActual(b,rec); rec.balance=seeded-move; }); b.bankReconciled=true; }
+      try{ this.coaFixSaleIncome(b); }catch(e){}   /* one-time: "Sale" under Expenses -> Income (FIX_SPEC_4 #1.6) */
       refreshSummary(b); });
     DB.set(DB.k.biz,biz);
     try{ this.paintStaticIcons(); }catch(e){}
@@ -231,7 +232,10 @@ const App = {
   },
 
   /* ---------- workspace ---------- */
-  openBusiness(id){ this.navTrail=[]; this.recReturn=null; this.openBiz=id; this.wsSection='Summary'; this.wsMode='summary'; this.listQuery=''; this.go('workspace'); },
+  openBusiness(id){ this.navTrail=[]; this.recReturn=null; this.openBiz=id;
+    /* a business that arrived after start-up (cloud sync, restore, import) still gets its one-time chart fix */
+    try{ const ob=this.curBiz(); if(ob && this.coaFixSaleIncome(ob)) this.saveBiz(ob); }catch(e){}
+    this.wsSection='Summary'; this.wsMode='summary'; this.listQuery=''; this.go('workspace'); },
   closeBusiness(){ this.openBiz=null; this.go('businesses'); },
   curBiz(){ return DB.get(DB.k.biz,[]).find(b=>b.id===this.openBiz); },
   saveBiz(b){ const all=DB.get(DB.k.biz,[]); const i=all.findIndex(x=>x.id===b.id); if(i>=0){ all[i]=b; DB.set(DB.k.biz,all); } },
@@ -1240,7 +1244,7 @@ const App = {
     var prec=((b.records&&b.records[listKey])||[]).find(function(x){ return (x.name||'')===nm; })||{};
     var addrSrc=(rec.billingAddress!=null&&String(rec.billingAddress).trim()!=='')?rec.billingAddress:(prec.address||'');
     var addrH=(addrSrc||'').split('\n').filter(Boolean).map(l=>e(l)).join('<br>');
-    var trn=prec.trn?('TRN: '+e(prec.trn)):''; var phone=prec.phone?('Tel: '+e(prec.phone)):''; var email=prec.email?e(prec.email):'';
+    var trnV=(isP&&rec.supTRN!=null&&String(rec.supTRN).trim()!=='')?rec.supTRN:prec.trn; var trn=trnV?('TRN: '+e(trnV)):''; var phone=prec.phone?('Tel: '+e(prec.phone)):''; var email=prec.email?e(prec.email):'';
     return [addrH,trn,phone,email].filter(Boolean).join('<br>'); },
   voucherDoc(b,c,rec,opts){ const d=b.details||{}; const isCash=c.lines&&c.lines.kind==='cash'; const isInv=c.lines&&c.lines.kind==='invoice'; const e=s=>this.esc(s);
     const _off={}; (Array.isArray(rec.printOff)?rec.printOff:[]).forEach(v=>{ _off[v]=1; }); const PO=(...vs)=>!(opts&&opts.edit)&&vs.some(v=>_off[v]);
@@ -1302,7 +1306,7 @@ const App = {
       if(rec.disclaimer&&(rec.printDisclaimer==null||rec.printDisclaimer)&&SHOW(key,'disclaimer')) cf+='<div class="iv-cfblock"><strong>Disclaimer</strong>'+e(rec.disclaimer).split('\n').join('<br>')+'</div>';
       if(d.footer&&SHOW(key,'footer')) cf+='<div class="iv-cfblock">'+e(d.footer).split('\n').join('<br>')+'</div>';
       const cfWrap=cf?'<div class="iv-cf">'+cf+'</div>':'';
-      const showBank=(!isP)&&(rec.printBankDetails==null||rec.printBankDetails)&&SHOW(key,'bankDetails');
+      const showBank=(!isP||rec.bankDetailsOn===true)&&(rec.printBankDetails==null||rec.printBankDetails)&&SHOW(key,'bankDetails');   /* purchase documents: the Bank Accounts Detail option */
       const _bankTxt=String(rec.bankDetails||rec.bank_accounts_detail||'').trim();
       const bankBox=(showBank&&(_bankTxt||ed))?'<div class="iv-bankbox"><div class="iv-bb-lbl">Bank Details:</div><div class="iv-bb-area">'+(_bankTxt?e(_bankTxt).split('\n').join('<br>'):'')+'</div></div>':'';
       const signBox='<div class="iv-sign"><div class="iv-sign-box"><div class="iv-sign-top">For '+co+'</div><div class="iv-sign-bot">Sign and stamp</div></div><div class="iv-sign-box"><div class="iv-sign-top">'+(isP?'For supplier':'For customer')+'</div><div class="iv-sign-bot">Sign and stamp</div></div></div>';
@@ -1316,7 +1320,7 @@ const App = {
         if(ed){ h='<div class="iv-slot" ondragover="event.preventDefault()" ondrop="App.fmtDropSlot(\''+slot+'\')">'+(h||'<span class="iv-slot-empty">'+slot+' — drop a separate field here</span>')+'</div>'; }
         return h; };
       const fieldsH=(SHOW(key,'date')?'<dt>'+dateLbl+'</dt><dd>'+e(this.fmtDateUS(rec.issueDate||rec.date))+'</dd>':'')+
-        (rec.reference&&SHOW(key,'reference')?'<dt>'+numLbl+'</dt><dd>'+e(rec.reference)+'</dd>':'')+
+        (rec.reference&&SHOW(key,'reference')?'<dt>'+numLbl+'</dt><dd>'+e(rec.reference)+'</dd>':'')+(isP&&rec.supplierInvoiceNo?'<dt>'+(key==='purchInv'||key==='debitNotes'?'SUPPLIER INVOICE NO.':'SUPPLIER REFERENCE')+'</dt><dd>'+e(rec.supplierInvoiceNo)+'</dd>':'')+
         (()=>{ if(rec.hideDueDate||!SHOW(key,'dueDate')) return ''; const isQ=(key==='salesQuotes'||key==='purchQuotes'); const dv=isQ?(rec.validUntil||rec.expiryDate||rec.dueDate):rec.dueDate;
           if(!dv&&!(key==='salesInv'||key==='purchInv')) return ''; return '<dt>'+(isQ?'Valid until':'Due Date')+'</dt><dd>'+(dv?e(this.fmtDateUS(dv)):'-')+'</dd>'; })();
       const partyName=SHOW(key,'party')?e(party):''; let partyAddr=SHOW(key,'partyAddress')?this._partyBlock(b,key,rec):''; if(PO('f:custTRN','f:supTRN')) partyAddr=partyAddr.split('<br>').filter(l=>l.indexOf('TRN: ')!==0).join('<br>');
@@ -4287,7 +4291,59 @@ const App = {
     { let acc=0; (b.coaTop&&b.coaTop.pl||[]).forEach(id=>{ const n=b.coa.find(x=>x.id===id); if(!n) return; if(n.type==='group') acc+=((n.plkind==='expense')?-1:1)*this.coaSectionSubtotal(b,id,mov); else if(n.type==='total'){ out[id]=acc; } }); }
     return out; },
   coaSideOf(b,n){ let p=n.parent,g=0; const roots=['assets','liabilities','equity','pl']; while(p&&roots.indexOf(p)<0&&g++<60){ const x=b.coa.find(y=>y.id===p); if(!x)break; p=x.parent; } return p==='pl'?'pl':'bs'; },
-  coaGroupOptions(b,side,excludeId){ let opts=[];
+  /* ----- the five elements (FIX_SPEC_4 #1) -----
+     The one list every account-creation form offers as its Group: the Chart of
+     Accounts editor and the inline "＋ Add New Account" dialog both build from it,
+     so Income / Expenses are always there — also before the business has any
+     Profit & Loss group (a new chart has none). "Income" / "Expenses" carry a
+     sentinel value that coaResolveParent turns into the proper P&L group. */
+  COA_ELEMENTS:[
+    {key:'assets',      label:'Assets',      side:'bs', value:'assets',      nature:'D'},
+    {key:'liabilities', label:'Liabilities', side:'bs', value:'liabilities', nature:'C'},
+    {key:'equity',      label:'Equity',      side:'bs', value:'equity',      nature:'C'},
+    {key:'income',      label:'Income',      side:'pl', value:'@income',     nature:'C', plkind:'income'},
+    {key:'expense',     label:'Expenses',    side:'pl', value:'@expense',    nature:'D', plkind:'expense'}],
+  /* the Group a new account starts on, by the form it is created from (the user can change it) */
+  COA_CONTEXT_DEFAULT:{ salesInv:'@income', creditNotes:'@income', salesQuotes:'@income', salesOrders:'@income',
+    purchInv:'@expense', debitNotes:'@expense', purchQuotes:'@expense', purchOrders:'@expense', bankCash:'assets',
+    sales:'@income', purchase:'@expense' },   /* the shared invoice form tags its account lists data-qc-context="sales" | "purchase" */
+  COA_GROUP_REQUIRED:'Group is required — choose Assets, Liabilities, Equity, Income or Expenses.',
+  coaDefaultGroupFor(key){ return (key && this.COA_CONTEXT_DEFAULT[key]) || ''; },
+  /* top-level P&L groups of one kind, in statement order (no plkind reads as income, as acctRoot does) */
+  coaPlGroupsOf(b,kind){ const order=(b.coaTop&&b.coaTop.pl)||[]; const pos=id=>{ const i=order.indexOf(id); return i<0?1e9:i; };
+    return (b.coa||[]).filter(n=>n&&n.type==='group'&&n.parent==='pl'&&((n.plkind==='expense')?'expense':'income')===kind).sort((x,y)=>pos(x.id)-pos(y.id)); },
+  _coaIsElementName(name,kind){ return kind==='expense' ? /^expenses?$/i.test(String(name||'').trim()) : /^income$/i.test(String(name||'').trim()); },
+  /* The P&L group behind plain "Income" / "Expenses": the top-level group of that name, else the first
+     one of that kind, else a new one — always listed in coaTop.pl, so it shows on the statement. */
+  coaElementGroup(b,kind){ kind=kind==='expense'?'expense':'income'; b.coa=b.coa||[]; b.coaTop=b.coaTop||{bs:['assets','liabilities','equity'],pl:[]}; b.coaTop.pl=b.coaTop.pl||[];
+    const gs=this.coaPlGroupsOf(b,kind); let g=gs.find(x=>this._coaIsElementName(x.name,kind))||gs[0];
+    if(!g){ let id='sys_g_'+kind; if(b.coa.some(n=>n&&n.id===id)) id='g'+kind+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
+      g={id,type:'group',name:kind==='income'?'Income':'Expenses',code:'',parent:'pl',plkind:kind}; b.coa.push(g); }
+    if(b.coaTop.pl.indexOf(g.id)<0) this.plInsert(b,g.id);
+    return g.id; },
+  /* Group options for an account: the five elements, each with its own groups nested beneath it.
+     The P&L group that *is* the element (named "Income" / "Expenses") is folded into the element row. */
+  coaElementOptions(b,excludeId){ const opts=[];
+    const add=(pk,d,el)=>{ (b.coa||[]).filter(n=>n.type==='group'&&n.parent===pk&&n.id!==excludeId).forEach(g=>{ opts.push({value:g.id,label:g.name,depth:d,element:el}); add(g.id,d+1,el); }); };
+    this.COA_ELEMENTS.forEach(e=>{ opts.push({value:e.value,label:e.label,depth:0,element:e.key});
+      if(e.side==='bs'){ add(e.value,1,e.key); return; }
+      const gs=this.coaPlGroupsOf(b,e.plkind).filter(g=>g.id!==excludeId); const home=gs.find(g=>this._coaIsElementName(g.name,e.plkind));
+      gs.forEach(g=>{ if(g===home){ add(g.id,1,e.key); return; } opts.push({value:g.id,label:g.name,depth:1,element:e.key}); add(g.id,2,e.key); }); });
+    return opts; },
+  /* the option value that stands for an account's current parent (its home P&L group shows as the element) */
+  coaElementValueOf(b,parent){ const opts=this.coaElementOptions(b,null); if(opts.some(o=>String(o.value)===String(parent))) return parent;
+    const n=(b.coa||[]).find(x=>x.id===parent); if(n&&n.type==='group'&&n.parent==='pl') return n.plkind==='expense'?'@expense':'@income'; return parent; },
+  /* "Sale" / "Sales" created under Expenses because the Group list had no Income (FIX_SPEC_4 #1.6):
+     moved once into the Income group. Returns true when `b` changed and needs saving. */
+  coaFixSaleIncome(b){ if(!b||!b.coa||b._fix4SaleIncome) return false; const moved=[];
+    b.coa.forEach(n=>{ if(!n||n.type!=='account'||!/^sales?$/i.test(String(n.name||'').trim())) return;
+      let root='assets'; try{ root=acctRoot(b,n); }catch(e){} if(root!=='expense') return;
+      const from=((b.coa.find(x=>x.id===n.parent)||{}).name)||n.parent; n.parent=this.coaElementGroup(b,'income'); moved.push({name:n.name,from}); });
+    b._fix4SaleIncome=1;
+    if(moved.length){ try{ refreshSummary(b); }catch(e){}
+      moved.forEach(m=>{ try{ this._logActivity(b,'update','coa',null,null,{label:'Chart of Accounts — account “'+m.name+'” moved from '+m.from+' to Income'}); }catch(e){} }); }
+    return true; },
+  coaGroupOptions(b,side,excludeId){ if(side==='all') return this.coaElementOptions(b,excludeId); let opts=[];
     const add=(pk,d)=>{ b.coa.filter(n=>n.type==='group'&&n.parent===pk&&n.id!==excludeId).forEach(g=>{ opts.push({value:g.id,label:g.name,depth:d}); add(g.id,d+1); }); };
     if(side==='bs'){ const T=b.coaSections||{}; [['assets',T.assets||'Assets'],['liabilities',T.liabilities||'Liabilities'],['equity',T.equity||'Equity']].forEach(s=>{ opts.push({value:s[0],label:s[1],depth:0}); add(s[0],1); }); }
     else add('pl',0);
@@ -4312,12 +4368,13 @@ const App = {
         const opts=this.coaGroupOptions(b,'bs',ctx.id).map(o=>'<option value="'+o.value+'"'+(String(curParent)===String(o.value)?' selected':'')+'>'+'\u00A0\u00A0\u00A0\u00A0'.repeat(o.depth)+this.esc(o.label)+'</option>').join('');
         inner+='<label class="fld">Group</label><select id="coa_parent">'+opts+'</select>'; } }
     else { title=(node?'Edit ':'New ')+sideLabel+' Account';
-      const gopts=this.coaGroupOptions(b,ctx.side,null); const curParent=node?node.parent:(ctx.side==='bs'?'assets':(gopts[0]?gopts[0].value:''));
-      const optsHtml=gopts.length? gopts.map(o=>'<option value="'+o.value+'"'+(String(curParent)===String(o.value)?' selected':'')+'>'+'\u00A0\u00A0\u00A0\u00A0'.repeat(o.depth)+this.esc(o.label)+'</option>').join('') : '<option value="">(no groups — one will be created)</option>';
+      /* the five elements with their groups (COA_ELEMENTS) — a new account picks its Group, none is assumed */
+      const gopts=this.coaGroupOptions(b,'all',null); const curParent=node?this.coaElementValueOf(b,node.parent):'';
+      const optsHtml='<option value=""'+(curParent?'':' selected')+'>\u2014 select group \u2014</option>'+gopts.map(o=>'<option value="'+this.esc(o.value)+'"'+(String(curParent)===String(o.value)?' selected':'')+(o.depth?'':' style="font-weight:600"')+'>'+'\u00A0\u00A0\u00A0\u00A0'.repeat(o.depth)+this.esc(o.label)+'</option>').join('');
       inner='<label class="fld">Name</label><input id="coa_name" type="text" value="'+this.esc(node?node.name:'')+'">'+
         '<label class="fld">Code</label><input id="coa_code" type="text" value="'+this.esc(node?node.code:'')+'" placeholder="optional, e.g. 1200">'+
         '<label class="fld">Group</label><select id="coa_parent">'+optsHtml+'</select>'+
-        (ctx.side==='pl'&&!gopts.length?'<div style="color:#999;font-size:12px;margin-top:4px">No Profit &amp; Loss groups yet — an \u201cUncategorised\u201d income group will be created for this account. Add Income/Expense groups via New Group.</div>':'')+
+        '<div style="color:#999;font-size:12px;margin-top:4px">Choose Assets, Liabilities, Equity, Income or Expenses (or one of their groups). Income / Expenses accounts go to the Profit &amp; Loss statement.</div>'+
         '<label class="fld">Starting balance</label><input id="coa_bal" type="text" inputmode="decimal" value="'+(node&&node.balance?node.balance:'')+'" placeholder="0.00">'+
         (node&&node.control?'<div style="color:#999;font-size:12px;margin-top:6px">This is a control account. Its balance is this starting figure plus the movements in its subsidiary ledger (customers, suppliers, bank &amp; cash accounts, and so on), so it updates automatically as you post transactions.</div>':''); }
     const canDel=node&&ctx.kind!=='section'&&!node.mandatory&&!node.control&&!(ctx.kind==='group'&&b.coa.some(n=>n.parent===node.id));
@@ -4352,6 +4409,7 @@ const App = {
       refreshSummary(b); this.saveBiz(b); this.coaCtx=null; this.renderMain(b); return;
     }
     // account
+    if(!((document.getElementById('coa_parent')||{}).value)){ alert(this.COA_GROUP_REQUIRED); return; }
     const bal=this.parseNum((document.getElementById('coa_bal')||{}).value)||0;
     if(ctx.id){ const parent=this.coaResolveParent(b,ctx.side,(document.getElementById('coa_parent')||{}).value);
       const n=b.coa.find(x=>x.id===ctx.id); n.name=name; n.code=code; n.parent=parent; n.balance=bal; }
@@ -4360,6 +4418,7 @@ const App = {
     refreshSummary(b); this.saveBiz(b); this.coaCtx=null; this.renderMain(b); },
   /* A Profit & Loss account needs a group to live in; make one if there is none. */
   coaResolveParent(b,side,parent){
+    if(parent==='@income' || parent==='@expense') return this.coaElementGroup(b,parent.slice(1));   /* plain Income / Expenses (COA_ELEMENTS) */
     if(side==='pl' && !parent){ const gid='g'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
       b.coa.push({id:gid,type:'group',name:'Uncategorised',code:'',parent:'pl',plkind:'income'}); this.plInsert(b,gid); return gid; }
     return parent; },
@@ -4693,20 +4752,29 @@ const App = {
     const p=periodOf(b); const periodTxt=p.from&&p.to?('For the period '+this.fmtDate(p.from)+' – '+this.fmtDate(p.to)):'';
     /* balance sheet as at the period end, profit and loss for the period — the same ledger the reports read */
     const S=summaryFromCoa(b,{from:p.from,to:p.to}); const totals={};
+    /* P&L groups missing from the chart order (summaryFromCoa appends them) are listed too, before the first total line */
+    const plOrder=((b.coaTop&&b.coaTop.pl)||[]).slice(); (b.coa||[]).forEach(n=>{ if(n&&n.type==='group'&&n.parent==='pl'&&plOrder.indexOf(n.id)<0){ const ti=plOrder.findIndex(x=>{ const m=(b.coa||[]).find(y=>y.id===x); return m&&m.type==='total'; }); if(ti<0) plOrder.push(n.id); else plOrder.splice(ti,0,n.id); } });
     { let acc=0; const sec={assets:0,liabilities:1,equity:2}; (b.coaTop&&b.coaTop.bs||['assets','liabilities','equity']).forEach(id=>{ if(sec[id]!=null) acc+=(S.balanceSheet[sec[id]]||{}).total||0; else totals[id]=acc; }); }
-    { let acc=0,gi=0; (b.coaTop&&b.coaTop.pl||[]).forEach(id=>{ const n=(b.coa||[]).find(x=>x.id===id); if(!n) return; if(n.type==='group'){ const g=S.profitLoss[gi++]; if(g) acc+=(g.plkind==='expense'?-1:1)*(g.total||0); } else if(n.type==='total') totals[id]=acc; }); } const BS=['assets','liabilities','equity'];
+    /* S.profitLoss lists the chart-order groups first, then the missing ones (summaryFromCoa) */
+    const grpIdx={}; { let gk=0; ((b.coaTop&&b.coaTop.pl)||[]).forEach(id=>{ const n=(b.coa||[]).find(x=>x.id===id); if(n&&n.type==='group'&&grpIdx[id]==null) grpIdx[id]=gk++; }); (b.coa||[]).forEach(n=>{ if(n&&n.type==='group'&&n.parent==='pl'&&grpIdx[n.id]==null) grpIdx[n.id]=gk++; }); }
+    { let acc=0; plOrder.forEach(id=>{ const n=(b.coa||[]).find(x=>x.id===id); if(!n) return; if(n.type==='group'){ const g=S.profitLoss[grpIdx[id]]; if(g) acc+=(g.plkind==='expense'?-1:1)*(g.total||0); } else if(n.type==='total') totals[id]=acc; }); } const BS=['assets','liabilities','equity'];
     const bsMap={assets:S.balanceSheet[0],liabilities:S.balanceSheet[1],equity:S.balanceSheet[2]};
     let bsOut=''; (b.coaTop&&b.coaTop.bs||BS).forEach(id=>{ if(bsMap[id]) bsOut+=this.sectionHtml(bsMap[id]); else { const n=(b.coa||[]).find(x=>x.id===id); if(n&&n.type==='total') bsOut+=this.totalLineHtml(n.name,totals[id]||0); } });
-    let plOut='',gi=0; (b.coaTop&&b.coaTop.pl||[]).forEach(id=>{ const n=(b.coa||[]).find(x=>x.id===id); if(!n) return; if(n.type==='group'){ const sec=S.profitLoss[gi++]; if(sec) plOut+=this.sectionHtml(sec); } else if(n.type==='total') plOut+=this.totalLineHtml(n.name,totals[id]||0); });
+    let plOut=''; plOrder.forEach(id=>{ const n=(b.coa||[]).find(x=>x.id===id); if(!n) return; if(n.type==='group'){ const sec=S.profitLoss[grpIdx[id]]; if(sec) plOut+=this.sectionHtml(sec); } else if(n.type==='total') plOut+=this.totalLineHtml(n.name,totals[id]||0); });
     /* Summary is the statements. The cards and charts derived from them live on
        the Dashboard tab above it — both read the same engine, so the two always
        agree. */
     return this.crumb('Summary')+
       '<div class="ws-tabrow"><span class="ws-tab active">Summary</span><button class="btn btn-sm" onclick="App.editSummary()">Edit</button></div>'+
-      '<div class="ws-period">'+periodTxt+'</div>'+
+      '<div class="ws-period">'+periodTxt+'</div>'+this._laterNote(b,p)+
       '<div class="sum-grid"><div class="sum-col"><div class="col-label">Balance Sheet</div>'+bsOut+'</div>'+
       '<div class="sum-col"><div class="col-label">Profit and Loss Statement</div>'+plOut+'</div></div>';
   },
+  /* FIX_SPEC_4 #3: the Summary is as at the period end — a payroll dated at month end (or anything else
+     dated after it) is not in it yet. Say so, rather than leave the salary expense silently missing. */
+  _laterNote(b,p){ if(!p||!p.to) return ''; let txs=[]; try{ txs=GL.get(b).txs.filter(t=>t&&t.date&&t.date>p.to&&t.lines.some(L=>L.debit||L.credit)); }catch(e){ return ''; } if(!txs.length) return '';
+    const pay=txs.filter(t=>t.src==='payroll'||t.src==='payslips'); const ex=(pay.length?pay:txs).slice().sort((x,y)=>String(x.date).localeCompare(String(y.date)))[0];
+    return '<div class="info-bar sum-later" role="status">'+txs.length+' transaction'+(txs.length===1?' is':'s are')+' dated after '+this.esc(this.fmtDate(p.to))+' and not included'+(pay.length?' — including '+this.esc(ex.type||'payroll')+' on '+this.esc(this.fmtDate(ex.date)):'')+'. <a class="led-link" onclick="App.editSummary()">Change the period</a> to include '+(txs.length===1?'it':'them')+'.</div>'; },
   /* The Dashboard tab: the same cards, charts and panels that used to sit on top
      of the Summary, on a page of their own. */
   dashboardPageHtml(b){

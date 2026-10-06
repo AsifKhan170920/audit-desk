@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="css/settings-fixes-a.css">
 <link rel="stylesheet" href="css/settings-fixes-b.css">
 <link rel="stylesheet" href="css/reminders.css">
+<link rel="stylesheet" href="css/user-reminders.css">
 <link rel="stylesheet" href="css/payroll.css">
 <link rel="stylesheet" href="css/pdc.css">
 <link rel="stylesheet" href="css/loans.css">
@@ -60,6 +61,9 @@
         </div>
         <button class="hd-icon" id="hdNotify" title="Notifications" aria-label="Notifications"
           onclick="App.openNotifications()"></button>
+        <!-- Set reminder (js/user-reminders.js): label hides on narrow screens; shortcut R -->
+        <button class="hd-icon hd-remind" id="hdRemind" type="button" title="Set reminder (R)" aria-label="Set reminder"
+          aria-keyshortcuts="R" onclick="UserReminders.openNew()"><span class="hd-remind-i" data-ico="alarm"></span><span class="hd-remind-l">Reminder</span></button>
       </div>
     </div>
     <div class="tb-nav">
@@ -220,6 +224,7 @@
 <script src="js/stock-query.js"></script>
 <script src="js/doc-templates.js"></script>
 <script src="js/unsaved-guard.js"></script>
+<script src="js/user-reminders.js"></script>
 <!-- Custom modules (Settings -> Customisation; off for every business until switched on) -->
 <link rel="stylesheet" href="css/gill.css">
 <script src="js/gill-trips.js"></script>

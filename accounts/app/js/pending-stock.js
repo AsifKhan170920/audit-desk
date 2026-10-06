@@ -357,6 +357,26 @@
   function txWire() { var h = byId('txHost'); if (!h || h._psWired || !h.addEventListener) return; h._psWired = 1;
     h.addEventListener('change', function (e) { var el = e.target; if (!el || !el.getAttribute) return;
       if (el.getAttribute('data-f') === 'qty' || el.getAttribute('data-k') === 'date' || el.id === 'sfbLoc') txSchedule(); }); }
+  /* ---- native Purchase Invoice: an item / qty change offers the pending sales it can clear (as dPurchase does) */
+  function txBuyQty(t, l) { if (blank(l.item)) return 0; if (t.colQty === false) return 1; return blank(l.qty) ? 0 : num(l.qty); }
+  function txBuySigs(t) { var q = {}; (t.lines || []).forEach(function (l) { if (l && !blank(l.item)) q[l.item] = (q[l.item] || 0) + txBuyQty(t, l); });
+    var out = {}; Object.keys(q).forEach(function (it) { out[it] = sig(it, q[it]); }); return { qty: q, sig: out }; }
+  /** what the open record already clears; the current lines count as already asked */
+  function txBuyInit(b, t) { if (!b || !t || t._psClears) return;
+    var rec = t.mode === 'edit' && t.id != null ? recs(b, t.key).filter(function (r) { return r && r.id === t.id; })[0] : null;
+    t._psClears = clone((rec && rec.pendingClears) || []); t._psSig = txBuySigs(t).sig;
+    var h = byId('txHost'); if (h && h.addEventListener && !h._psBuyWired) { h._psBuyWired = 1;
+      h.addEventListener('change', function (e) { var el = e.target; if (el && el.getAttribute && el.getAttribute('data-f') === 'qty') setTimeout(txBuyScan, 30); }); } }
+  function txBuyScan() { var b = curB(), t = txState(); if (!b || !t || !BUY_KEYS[t.key] || busy) return Promise.resolve();
+    if (!hasDom() && !PS._autoClear) return Promise.resolve();
+    if (!t._psClears) txBuyInit(b, t);
+    var S = txBuySigs(t), it = Object.keys(S.sig).filter(function (x) { return S.qty[x] > 0 && t._psSig[x] !== S.sig[x] && invRec(b, x); })[0];
+    if (!it) return Promise.resolve(); t._psSig[it] = S.sig[it];
+    var list = openFor(b, it, t.key, t.mode === 'edit' && t.id != null ? { key: t.key, id: t.id } : null); if (!list.length) return txBuyScan();
+    busy = true; var preset = t._psClears.filter(function (c) { return c.item === it; });
+    return askClear(b, it, list, { qty: S.qty[it], supplier: t.supplier || '', preset: preset, key: t.key }).then(function (sel) { busy = false;
+      if (sel != null) { t._psClears = t._psClears.filter(function (c) { return c.item !== it; }).concat(sel.map(function (c) { return { pid: c.pid, item: it, qty: c.qty }; })); t._psTouched = true; }
+      return txBuyScan(); }, function (e) { busy = false; throw e; }); }
   function installTxn() {
     var TF = G.TxnForms; if (!TF || TF.__ps) return; TF.__ps = 1;
     TF.ext = TF.ext || { cols: [], onAccount: [], onDraw: [] }; TF.ext.cols = TF.ext.cols || []; TF.ext.onDraw = TF.ext.onDraw || [];
@@ -364,13 +384,18 @@
       /* the choice travels with an edited invoice; a clone / copy is asked afresh */
       load: function (tl, ln, b, t) { if (t && t.mode === 'edit' && ln && ln.pending && typeof ln.pending === 'object') tl.pending = clone(ln.pending); },
       save: function (l, o) { var p = l.pending; if (p && p.item === o.item && r6(num(p.qty)) === r6(num(o.qty))) o.pending = clone(p); } });
-    TF.ext.onDraw.push(function (b, t) { if (!t || t.key !== 'salesInv') return; try { txBadges(b, t); } catch (e) {}
+    TF.ext.onDraw.push(function (b, t) { if (t && BUY_KEYS[t.key]) { txBuyScan(); return; } if (!t || t.key !== 'salesInv') return; try { txBadges(b, t); } catch (e) {}
       txWire(); if (hasDom()) txSchedule(); });
+    /* the native Purchase Invoice keeps the pending sales it clears (header field, like the designed form) */
+    TF.ext.onSave = TF.ext.onSave || [];
+    TF.ext.onSave.push(function (b, t, rec) { if (!t || !BUY_KEYS[t.key] || !t._psTouched) return;
+      var have = {}; (rec.lines || []).forEach(function (ln) { if (ln && ln.item && num(ln.qty) > 0) have[ln.item] = 1; });
+      rec.pendingClears = (t._psClears || []).filter(function (c) { return c && have[c.item] && num(c.qty) > 0; }); });
     /* mount() draws the form without the onDraw hooks, and a qty / date / location change does not redraw
        it: the listener has to be there from the start (an invoice opened to edit is changed with no redraw) */
     var mount = TF.mount;
     if (typeof mount === 'function') TF.mount = function () { var r = mount.apply(this, arguments);
-      try { var t = txState(); if (t && t.key === 'salesInv') { txWire(); txBadges(curB(), t); } } catch (e) {} return r; };
+      try { var t = txState(); if (t && t.key === 'salesInv') { txWire(); txBadges(curB(), t); } if (t && BUY_KEYS[t.key]) txBuyInit(curB(), t); } catch (e) {} return r; };
     var origSave = TF.save;
     TF.save = function (act, opts) { var t = txState(), b = curB(), self = this, args = arguments;
       if (!t || !b || t.key !== 'salesInv') return origSave.apply(this, args);

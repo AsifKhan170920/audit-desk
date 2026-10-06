@@ -72,7 +72,6 @@
 .pr-grid td.pr-emp b{font-weight:600;word-break:break-word}
 .pr-grid tr.pr-off td{opacity:.55}
 .pr-grid tr.pr-off td.pr-stk{opacity:1;color:var(--muted)}
-.pr-note{font-size:11.5px;color:var(--warn);margin-top:2px;white-space:normal;max-width:260px}
 .pr-num{width:110px;max-width:100%;text-align:right;box-sizing:border-box}
 .pr-x{border:0;background:none;color:var(--muted-2);cursor:pointer;padding:0 0 0 4px;font-size:14px;line-height:1}
 .pr-x:hover{color:var(--danger)}
@@ -282,7 +281,6 @@ body.theme-dark .pr-run{--pr-in-line:#475569;--pr-in-bg:#0f172a;--pr-cell:#33415
 .pr-run .pr-grid thead .pr-stk-r{background:var(--pr-net-h)}
 .pr-run .pr-grid tbody td.pr-stk-r{background:var(--pr-net-c)}
 .pr-run .pr-grid td.pr-emp b{font-weight:600;color:var(--ink)}
-.pr-run .pr-note{font-size:11px;line-height:1.25;max-width:170px;margin-top:1px}
 .pr-run .pr-grid tr.pr-off td{opacity:1}
 .pr-run .pr-grid tr.pr-off td:not(.pr-stk){color:var(--muted)}
 .pr-run .pr-grid tr.pr-off .pr-num{opacity:.7}
@@ -291,3 +289,84 @@ body.theme-dark .pr-run{--pr-in-line:#475569;--pr-in-bg:#0f172a;--pr-cell:#33415
 .pr-run .pr-grid tfoot td.pr-stk{background:var(--surface-2)}
 .pr-run .pr-addcol{margin:8px 0 0}
 @media (max-width:640px){ .pr-run .pr-grid-wrap{width:auto} .pr-run .pr-grid .pr-stk-l1{max-width:130px} }
+
+/* ================================================ FIX_SPEC_4 #3 — run Edit, sync, reconciliation, history */
+.pr-rec{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:var(--radius-pill);font-size:12px;font-weight:600;white-space:nowrap;border:1px solid}
+.pr-rec-ok{background:var(--success-tint);color:var(--success);border-color:var(--success-line)}
+.pr-rec-bad{background:var(--danger-tint);color:var(--danger);border-color:var(--danger-line);cursor:help}
+.pr-warnbar{border:1px solid var(--warn-line);background:var(--warn-tint);color:var(--ink-2);margin:8px 0}
+.pr-recbox{border-color:var(--danger-line);background:var(--danger-tint)}
+.pr-recbox ul{margin:6px 0 8px 18px;padding:0}
+.pr-recbox li{margin:2px 0}
+.pr-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:4px 0 12px}
+.pr-tab{appearance:none;background:none;border:0;border-bottom:2px solid transparent;padding:7px 12px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.pr-tab.on{color:var(--ink);border-bottom-color:var(--primary);font-weight:600}
+.pr-cnt{display:inline-block;min-width:18px;padding:0 5px;border-radius:var(--radius-pill);background:var(--surface-2);font-size:11px;text-align:center}
+.pr-hist td{vertical-align:top}
+.pr-rm{margin-left:6px;vertical-align:middle}
+.pr-new{display:inline-block;margin-left:6px;padding:0 6px;border-radius:var(--radius-pill);background:var(--primary-tint);color:var(--primary);font-size:11px;font-weight:600}
+.pr-addemp{margin-top:8px}
+.pr-dlg-wrap{display:flex;justify-content:center;padding:24px 0}
+.pr-dlg{width:100%;max-width:560px;box-shadow:var(--shadow-card)}
+.pr-dlg-f .pr-f{flex:1 1 200px}
+.pr-psx{margin:14px 0 0}
+.pr-pshist summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--ink-2);padding:6px 0}
+.sum-later{margin:6px 0 10px}
+@media (max-width:640px){ .pr-dlg-wrap{padding:8px 0} .pr-tab{padding:7px 8px} }
+
+/* ================================================ FIX_SPEC_5 A1/A2/A4/A5/A7 — Run payroll grid, employee balance, payslip print
+   A1 root cause: the global form rule ".chk{display:flex;…;margin-top:16px}" (css/app.css) also matched the grid's
+   checkbox cells (th/td.act.chk). A flex th is not a table cell, so the browser ignored its rowspan=2 and the whole
+   second header row moved one column left. The grid cells no longer carry .chk; they stay display:table-cell and an
+   inner <div class="pr-cc"> centres the checkbox. The rule below also guards any .chk cell left in the grid. */
+.pr-grid th.chk,.pr-grid td.chk,.pr-grid th.pr-chk,.pr-grid td.pr-chk{display:table-cell;margin:0;text-align:center;vertical-align:middle}
+.pr-cc{display:flex;align-items:center;justify-content:center;min-height:18px}
+.pr-cc input{margin:0;width:16px;height:16px;cursor:pointer}
+.pr-run .pr-grid .pr-stk-l0{width:32px;min-width:32px;max-width:32px;padding:0 4px;box-sizing:border-box}
+.pr-run .pr-grid .pr-stk-l1{left:32px}
+.pr-emp-i{display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:0}
+.pr-emp-i b{overflow:hidden;text-overflow:ellipsis}
+.pr-run .pr-grid td.pr-emp .pr-code{margin-left:0}
+/* item columns never squash ("B A"): at least 110px, the title wraps between words only */
+.pr-run .pr-grid th.pr-col,.pr-run .pr-grid td.pr-col{min-width:110px}
+.pr-run .pr-grid th.pr-col{max-width:170px}
+.pr-run .pr-th-t{word-break:normal;overflow-wrap:normal;hyphens:none}
+.pr-run .pr-grid th.pr-sum,.pr-run .pr-grid td.pr-sum{font-weight:700}
+/* sticky right: Net pay | Before | After, fixed widths so they never overlap each other; solid background and a
+   left shadow on Net pay so scrolled columns pass under them cleanly */
+.pr-run .pr-grid .pr-stk-r{right:280px;width:120px;min-width:120px;max-width:120px;box-sizing:border-box}
+.pr-run .pr-grid .pr-stk-b1{right:140px;width:140px;min-width:140px;max-width:140px;box-sizing:border-box}
+.pr-run .pr-grid .pr-stk-b2{right:0;width:140px;min-width:140px;max-width:140px;box-sizing:border-box}
+.pr-run .pr-grid .pr-stk-rg{right:0}
+.pr-run .pr-grid .pr-stk-b1,.pr-run .pr-grid .pr-stk-b2,.pr-run .pr-grid .pr-stk-rg{z-index:2}
+.pr-run .pr-grid thead .pr-stk-b1,.pr-run .pr-grid thead .pr-stk-b2,.pr-run .pr-grid thead .pr-stk-rg{z-index:3}
+@media (max-width:1100px){
+  .pr-run .pr-grid :is(th,td).pr-stk:is(.pr-stk-r,.pr-stk-b1,.pr-stk-b2,.pr-stk-rg){position:static;box-shadow:none}
+}
+/* group colours: Salary cost, Recoveries (a different tint from Salary deductions), Employee balance */
+.pr-run{--pr-cost-h:#fdf0c8;--pr-cost-c:#fffaeb;--pr-rec-h:#ffe2c6;--pr-rec-c:#fff5ea;--pr-bal-h:#d8f0f1;--pr-bal-c:#f1fafa}
+body.theme-dark .pr-run{--pr-cost-h:#4a3b12;--pr-cost-c:#2f260c;--pr-rec-h:#5a3417;--pr-rec-c:#3a2310;--pr-bal-h:#164447;--pr-bal-c:#0f2e30}
+.pr-run .pr-grid th.pr-gx-cost{background:var(--pr-cost-h)}
+.pr-run .pr-grid td.pr-gx-cost{background:var(--pr-cost-c)}
+.pr-run .pr-grid th.pr-gx-recov{background:var(--pr-rec-h);color:var(--ink-2)}
+.pr-run .pr-grid td.pr-gx-recov{background:var(--pr-rec-c)}
+.pr-run .pr-grid th.pr-gx-bal{background:var(--pr-bal-h)}
+.pr-run .pr-grid td.pr-gx-bal{background:var(--pr-bal-c)}
+.pr-run .pr-grid tfoot td.pr-gx-bal{background:var(--pr-bal-h)}
+.pr-os{font-size:10.5px;line-height:1.2;color:var(--muted);margin-top:2px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pr-os-bad{color:var(--danger);font-weight:600}
+.pr-bal-l{white-space:nowrap;text-decoration:none;font-variant-numeric:tabular-nums}
+.pr-bal-pay{color:var(--ink)}
+.pr-bal-over{color:var(--danger)}
+.pr-bal-zero{color:var(--muted)}
+.pr-ovw{margin-left:4px;color:var(--warn);font-weight:700}
+.pr-ovw[hidden]{display:none}
+/* still overpaid after this payroll: amber row marker */
+.pr-run .pr-grid tr.pr-overpaid td.pr-stk-l1{background:var(--warn-tint);box-shadow:inset 3px 0 0 var(--warn),4px 0 6px -4px rgba(15,23,42,.22)}
+.pr-run .pr-grid tr.pr-overpaid td.pr-gx-bal{background:var(--warn-tint)}
+/* payslip print header and sections */
+.pr-psp-h dl{display:flex;flex-wrap:wrap;gap:4px 22px;margin:4px 0 8px;font-size:13px}
+.pr-psp-h dl>div{display:flex;gap:6px}
+.pr-psp-h dt{color:var(--muted)}
+.pr-psp-h dd{margin:0;font-weight:600;color:var(--ink)}
+.pr-psp-eq td{font-weight:700}

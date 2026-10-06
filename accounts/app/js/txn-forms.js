@@ -5,8 +5,13 @@
    lost while typing), searchable combo boxes with "+ Add new", and Tally-style
    keyboard entry.
 
-   It is the DEFAULT engine for receipts, payments and salesInv. A business can
-   switch any of the three back to Wasif's Form Designer path with
+   It is the DEFAULT engine for receipts, payments, salesInv and the purchase
+   documents (purchInv, purchQuotes, purchOrders, debitNotes). The purchase side
+   is the SAME invoice form, parametrised by SPEC[key].side==='purchase': the
+   party is a supplier (+ Supplier TRN, Supplier invoice no.), item prices are
+   purchase prices, the account list leads with Expenses / Assets and leaves out
+   Accounts receivable / payable, and "Bank Accounts Detail" is one more option.
+   A business can switch any of them back to Wasif's Form Designer path with
    b.formEngine[key] = 'designed' (link in the form footer); that path is left
    completely untouched.
 
@@ -20,6 +25,9 @@
      salesInv  { issueDate, date, dueType, dueDays, dueDateManual, dueDate,
                  reference, customer, billingAddress, description,
                  subtotal, tax, total, balanceDue, taxInclusive, ...options, lines[] }
+     purchInv  { ...the salesInv shape with supplier instead of customer, plus
+                 supName / supTRN / narration (what the Form Designer path and the
+                 Diesel prefill use), supplierInvoiceNo, bankDetailsOn, bankDetails }
      line      { item, account:<coa id>, accountName, sub, desc, description, qty,
                  price, discount, net, amount:<line total incl. tax>, taxAmt,
                  tax:<tax code name>, taxCode, taxRate, division }
@@ -32,7 +40,10 @@
 (function(global){
   'use strict';
 
-  var KEYS = { receipts:1, payments:1, salesInv:1 };
+  var KEYS = { receipts:1, payments:1, salesInv:1, purchInv:1, purchQuotes:1, purchOrders:1, debitNotes:1 };
+  /* purchase documents: one spec each, all the invoice form with the supplier side switched on */
+  function buySpec(singular, supRef){ return { kind:'inv', side:'purchase', singular:singular, partyLabel:'Supplier', addrLabel:'Billing address',
+    dateLabel:'Issue date', supRefLabel:supRef, buy:true, head:['date','due','ref','supRef','party','trn','address','desc'] }; }
   var SPEC = {
     receipts: { kind:'money', dir:1,  singular:'Receipt', partyLabel:'Paid by', bankLabel:'Received in',
                 bankField:'receivedIn', partyField:'paidBy', typeField:'paidByType', buy:false,
@@ -41,7 +52,11 @@
                 bankField:'paidFrom',  partyField:'payee',  typeField:'payeeType',  buy:true,
                 head:['date','ref','bank','contact','desc'] },
     salesInv: { kind:'inv', singular:'Sales Invoice', partyLabel:'Customer', addrLabel:'Billing address',
-                dateLabel:'Issue date', buy:false, head:['date','due','ref','party','address','desc'] }
+                dateLabel:'Issue date', buy:false, head:['date','due','ref','party','address','desc'] },
+    purchInv:    buySpec('Purchase Invoice', 'Supplier invoice no.'),
+    purchQuotes: buySpec('Purchase Quote',   'Supplier reference'),
+    purchOrders: buySpec('Purchase Order',   'Supplier reference'),
+    debitNotes:  buySpec('Debit Note',       'Supplier invoice no.')
   };
   /* option checkboxes, in the order the source shows them */
   var OPTS = {
@@ -54,6 +69,16 @@
             ['customTitleOn','Custom title'],['hideDueDate','Hide — Due date'],['hideBalanceDue','Hide — Balance due'],
             ['amountInWords','Amount in words']]
   };
+  /* purchase documents: the same list and order, plus the supplier's bank details (printed when ticked) */
+  OPTS.purch = OPTS.inv.concat([['bankDetailsOn','Bank Accounts Detail']]);
+  /** the purchase side of the invoice form */
+  function isBuy(t){ var S=SPEC[(t||TX).key]; return !!(S && S.kind==='inv' && S.side==='purchase'); }
+  /** the state / record field holding the invoice's party */
+  function partyKey(t){ return isBuy(t) ? 'supplier' : 'customer'; }
+  /* a designed purchase form stored its print checklist as switched-off field / column vars:
+     the matching option checkbox takes it over (they now drive the form and the printout) */
+  var PRINT_OFF_OPTS = { 'f:dueDate':['hideDueDate',true], 'f:balanceDue':['hideBalanceDue',true],
+    'f:amounts_in_word':['amountInWords',false], 'c:taxAmount':['showTaxCol',false] };
   var OPT_KEYS = ['colLineNum','colItem','showDescCol','colQty','colDiscount','discType','colDivision','taxExclusive','taxInclusive',
     'rounding','roundMode','withholding','whtType','whtRate','whtAmount','showTaxCol','fixedTotal','fixedTotalValue','customTitleOn','customTitle',
     'hideDueDate','hideBalanceDue','amountInWords'];
@@ -112,6 +137,8 @@
     if(/^intangible assets, at cost$/i.test(nm)) return 'intangibles';
     if(/^investments$/i.test(nm)) return 'investments';
     if(/^expense claims$/i.test(nm)) return 'claimPayer';
+    /* FIX_SPEC_5 A3: an employee loan / salary advance account (a Recovery payslip item) is kept per employee */
+    try{ if(typeof GL!=='undefined' && GL.empSubAcct && GL.empSubAcct(b,n.id)) return 'employees'; }catch(e){}
     return null;
   }
   function namesOf(b,list){ return (((b&&b.records)||{})[list]||[]).map(function(r){ return r && (r.name||r.customer||r.supplier); }).filter(Boolean); }
@@ -124,7 +151,8 @@
   function uniq(a){ var s={}, o=[]; a.forEach(function(x){ if(x && !s[x]){ s[x]=1; o.push(x); } }); return o; }
   /* extension points other modules register on TxnForms.ext (no-ops when nothing is registered):
      ext.cols      [{id, th, show(b,t), cell(b,t,l,i), load(stateLine, storedLine), save(stateLine, outLine)}]
-     ext.onAccount [fn(b,t,line,i)] after a line's account changes;  ext.onDraw [fn(b,t)] after a redraw */
+     ext.onAccount [fn(b,t,line,i)] after a line's account changes;  ext.onDraw [fn(b,t)] after a redraw
+     ext.onSave    [fn(b,t,rec)] when the record to store is built (header fields other modules keep) */
   function extList(){ var x=(typeof TxnForms!=='undefined' && TxnForms.ext) || null; return (x && Array.isArray(x.cols)) ? x.cols : []; }
   function hooks(n){ var x=(typeof TxnForms!=='undefined' && TxnForms.ext) || null; return (x && Array.isArray(x[n])) ? x[n] : []; }
 
@@ -187,11 +215,22 @@
     var A=app();
     t.autoRef = mode==='edit' ? false : blank(rec.reference);
     t.reference = mode==='edit' ? (rec.reference||'') : (blank(rec.reference) ? nextRef(b,key) : rec.reference);
+    var buy=inv && S.side==='purchase';
+    if(buy){
+      /* older purchase records (Form Designer path, Diesel prefill) name the supplier supName, the address
+         supAddress, the TRN supTRN and the description narration */
+      t.supplier=rec.supplier||rec.supName||''; t.billingAddress=rec.billingAddress!=null?rec.billingAddress:(rec.supAddress||'');
+      if(blank(t.description)) t.description=rec.narration||'';
+      var sp=partyRec(b,'suppliers',t.supplier);
+      t.trn=!blank(rec.supTRN) ? String(rec.supTRN) : (sp ? String(sp.trn||sp.taxNumber||'').trim() : '');
+      if(blank(t.billingAddress) && sp && mode==='new') t.billingAddress=String(sp.address||'').trim();
+      t.supplierInvoiceNo=rec.supplierInvoiceNo||'';
+      t.bankDetails=rec.bankDetails!=null ? rec.bankDetails : (rec.bank_accounts_detail||'');
+    } else if(inv){ t.customer=rec.customer||rec.custName||''; t.billingAddress=rec.billingAddress!=null?rec.billingAddress:(rec.custAddress||''); }
     if(inv){
-      t.customer=rec.customer||rec.custName||''; t.billingAddress=rec.billingAddress!=null?rec.billingAddress:(rec.custAddress||'');
       t.dueType=rec.dueType || (!blank(rec.dueDateManual)?'By':(blank(rec.dueDays)&&!blank(rec.dueDate)?'By':'Net'));
       t.dueDays=!blank(rec.dueDays)?rec.dueDays:''; t.dueDateManual=rec.dueDateManual || (t.dueType==='By'?(rec.dueDate||''):'');
-      if(t.dueType==='Net' && blank(t.dueDays) && mode==='new'){ var c=partyRec(b,'customers',t.customer); if(c && !blank(c.dueDays)) t.dueDays=c.dueDays; }
+      if(t.dueType==='Net' && blank(t.dueDays) && mode==='new'){ var c=partyRec(b,buy?'suppliers':'customers',t[partyKey(t)]); if(c && !blank(c.dueDays)) t.dueDays=c.dueDays; }
     } else {
       t.bank=rec[S.bankField]||'';
       t.partyType=partyTypeOf(b,rec,S.typeField,S.partyField);
@@ -200,6 +239,10 @@
     /* options: stored on the record; new documents take Settings > Form Defaults, then the source's defaults */
     var fd=((b&&b.formDefaults)||{})[key]||{}; var fo=fd.options||{};
     OPT_KEYS.forEach(function(k){ if(rec[k]!=null) t[k]=rec[k]; else if(fo[k]!=null) t[k]=fo[k]; });
+    if(buy){
+      t.bankDetailsOn = rec.bankDetailsOn!=null ? !!rec.bankDetailsOn : !!fo.bankDetailsOn;
+      if(Array.isArray(rec.printOff)) rec.printOff.forEach(function(v){ var m=PRINT_OFF_OPTS[v]; if(m && rec[m[0]]==null) t[m[0]]=m[1]; });
+    }
     /* a legacy record with a header amount but no stored lines opens with one line carrying that amount */
     var lines=(((A&&A._linesForEdit)?A._linesForEdit(key,rec):rec.lines)||[]).filter(function(ln){ return ln && !ln.rounding; });
     var designed=lines.some(function(ln){ return ln.amountNoTax!=null && blank(ln.taxCode); });
@@ -287,7 +330,7 @@
     if(!inv){
       if(blank(t.bank)) E.push(S.bankLabel+' account is required.');
       if((t.partyType==='customer'||t.partyType==='supplier') && blank(t.party)) E.push('Select a '+t.partyType+' for '+S.partyLabel+'.');
-    } else if(blank(t.customer)) E.push('Select a customer.');
+    } else if(blank(t[partyKey(t)])) E.push('Select a '+partyKey(t)+'.');
     if(inv && t.dueType==='By' && blank(t.dueDateManual)) E.push('Due date is required when the due date type is “By”.');
     var used=usedLines(t);
     if(!used.length) E.push('Add at least one line.');
@@ -329,7 +372,15 @@
     if(t.division) rec.division=t.division; if(t.project) rec.project=t.project;
     OPT_KEYS.forEach(function(k){ if(t[k]!=null) rec[k]=t[k]; });
     if(inv){
-      rec.issueDate=t.date; rec.date=t.date; rec.customer=t.customer; rec.billingAddress=t.billingAddress||'';
+      rec.issueDate=t.date; rec.date=t.date; rec.billingAddress=t.billingAddress||'';
+      if(isBuy(t)){
+        /* the names older purchase readers use stay in step (Form Designer tokens, print, Diesel billing) */
+        var sp=partyRec(b,'suppliers',t.supplier);   // a TRN left empty is the supplier's own
+        rec.supplier=t.supplier||''; rec.supName=rec.supplier; rec.supTRN=!blank(t.trn) ? String(t.trn).trim() : (sp ? String(sp.trn||sp.taxNumber||'').trim() : ''); rec.supAddress=rec.billingAddress;
+        rec.narration=rec.description; rec.supplierInvoiceNo=t.supplierInvoiceNo||'';
+        rec.bankDetailsOn=!!t.bankDetailsOn; rec.bankDetails=t.bankDetails||'';
+        rec.printOff=[];   // the option checkboxes drive the printout now
+      } else rec.customer=t.customer;
       rec.dueType=t.dueType||'Net'; rec.dueDays=t.dueType==='By'?'':(blank(t.dueDays)?'':num(t.dueDays)); rec.dueDateManual=t.dueType==='By'?(t.dueDateManual||''):'';
       rec.dueDate=t.dueType==='By' ? (t.dueDateManual||'') : (blank(t.dueDays)?'':addDays(t.date,num(t.dueDays)));
       rec.taxInclusive=!!t.taxInclusive; rec.balanceDue=T.total; rec.roundingAmt=T.rnd||0;
@@ -339,13 +390,24 @@
       rec.amount=T.total; rec.taxExclusive=!!t.taxExclusive;
       rec.allocations=(t.allocations||[]).slice();
     }
+    hooks('onSave').forEach(function(fn){ try{ fn(b,t,rec); }catch(e){} });
     return rec;
   }
 
   /* ----------------------------------------------------------- option lists */
   function acctOpts(b){ var A=app(); var L=[]; try{ L=A.accountOptions(b); }catch(e){}
     var used={}; ((TX&&TX.lines)||[]).forEach(function(l){ if(l&&l.account) used[l.account]=1; });
-    return L.filter(function(o){ var n=acctById(b,o.id); if(n && n.cashControl) return false; if(used[o.id]) return true; return !(A.lineAccountHidden && A.lineAccountHidden(b,o.id,TX&&TX.key)); }).map(function(o){ return { v:o.id, l:o.label }; }); }
+    var out=L.filter(function(o){ var n=acctById(b,o.id); if(n && n.cashControl) return false; if(used[o.id]) return true; return !(A.lineAccountHidden && A.lineAccountHidden(b,o.id,TX&&TX.key)); });
+    if(TX && isBuy(TX)) out=buyAcctOpts(b,out,used);
+    return out.map(function(o){ return o.g ? { v:o.id, l:o.label, g:o.g } : { v:o.id, l:o.label }; }); }
+  /** purchase lines: no Accounts receivable / payable (the supplier is posted by the form itself),
+      Expenses first, then Assets, then the rest; each tagged with its element for the list */
+  var BUY_RANK = { expense:0, assets:1, liabilities:2, equity:3, income:4 };
+  var ROOT_LBL = { expense:'Expenses', assets:'Assets', liabilities:'Liabilities', equity:'Equity', income:'Income' };
+  function buyAcctOpts(b,L,used){
+    return L.filter(function(o){ var c=subClassOf(b,o.id); return used[o.id] || (c!=='customers' && c!=='suppliers'); })
+      .map(function(o,i){ var n=acctById(b,o.id), r=n?acctRootOf(b,n):'assets'; return { id:o.id, label:o.label, g:ROOT_LBL[r]||'', rk:(r in BUY_RANK)?BUY_RANK[r]:9, i:i }; })
+      .sort(function(x,y){ return (x.rk-y.rk) || (x.i-y.i); }); }
   function bankOpts(b,cur){ return (((b.records||{}).bankCash)||[]).filter(function(r){ return r && r.name && (!r.inactive || r.name===cur); })
     .map(function(r){ return { v:r.name, l:(App.codeName?App.codeName(r.code,r.name):((r.code?r.code+' - ':'')+r.name)) }; }); }
   function partyOpts(b,list){ return (((b.records||{})[list])||[]).filter(function(r){ return r && r.name; }).map(function(r){ return { v:r.name, l:(App.codeName?App.codeName(r.code,r.name):((r.code?r.code+' - ':'')+r.name)) }; }); }
@@ -370,7 +432,9 @@
   var cbPanel=null;
   function cbClose(){ if(cbPanel){ if(cbPanel.parentNode) cbPanel.parentNode.removeChild(cbPanel); cbPanel=null; } }
   /** a stand-in <select> so QuickCreate's dialog hands the new value back to a combo */
-  function qcProxy(cb){ return { value:'', isConnected:true, options:{ length:0 }, setAttribute:function(){}, getAttribute:function(){ return null; },
+  /* ctx: 'purchase' / 'sales' on invoice-form account lists, read by QuickCreate as data-qc-context
+     (a new account from a purchase line starts under Expenses) */
+  function qcProxy(cb,ctx){ return { value:'', isConnected:true, options:{ length:0 }, setAttribute:function(){}, getAttribute:function(n){ return (n==='data-qc-context' && ctx) ? ctx : null; },
     insertBefore:function(){}, focus:function(){}, dispatchEvent:function(e){ if(e && e.type==='change') cb(this.value); return true; } }; }
   function cbOpen(id, btn, seed){
     cbClose(); var c=CB[id]; if(!c) return; var d=doc(); if(!d || !btn.getBoundingClientRect) return;
@@ -386,7 +450,8 @@
     var after=navAfterPick(btn);
     var pick=function(v){ cbClose(); c.pick(v); after(); };
     var addNew=function(){ var text=q.value.trim(); cbClose();
-      QuickCreate.open(c.qc, qcProxy(function(v){ c.pick(v, true); after(); }), text); };
+      var ctx=(c.qc==='account' && TX && isInv(TX)) ? (isBuy(TX)?'purchase':'sales') : '';
+      QuickCreate.open(c.qc, qcProxy(function(v){ c.pick(v, true); after(); }, ctx), text); };
     var draw=function(){ var s=q.value.toLowerCase();
       cur=c.opts.filter(function(o){ return (o.l+' '+(o.g||'')).toLowerCase().indexOf(s)>=0; }).slice(0,300);
       var max=cur.length-(canAdd?0:1); hi=Math.min(hi,Math.max(0,max));
@@ -429,6 +494,7 @@
             : '<input type="date" data-k="dueDateManual" value="'+esc(t.dueDateManual||'')+'" oninput="TxnForms._in(this)">')+'</div>'));
       else if(h==='ref') row.push(FL('Reference','<div class="tf-ig"><span><input type="checkbox" title="Automatic" aria-label="Automatic reference"'+(t.autoRef?' checked':'')+' onchange="TxnForms._refAuto(this.checked)"></span>'+
           '<input type="text" data-k="reference" placeholder="Automatic" value="'+esc(t.reference||'')+'"'+(t.autoRef?' readonly tabindex="-1"':'')+' oninput="TxnForms._in(this)" style="width:120px"></div>'));
+      else if(h==='supRef') row.push(FL(S.supRefLabel||'Supplier invoice no.',IN('supplierInvoiceNo',t.supplierInvoiceNo,{ph:'Optional',w:'170px'})));
       else {
         flush();
         if(h==='contact'){
@@ -446,9 +512,11 @@
             (!bo.length?'<div class="tf-hint">No bank or cash accounts yet — use “+ Add new” in the list.</div>':''))); }
         else if(h==='desc') H.push(FL('Description',IN('description',t.description,{ph:'Optional',w:'100%'}),'max-width:600px'));
         else if(h==='party'){
-          var bal=custBadge(b,t.customer);
-          H.push(FL('Customer','<div class="tf-ig wide">'+combo(t.customer,partyOpts(b,'customers'),function(v){ pickCustomer(v); },'','grow'+(blank(t.customer)?' need':''),'customer')+
+          var buy=isBuy(t), pv=t[partyKey(t)];
+          var bal=buy?supBadge(b,pv):custBadge(b,t.customer);
+          H.push(FL(S.partyLabel,'<div class="tf-ig wide">'+combo(pv,partyOpts(b,buy?'suppliers':'customers'),function(v){ if(buy) pickSupplier(v); else pickCustomer(v); },'','grow'+(blank(pv)?' need':''),buy?'supplier':'customer')+
             (bal?'<span class="party-bal'+(bal.amount< -0.005?' pb-neg':'')+'"><span class="pb-l">'+esc(bal.label)+'</span><span class="pb-v">'+money(bal.amount)+'</span></span>':'')+'</div>')); }
+        else if(h==='trn') H.push(FL('Supplier TRN',IN('trn',t.trn,{ph:'From the supplier',w:'220px'})));
         else if(h==='address') H.push(FL(S.addrLabel,'<textarea data-k="billingAddress" rows="3" oninput="TxnForms._in(this)" style="max-width:420px;min-height:70px">'+esc(t.billingAddress||'')+'</textarea>'));
       }
     });
@@ -456,6 +524,12 @@
     return H.join('')+divisionBar(b,t);
   }
   function custBadge(b,name){ if(blank(name)) return null; try{ return global.PartyBalance ? PartyBalance.balanceOf('customer',name) : null; }catch(e){ return null; } }
+  /** the supplier's payable balance, read-only beside the Supplier field (the purchase twin of the customer's Outstanding) */
+  function supBadge(b,name){ if(blank(name)) return null; var amt=null;
+    try{ var x=global.PartyBalance ? PartyBalance.balanceOf('supplier',name) : null; if(x) amt=x.amount; }catch(e){}
+    if(amt==null) try{ amt=G('supplierBalance')(b,name); }catch(e){}
+    if(typeof amt!=='number' || isNaN(amt)) return null;
+    return { label: amt< -0.005 ? 'Prepaid' : 'Outstanding', amount: amt }; }
   function divisionBar(b,t){
     var divs=b.divisions||[], ps=(b.projects||[]).filter(function(p){ return p && p.name && p.status!=='Complete'; });
     if(!divs.length && !ps.length) return '';
@@ -539,11 +613,12 @@
       '<div class="tf-under"><button type="button" class="btn btn-sm tf-add" onclick="TxnForms._addLine()">▸ Add line</button><div class="tf-totals">'+foot+'</div></div>';
   }
   function optsHtml(b,t){
-    var list=OPTS[isInv(t)?'inv':'money'];
+    var list=OPTS[isInv(t)?(isBuy(t)?'purch':'inv'):'money'];
     var reveal={
       colDiscount:function(){ return SEL('discType',t.discType||'Percentage',['Percentage','Exact amount']); },
       rounding:function(){ return SEL('roundMode',t.roundMode||'Round to nearest',['Round to nearest','Round down']); },
       customTitleOn:function(){ return IN('customTitle',t.customTitle,{ph:SPEC[t.key].singular}); },
+      bankDetailsOn:function(){ return '<textarea data-k="bankDetails" rows="4" oninput="TxnForms._in(this)" style="max-width:420px;min-height:80px" placeholder="Account Title: ...&#10;Bank Name: ...&#10;Account no. ...&#10;IBAN Number: ...&#10;Swift Code: ...">'+esc(t.bankDetails||'')+'</textarea>'; },
       colDivision:function(){ return (b.divisions||[]).length?'':'<span class="tf-hint">No divisions yet — add them in <a class="led-link" onclick="App.openSetting(\'divisions\')">Settings → Divisions</a>.</span>'; }
     };
     return '<div class="tf-opts">'+list.map(function(o){ var k=o[0];
@@ -638,6 +713,12 @@
       if(comp) TX.billingAddress=comp;
       if(!blank(c.dueDays) && blank(TX.dueDays) && (TX.dueType||'Net')==='Net') TX.dueDays=c.dueDays; }
     draw(); }
+  /** purchase side: the supplier's address fills Billing address and its TRN the Supplier TRN field (both stay editable) */
+  function pickSupplier(v){ TX.supplier=v||''; var b=cur(), s=partyRec(b,'suppliers',v);
+    if(s){ var addr=String(s.address||'').trim(); if(addr) TX.billingAddress=addr;
+      TX.trn=String(s.trn||s.taxNumber||'').trim();
+      if(!blank(s.dueDays) && blank(TX.dueDays) && (TX.dueType||'Net')==='Net') TX.dueDays=s.dueDays; }
+    draw(); }
   /* switching account: park the sub-ledger choice, restore the one for the new control type (source switchAccount) */
   function switchAccount(i,v){ var b=cur(), l=TX.lines[i]; l.memo=l.memo||{};
     if(!blank(v) && !acctById(b,v)){ var byName=acctByName(b,v); v=byName?byName.id:''; }   // "+ Add new" hands back the new account's name
@@ -645,7 +726,7 @@
     l.account=v||''; l.sub='';
     var nc=subClassOf(b,l.account);
     if(nc){ l.sub=l.memo[nc]||'';
-      var pt=isInv(TX)?'customer':TX.partyType, party=isInv(TX)?TX.customer:TX.party;
+      var pt=isInv(TX)?partyKey(TX):TX.partyType, party=isInv(TX)?TX[partyKey(TX)]:TX.party;
       if(!l.sub && nc==='customers' && pt==='customer') l.sub=party||'';
       if(!l.sub && nc==='suppliers' && pt==='supplier') l.sub=party||''; }
     hooks('onAccount').forEach(function(fn){ try{ fn(b,TX,l,i); }catch(e){} });
@@ -726,7 +807,7 @@
 
   /* -------------------------------------------------------- public API */
   var TxnForms = {
-    KEYS:KEYS, SPEC:SPEC, OPTS:OPTS, ext:{ cols:[], onAccount:[], onDraw:[] },
+    KEYS:KEYS, SPEC:SPEC, OPTS:OPTS, ext:{ cols:[], onAccount:[], onDraw:[], onSave:[] },
     redraw:function(){ draw(); },
     handles:handles, engineOf:engineOf, navCfg:navCfg,
     start:start, lineCalc:function(b,t,l){ return lineCalc(b,t,l); }, totals:totals, validate:validate, buildRecord:buildRecord,
@@ -777,7 +858,8 @@
     _rm:function(i){ TX.lines.splice(i,1); if(!TX.lines.length) TX.lines.push(blankLine(TX)); draw(); },
     _mv:function(i,d){ var A=TX.lines, j=i+d; if(j<0||j>=A.length) return; var x=A[i]; A[i]=A[j]; A[j]=x; draw(); },
     _pickItem:function(i,v){ pickItem(i,v); }, _switchAccount:function(i,v){ switchAccount(i,v); },
-    _setParty:function(v){ setParty(v); }, _pickCustomer:function(v){ pickCustomer(v); },
+    _setParty:function(v){ setParty(v); }, _pickCustomer:function(v){ pickCustomer(v); }, _pickSupplier:function(v){ pickSupplier(v); },
+    isBuy:function(t){ return isBuy(t); }, acctOpts:function(b){ return acctOpts(b); },
 
     /**
      * Validate and store. act: 'create' | 'another' | 'update'. Returns the

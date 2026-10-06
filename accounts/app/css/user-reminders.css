@@ -1,0 +1,67 @@
+/* ===================== Set reminder (js/user-reminders.js) =====================
+   The "Reminder" button beside the bell, the New / Edit reminder dialog, the
+   reminder rows in the bell dropdown and the Upcoming / Overdue / Done tabs.
+   Theme tokens only, so light and dark both work. */
+
+/* ---- top bar button: same height and look as the bell; label drops on narrow screens ---- */
+.hd-icon.hd-remind{width:auto;display:inline-flex;align-items:center;gap:6px;padding:0 12px 0 10px;
+  font:inherit;font-size:13px;font-weight:600;white-space:nowrap}
+.tb-tools .hd-icon.hd-remind{width:auto}
+.hd-remind-i{display:inline-grid;place-items:center;line-height:0}
+.hd-remind:focus-visible,#hdNotify:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
+@media (max-width:1180px){
+  .hd-icon.hd-remind,.tb-tools .hd-icon.hd-remind{width:38px;padding:0;justify-content:center}
+  .hd-remind-l{display:none}
+}
+
+/* ---- dialog ---- */
+.ur-ov .app-modal{max-width:560px;width:100%}
+.ur-dlg{display:flex;flex-direction:column;gap:2px}
+.ur-dlg .fld{margin-top:10px}
+.ur-dlg input[type=text],.ur-dlg input[type=date],.ur-dlg input[type=time],.ur-dlg select,.ur-dlg textarea{width:100%;max-width:none;box-sizing:border-box}
+/* the base field style (css/app.css) does not list type=time */
+.ur-dlg input[type=time]{padding:10px 13px;border:1px solid var(--field-line);border-radius:var(--radius);font-family:inherit;font-size:14px;
+  background:var(--field-bg);color:var(--ink);transition:border-color .13s ease,box-shadow .13s ease}
+.ur-dlg input[type=time]:hover{border-color:var(--muted-2)}
+.ur-dlg input[type=time]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
+.ur-dlg textarea{resize:vertical;min-height:64px;font:inherit}
+.ur-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ur-f{min-width:0}
+.ur-half{max-width:calc(50% - 6px)}
+.ur-req{color:var(--danger)}
+.ur-tz{font-size:12px;color:var(--muted);margin-top:4px}
+.ur-err{margin:2px 0 4px;padding:8px 11px;border-radius:8px;background:var(--danger-tint);color:var(--danger);border:1px solid var(--danger-line);font-size:13px}
+.ur-err.hide{display:none}
+.ur-dlg select:disabled{opacity:.6}
+@media (max-width:480px){
+  .ur-row{grid-template-columns:1fr;gap:0}
+  .ur-half{max-width:none}
+}
+
+/* ---- bell dropdown: reminder rows carry their own action line ---- */
+.rm-item.rm-item-acts{flex-wrap:wrap;padding-bottom:6px}
+.rm-item-acts .rm-main{flex:1 1 100%;padding-bottom:4px}
+.rm-uacts{display:flex;flex-wrap:wrap;gap:4px;padding:0 8px 0 49px}
+.rm-uact{padding:3px 9px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--ink-2);
+  font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.rm-uact:hover{border-color:var(--line-strong);color:var(--ink);background:var(--surface-2)}
+.rm-uact:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.rm-b-high{background:var(--danger-tint);color:var(--danger);border-color:var(--danger-line);margin-left:4px;vertical-align:1px;font-size:10.5px;padding:1px 7px}
+
+/* ---- Reminders page tabs and list ---- */
+.ur-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0 12px;border-bottom:1px solid var(--line)}
+.ur-tab{padding:8px 14px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;color:var(--muted);
+  font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.ur-tab:hover{color:var(--ink)}
+.ur-tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.ur-tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:6px 6px 0 0}
+.ur-tab-n{display:inline-block;min-width:18px;padding:0 6px;margin-left:4px;border-radius:var(--radius-pill);background:var(--surface-3);
+  color:var(--muted);font-size:11px;line-height:17px;text-align:center}
+.ur-tab-od .ur-tab-n{background:var(--danger-tint);color:var(--danger)}
+.tbl-scroll .ur-tbl{min-width:820px}
+.ur-tbl tr.ur-od .rm-t,.ur-tbl tr.ur-od td.ur-due,.ur-tbl tr.ur-od td.ur-due .rm-when{color:var(--danger)}
+.ur-tbl tr.ur-od td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.ur-tbl td.rm-rem{min-width:200px}
+.ur-tbl td.ur-link{min-width:180px}
+.ur-muted{color:var(--muted-2)}
+.ur-tbl .ur-del{color:var(--danger)}

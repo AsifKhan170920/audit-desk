@@ -118,8 +118,15 @@
       else if (days === 0) sev = 'due';
       else sev = days <= leadFor(p, kind) ? 'soon' : 'later';
     }
+    /* optional extras a source may pass (js/user-reminders.js does):
+         when     - its own "when" text (e.g. a time of day) instead of the date + "in N days"
+         acts     - [{label, title, call}] buttons replacing Mark as read / Snooze 1 day;
+                    `call` is the onclick JavaScript. Such items have no per-device read state.
+         priority - 'high' shows a High badge */
+    var acts = Array.isArray(raw.acts) && raw.acts.length ? raw.acts.filter(function (a) { return a && a.label && a.call; }) : null;
     return { id: raw.id, key: sourceId + ':' + raw.id, source: sourceId, title: String(raw.title), detail: raw.detail == null ? '' : String(raw.detail),
-      due: due, kind: kind, severity: sev, days: days, link: raw.link || null };
+      due: due, kind: kind, severity: sev, days: days, link: raw.link || null,
+      when: raw.when == null ? '' : String(raw.when), acts: acts && acts.length ? acts : null, priority: raw.priority === 'high' ? 'high' : '' };
   }
   function sortItems(a, b) {
     if (SEV[a.severity] !== SEV[b.severity]) return SEV[a.severity] - SEV[b.severity];
@@ -138,7 +145,7 @@
       got.forEach(function (raw) {
         var it = normalize(raw, s.id, p, now); if (!it || seen[it.key]) return; seen[it.key] = 1;
         if (!opts.all && (it.severity === 'later' || p.off[it.kind])) return;
-        it.read = st.read[it.key] === it.severity;
+        it.read = !it.acts && st.read[it.key] === it.severity;
         it.snoozed = !!(st.snooze[it.key] && st.snooze[it.key] > now);
         it.off = !!p.off[it.kind];
         out.push(it);
@@ -255,8 +262,22 @@
   /* ---------- the dropdown under the bell ---------- */
   function drop() { return byId('rmDrop'); }
   function dropOpen() { var d = drop(); return !!(d && d.classList && !d.classList.contains('hide')); }
+  function actButtons(it, cls) {
+    return it.acts.map(function (a) { return '<button type="button" class="' + cls + '"' + (a.title ? ' title="' + esc(a.title) + '"' : '') + ' onclick="' + esc(a.call) + '">' + esc(a.label) + '</button>'; }).join('');
+  }
+  function highBadge(it) { return it.priority === 'high' ? ' <span class="rm-badge rm-b-high">High</span>' : ''; }
   function itemRow(it) {
-    var when = it.due ? fmtDate(it.due) + (it.days != null ? ' · ' + whenText(it.days) : '') : '';
+    var when = it.when || (it.due ? fmtDate(it.due) + (it.days != null ? ' · ' + whenText(it.days) : '') : '');
+    if (it.acts) {
+      /* a source with its own actions (user reminders): Open / Done / Snooze … on a second line */
+      return '<div class="rm-item rm-item-acts rm-' + it.severity + '" data-key="' + esc(it.key) + '">' +
+        '<button type="button" class="rm-main" onclick="Reminders.open(' + jsq(it.key) + ')">' +
+          '<span class="rm-ico">' + ico(KIND_ICON[it.kind] || 'bell', 16) + '</span>' +
+          '<span class="rm-txt"><span class="rm-t">' + esc(it.title) + highBadge(it) + '</span>' +
+          (it.detail ? '<span class="rm-d">' + esc(it.detail) + '</span>' : '') +
+          (when ? '<span class="rm-w">' + esc(when) + '</span>' : '') + '</span></button>' +
+        '<span class="rm-uacts">' + actButtons(it, 'rm-uact') + '</span></div>';
+    }
     return '<div class="rm-item rm-' + it.severity + '" data-key="' + esc(it.key) + '">' +
       '<button type="button" class="rm-main" onclick="Reminders.open(' + jsq(it.key) + ')">' +
         '<span class="rm-ico">' + ico(KIND_ICON[it.kind] || 'bell', 16) + '</span>' +
@@ -304,8 +325,10 @@
   function openDrop() {
     var d = ensureDrop(); if (!d) return;
     try { if (root.Topbar) root.Topbar.close(); } catch (e) {}
-    refresh();
-    drawDrop(); d.classList.remove('hide'); placeDrop();
+    /* the panel must open even if re-evaluating fails: show what we have */
+    try { refresh(); } catch (e) { try { console.warn('Reminders refresh failed', e); } catch (x) {} }
+    try { drawDrop(); } catch (e) { d.innerHTML = dropHtml([]); }
+    d.classList.remove('hide'); placeDrop();
     var btn = byId('hdNotify'); if (btn) btn.setAttribute('aria-expanded', 'true');
   }
   function closeDrop() {
@@ -325,12 +348,12 @@
     var A = getApp(); refresh();
     if (A && A.wsMode === 'reminders') { try { A.renderMain(A.curBiz()); } catch (e) {} }
   }
-  function markRead(key) { var f = find(key); if (!f.b || !f.it) return; var st = stateOf(f.b.id); st.read[key] = f.it.severity; saveState(f.b.id, st); afterChange(); }
+  function markRead(key) { var f = find(key); if (!f.b || !f.it || f.it.acts) return; var st = stateOf(f.b.id); st.read[key] = f.it.severity; saveState(f.b.id, st); afterChange(); }
   function markUnread(key) { var f = find(key); if (!f.b) return; var st = stateOf(f.b.id); delete st.read[key]; saveState(f.b.id, st); afterChange(); }
   function snooze(key, days) { var f = find(key); if (!f.b) return; var st = stateOf(f.b.id); st.snooze[key] = addDays(today(), days || 1); saveState(f.b.id, st); afterChange(); }
   function unsnooze(key) { var f = find(key); if (!f.b) return; var st = stateOf(f.b.id); delete st.snooze[key]; saveState(f.b.id, st); afterChange(); }
   function markAllRead() { var A = getApp(), b = A && A.curBiz(); if (!b) return; var st = stateOf(b.id);
-    attention(evaluate(b)).forEach(function (it) { st.read[it.key] = it.severity; }); saveState(b.id, st); afterChange(); }
+    attention(evaluate(b)).forEach(function (it) { if (!it.acts) st.read[it.key] = it.severity; }); saveState(b.id, st); afterChange(); }
 
   function openLink(link) {
     var A = getApp(); if (!A || !link) return false;
@@ -413,9 +436,9 @@
         '<td class="nowrap">' + badge + '</td>' +
         '<td class="rm-rem"><span class="rm-t">' + esc(it.title) + '</span>' + (it.detail ? '<div class="rm-d">' + esc(it.detail) + '</div>' : '') + '</td>' +
         '<td class="rm-kind">' + esc(kindLabel(it.kind)) + '</td>' +
-        '<td class="nowrap"><div class="rm-rowacts">' +
+        '<td class="nowrap"><div class="rm-rowacts">' + (it.acts ? actButtons(it, 'btn btn-xs') :
           (it.read ? '<button class="btn btn-xs" onclick="Reminders.markUnread(' + k + ')">Mark unread</button>' : '<button class="btn btn-xs" onclick="Reminders.markRead(' + k + ')">Mark as read</button>') +
-          (it.snoozed ? '<button class="btn btn-xs" onclick="Reminders.unsnooze(' + k + ')">Unsnooze</button>' : '<button class="btn btn-xs" onclick="Reminders.snooze(' + k + ')">Snooze 1 day</button>') +
+          (it.snoozed ? '<button class="btn btn-xs" onclick="Reminders.unsnooze(' + k + ')">Unsnooze</button>' : '<button class="btn btn-xs" onclick="Reminders.snooze(' + k + ')">Snooze 1 day</button>')) +
         '</div></td></tr>';
     }).join('') : '<tr><td colspan="6"><div class="reg-empty">' + (f.status === 'attention' && !f.kind && !f.q ? 'Nothing needs attention. You are all caught up.' : 'No reminders match these filters.') + '</div></td></tr>';
     return (A ? A.crumb('Reminders') : '') + head +
@@ -516,7 +539,8 @@
     if (typeof A.renderMain === 'function') {
       var origRM = A.renderMain;
       A.renderMain = function (b) {
-        if (this.wsMode === 'reminders') { var m = byId('wsMain'); if (m) m.innerHTML = pageHtml(b || this.curBiz()); return; }
+        /* through API.pageHtml so js/user-reminders.js can add its Upcoming / Overdue / Done tabs */
+        if (this.wsMode === 'reminders') { var m = byId('wsMain'); if (m) m.innerHTML = API.pageHtml(b || this.curBiz()); return; }
         API._pageLive = false;
         return origRM.apply(this, arguments);
       };
