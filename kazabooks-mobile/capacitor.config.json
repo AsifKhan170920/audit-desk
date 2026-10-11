@@ -1,0 +1,15 @@
+{
+  "appId": "com.kazabooks.app",
+  "appName": "Kazabooks",
+  "webDir": "www",
+  "server": {
+    "url": "https://kazabooks.com/",
+    "androidScheme": "https",
+    "allowNavigation": ["kazabooks.com", "test.kazabooks.com"]
+  },
+  "appendUserAgent": "KazabooksApp/1.0",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#14284b"
+  }
+}

@@ -1,0 +1,70 @@
+# Builds "Kazabooks for Android" (APK) and publishes it here:
+# https://github.com/AsifKhan170920/audit-desk/releases/download/kazabooks-android/Kazabooks.apk
+name: Build Kazabooks for Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'kazabooks-mobile/**'
+      - 'kazabooks-desktop/make-icon.js'
+      - '.github/workflows/kazabooks-android.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install Capacitor
+        working-directory: kazabooks-mobile
+        run: npm install --no-audit --no-fund
+
+      - name: Create the Android project
+        working-directory: kazabooks-mobile
+        run: |
+          npx cap add android
+          node scripts/prepare-android.js
+          npx cap sync android
+
+      - name: Add signing key
+        if: env.HAS_KEYSTORE == 'true'
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > kazabooks-mobile/android/app/release.keystore
+
+      - name: Build APK
+        working-directory: kazabooks-mobile/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/Kazabooks.apk"
+          ls -la "$GITHUB_WORKSPACE/Kazabooks.apk"
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kazabooks-android
+          name: Kazabooks for Android
+          body: |
+            Kazabooks for Android – Accounting, Kaza Limousine, CRM and Audit Desk (data on kazabooks.com).
+            Install: open this page on the phone, download Kazabooks.apk and allow installing from your browser.
+            Signed with the release key: ${{ env.HAS_KEYSTORE }}. Build ${{ github.run_number }}.
+          files: Kazabooks.apk
+          make_latest: false
+          overwrite_files: true

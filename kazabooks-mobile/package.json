@@ -1,0 +1,16 @@
+{
+  "name": "kazabooks-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kazabooks for Android – Accounting, Kaza Limousine, CRM and Audit Desk (kazabooks.com) in an app",
+  "scripts": {
+    "prepare-android": "node scripts/prepare-android.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.1"
+  }
+}

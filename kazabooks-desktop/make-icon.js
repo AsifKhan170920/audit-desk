@@ -1,10 +1,13 @@
 /* Draws the Kazabooks mark – a white "K" on a navy rounded tile with a gold line – as a PNG.
      node make-icon.js                → assets/icon.png (256×256, the Windows / Mac app)
      node make-icon.js 512 out.png    → any size (the website's icons)
+     node make-icon.js 432 out.png fg → Android adaptive-icon foreground: only the K and the line, small in the
+                                        middle of a clear square (the launcher puts the navy behind it)
    The shape is described on a 256 grid and drawn 4×4 supersampled, so every size has smooth edges.
    No image tools needed. */
 const fs = require('fs'), zlib = require('zlib'), path = require('path');
 const N = +process.argv[2] || 256, OUT = process.argv[3] || path.join(__dirname, 'assets', 'icon.png');
+const FG = process.argv[4] === 'fg', FG_SCALE = 0.62;   // the tile's share of the foreground square
 const SS = 4, G = 256;   // supersampling, design grid
 
 function inRound(x, y, x0, y0, x1, y1, rad) {
@@ -18,11 +21,13 @@ function nearSeg(x, y, ax, ay, bx, by, w) {   // within w/2 of the segment a–b
 }
 /** the colour at a point of the 256 grid: [r, g, b, a] */
 function paint(x, y) {
+  if (FG) { x = 128 + (x - 128) / FG_SCALE; y = 128 + (y - 128) / FG_SCALE; }
   if (!inRound(x, y, 8, 8, 248, 248, 52)) return [0, 0, 0, 0];
   const t = y / G;
   const k = ((x >= 72 && x <= 106) || nearSeg(x, y, 100, 132, 178, 62, 36) || nearSeg(x, y, 112, 120, 182, 194, 36)) && y >= 60 && y <= 196;
   if (k) return [255, 255, 255, 255];
   if (y >= 214 && y <= 222 && x >= 72 && x <= 184) return [201, 151, 58, 255];   // the gold line
+  if (FG) return [0, 0, 0, 0];
   return [Math.round(26 - 8 * t), Math.round(52 - 16 * t), Math.round(96 - 30 * t), 255];   // navy, a little darker at the bottom
 }
 const out = Buffer.alloc(N * N * 4);
