@@ -1,0 +1,56 @@
+# Builds "Kazabooks for Mac" (Apple chip and Intel) on a GitHub Mac and publishes it here:
+# https://github.com/AsifKhan170920/audit-desk/releases/download/kazabooks-mac/Kazabooks-arm64.dmg
+# https://github.com/AsifKhan170920/audit-desk/releases/download/kazabooks-mac/Kazabooks-x64.dmg
+# Not signed by Apple (ad-hoc): the first time, System Settings → Privacy & Security → Open Anyway.
+name: Build Kazabooks for Mac
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'kazabooks-desktop/**'
+      - '.github/workflows/kazabooks-mac.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the Mac apps
+        working-directory: kazabooks-desktop
+        run: |
+          npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+          npm version "1.0.${GITHUB_RUN_NUMBER}" --no-git-tag-version --allow-same-version
+          for i in 1 2; do npm run dist-mac && break; echo "retrying…"; sleep 20; done
+          ls -la dist
+          test -f dist/Kazabooks-arm64.dmg
+          test -f dist/Kazabooks-x64.dmg
+          codesign -dv dist/mac-arm64/Kazabooks.app 2>&1 | head -5 || true
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kazabooks-mac
+          name: Kazabooks for Mac
+          body: |
+            Kazabooks for Mac – Accounting, Kaza Limousine, CRM and Audit Desk in one window (data on kazabooks.com).
+            Kazabooks-arm64.dmg: Macs with an Apple chip (M1, M2, M3, M4). Kazabooks-x64.dmg: older Macs with an Intel chip.
+            Open the .dmg and drag Kazabooks to Applications. The first time, if the Mac says it cannot check the app:
+            System Settings → Privacy & Security → Open Anyway.
+            Build ${{ github.run_number }}.
+          files: |
+            kazabooks-desktop/dist/Kazabooks-arm64.dmg
+            kazabooks-desktop/dist/Kazabooks-x64.dmg
+          make_latest: false
+          overwrite_files: true

@@ -1,0 +1,78 @@
+{
+  "name": "kazabooks-desktop",
+  "productName": "Kazabooks",
+  "version": "1.0.0",
+  "description": "Kazabooks for Windows and Mac – Accounting, Kaza Limousine, CRM and Audit Desk in one window (data on kazabooks.com)",
+  "author": "Kazabooks",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "icon": "node make-icon.js",
+    "start": "electron .",
+    "test-site": "electron . --test",
+    "dist": "node make-icon.js && electron-builder --win nsis --x64 --publish never",
+    "dist-mac": "node make-icon.js && node make-icon.js 1024 assets/icon-1024.png && electron-builder --mac dmg --arm64 --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.kazabooks.desktop",
+    "productName": "Kazabooks",
+    "copyright": "Kazabooks",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "offline.html",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "Kazabooks-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kazabooks",
+      "runAfterFinish": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon-1024.png",
+      "category": "public.app-category.business",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "notarize": false,
+      "artifactName": "Kazabooks-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "Kazabooks",
+      "artifactName": "Kazabooks-${arch}.${ext}"
+    }
+  }
+}
